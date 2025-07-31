@@ -3,12 +3,24 @@ import torch
 
 class TranslationService:
     def __init__(self):
-        # Load both models
-        self.tokenizer_en_indic = AutoTokenizer.from_pretrained("ai4bharat/IndicTrans2-en-indic-1B")
-        self.model_en_indic = AutoModelForSeq2SeqLM.from_pretrained("ai4bharat/IndicTrans2-en-indic-1B")
+        # Load both models with trust_remote_code=True
+        self.tokenizer_en_indic = AutoTokenizer.from_pretrained(
+            "ai4bharat/IndicTrans2-en-indic-1B", 
+            trust_remote_code=True
+        )
+        self.model_en_indic = AutoModelForSeq2SeqLM.from_pretrained(
+            "ai4bharat/IndicTrans2-en-indic-1B", 
+            trust_remote_code=True
+        )
 
-        self.tokenizer_indic_en = AutoTokenizer.from_pretrained("ai4bharat/IndicTrans2-indic-en-1B")
-        self.model_indic_en = AutoModelForSeq2SeqLM.from_pretrained("ai4bharat/IndicTrans2-indic-en-1B")
+        self.tokenizer_indic_en = AutoTokenizer.from_pretrained(
+            "ai4bharat/IndicTrans2-indic-en-1B", 
+            trust_remote_code=True
+        )
+        self.model_indic_en = AutoModelForSeq2SeqLM.from_pretrained(
+            "ai4bharat/IndicTrans2-indic-en-1B", 
+            trust_remote_code=True
+        )
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model_en_indic.to(self.device)

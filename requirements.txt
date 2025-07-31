@@ -1,13 +1,48 @@
+# FastAPI and ASGI server
 fastapi==0.110.0
 uvicorn[standard]==0.29.0
-pydantic==2.6.3
+
+# Database
 motor==3.4.0
-python-dotenv==1.0.1
+pymongo==4.6.0
+
+# Data validation and serialization
+pydantic==2.6.3
+pydantic-settings==2.1.0
+
+# HTTP and async support
+httpx==0.25.2
+aiofiles==23.2.1
+python-multipart==0.0.6
+
+# Translation - AI4Bharat IndicTrans2
 transformers==4.39.3
 torch==2.2.2
 sentencepiece==0.2.0
 sacremoses==0.1.1
-langdetect==1.0.9
+
+# Text-to-Speech - ElevenLabs
 elevenlabs==0.2.27
+
+# Firebase integration
 firebase-admin==6.5.0
-pydantic-settins
+
+# Language detection
+langdetect==1.0.9
+
+# Environment and configuration
+python-dotenv==1.0.1
+
+# Utilities
+uuid==1.30
+python-dateutil==2.8.2
+
+# Testing (optional)
+pytest==7.4.3
+pytest-asyncio==0.21.1
+
+# Logging and monitoring
+structlog==23.2.0
+
+# CORS support
+fastapi-cors==0.0.6

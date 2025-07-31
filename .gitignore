@@ -1,2 +1,6 @@
 .venv/
 .env
+
+sheet.md
+
+__pycache__/
