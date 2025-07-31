@@ -5,12 +5,14 @@ sheet.md
 
 __pycache__/
 
-AZURE_DEPLOYMENT.md
+gcp-deploy.sh
 
-azure-deploy.sh
+deploy.sh
+
+quick-deploy.sh
 
 Dockerfile
 
-azure-deploy.yml
+GCP_DEPLOYMENT.md
 
-azure-vm-deploy.sh
+GITHUB_ACTIONS_SETUP.md
