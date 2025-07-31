@@ -6,10 +6,9 @@ on:
   workflow_dispatch:
 
 env:
-  PROJECT_ID: our-highway-467609-h8
-  SERVICE_NAME: fastapi-news-service
+  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   REGION: us-central1
-  IMAGE_NAME: gcr.io/our-highway-467609-h8/news-service
+  SERVICE_NAME: fastapi-news-service
 
 jobs:
   deploy:
@@ -31,52 +30,48 @@ jobs:
       uses: google-github-actions/auth@v2
       with:
         credentials_json: ${{ secrets.GCP_SA_KEY }}
-        project_id: ${{ env.PROJECT_ID }}
+        project_id: ${{ secrets.GCP_PROJECT_ID }}
     
-    - name: Configure Docker for GCR
-      run: gcloud auth configure-docker
+    - name: Enable required APIs
+      run: |
+        gcloud services enable run.googleapis.com
+        gcloud services enable containerregistry.googleapis.com
+        gcloud services enable cloudbuild.googleapis.com
+        gcloud services enable artifactregistry.googleapis.com
+    
+    - name: Configure Docker for Google Cloud
+      run: |
+        gcloud auth configure-docker
     
     - name: Build and push Docker image
       run: |
-        docker build -t ${{ env.IMAGE_NAME }}:${{ github.sha }} .
-        docker push ${{ env.IMAGE_NAME }}:${{ github.sha }}
+        docker build -t gcr.io/${{ secrets.GCP_PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }} .
+        docker push gcr.io/${{ secrets.GCP_PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
     
     - name: Deploy to Cloud Run
       uses: google-github-actions/deploy-cloudrun@v2
       with:
         service: ${{ env.SERVICE_NAME }}
-        image: ${{ env.IMAGE_NAME }}:${{ github.sha }}
+        image: gcr.io/${{ secrets.GCP_PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
         region: ${{ env.REGION }}
-        flags: |
-          --allow-unauthenticated
-          --memory=8Gi
-          --cpu=2
-          --timeout=3600
-          --concurrency=80
-          --max-instances=10
-          --set-env-vars=MONGO_URI=${{ secrets.MONGO_URI }}
-          --set-env-vars=DATABASE_NAME=${{ secrets.DATABASE_NAME }}
-          --set-env-vars=FIREBASE_SERVICE_ACCOUNT_BASE64=${{ secrets.FIREBASE_SERVICE_ACCOUNT_BASE64 }}
-          --set-env-vars=FIREBASE_STORAGE_BUCKET=${{ secrets.FIREBASE_STORAGE_BUCKET }}
-          --set-env-vars=ELEVENLABS_API_KEY=${{ secrets.ELEVENLABS_API_KEY }}
-          --set-env-vars=API_KEY=${{ secrets.API_KEY }}
-          --set-env-vars=CORS_ORIGINS=${{ secrets.CORS_ORIGINS }}
-          --set-env-vars=AI4BHARAT_MODELS_PATH=${{ secrets.AI4BHARAT_MODELS_PATH }}
-          --set-env-vars=CLOUD_PROVIDER=gcp
-          --set-env-vars=REGION=${{ env.REGION }}
-          --set-env-vars=CLUSTER_NAME=cloud-run
-          --set-env-vars=SERVICE_NAME=${{ env.SERVICE_NAME }}
-          --set-env-vars=LOG_LEVEL=${{ secrets.LOG_LEVEL }}
+        memory: 8Gi
+        cpu: 2
+        timeout: 3600
+        concurrency: 80
+        max_instances: 10
+        env_vars: |
+          MONGO_URI=${{ secrets.MONGO_URI }}
+          DATABASE_NAME=${{ secrets.DATABASE_NAME }}
+          FIREBASE_SERVICE_ACCOUNT_BASE64=${{ secrets.FIREBASE_SERVICE_ACCOUNT_BASE64 }}
+          FIREBASE_STORAGE_BUCKET=${{ secrets.FIREBASE_STORAGE_BUCKET }}
+          ELEVENLABS_API_KEY=${{ secrets.ELEVENLABS_API_KEY }}
+          CORS_ORIGINS=${{ secrets.CORS_ORIGINS }}
+          AI4BHARAT_MODELS_PATH=${{ secrets.AI4BHARAT_MODELS_PATH }}
+          LOG_LEVEL=${{ secrets.LOG_LEVEL }}
     
-    - name: Get service URL
-      run: |
-        SERVICE_URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} --region=${{ env.REGION }} --format="value(status.url)")
-        echo "SERVICE_URL=$SERVICE_URL" >> $GITHUB_ENV
-    
-    - name: Show deployment info
+    - name: Show service URL
       run: |
         echo "🎉 Deployment complete!"
-        echo "🌐 Service URL: ${{ env.SERVICE_URL }}"
-        echo "📚 API Documentation: ${{ env.SERVICE_URL }}/docs"
-        echo "❤️ Health Check: ${{ env.SERVICE_URL }}/health"
-        echo "🔧 Service Management: https://console.cloud.google.com/run/detail/${{ env.REGION }}/${{ env.SERVICE_NAME }}" 
+        echo "🌐 Service URL: https://${{ env.SERVICE_NAME }}-${{ secrets.GCP_PROJECT_ID }}-uc.a.run.app"
+        echo "📚 API Documentation: https://${{ env.SERVICE_NAME }}-${{ secrets.GCP_PROJECT_ID }}-uc.a.run.app/docs"
+        echo "❤️ Health Check: https://${{ env.SERVICE_NAME }}-${{ secrets.GCP_PROJECT_ID }}-uc.a.run.app/health" 

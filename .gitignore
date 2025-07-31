@@ -5,13 +5,3 @@ sheet.md
 
 __pycache__/
 
-gcp-deploy.sh
-
-deploy.sh
-
-quick-deploy.sh
-
-
-GCP_DEPLOYMENT.md
-
-GITHUB_ACTIONS_SETUP.md
