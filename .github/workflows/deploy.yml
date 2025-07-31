@@ -9,7 +9,7 @@ env:
   PROJECT_ID: our-highway-467609-h8
   SERVICE_NAME: fastapi-news-service
   REGION: us-central1
-  IMAGE_NAME: gcr.io/our-highway-467609-h8/fastapi-news-service
+  IMAGE_NAME: gcr.io/our-highway-467609-h8/news-service
 
 jobs:
   deploy:
