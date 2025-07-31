@@ -4,3 +4,11 @@
 sheet.md
 
 __pycache__/
+
+AZURE_DEPLOYMENT.md
+
+azure-deploy.sh
+
+Dockerfile
+
+azure-deploy.yml

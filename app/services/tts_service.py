@@ -11,9 +11,9 @@ class TTSService:
         
         # Voice mappings for different languages
         self.voice_mappings = {
-            "en": "pNInz6obpgDQGcFmaJgB",  # Adam voice
-            "hi": "VR6AewLTigWG4xSOukaG",  # Hindi voice
-            "kn": "pNInz6obpgDQGcFmaJgB"   # Default to Adam for Kannada
+            "en": "OwIqdhRPD2fFMmedVUrS",  # Adam voice
+            "hi": "OwIqdhRPD2fFMmedVUrS",  # Hindi voice
+            "kn": "OwIqdhRPD2fFMmedVUrS"   # Default to Adam for Kannada
         }
 
     def generate_audio(self, text: str, language: str) -> str:
