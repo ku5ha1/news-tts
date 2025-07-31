@@ -12,3 +12,5 @@ azure-deploy.sh
 Dockerfile
 
 azure-deploy.yml
+
+azure-vm-deploy.sh
