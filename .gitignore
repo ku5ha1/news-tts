@@ -5,3 +5,14 @@ sheet.md
 
 __pycache__/
 
+# GCP Service Account setup script (contains project-specific config)
+setup-gcp-service-account.sh
+
+# Service account key files
+*-service-account-key.json
+gcp-service-account-key.json
+
+# Any files with actual API keys or secrets
+*.key
+*.pem
+secrets.json

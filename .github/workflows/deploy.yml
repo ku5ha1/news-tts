@@ -3,75 +3,67 @@ name: Deploy to Google Cloud Run
 on:
   push:
     branches: [ main ]
-  workflow_dispatch:
+  workflow_dispatch:  # Allows manual trigger
 
 env:
   GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   REGION: us-central1
-  SERVICE_NAME: fastapi-news-service
+  SERVICE_NAME: news-tts-service
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
-    
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-    
-    - name: Authenticate to Google Cloud
-      uses: google-github-actions/auth@v2
-      with:
-        credentials_json: ${{ secrets.GCP_SA_KEY }}
-        project_id: ${{ secrets.GCP_PROJECT_ID }}
-    
-    - name: Enable required APIs
-      run: |
-        gcloud services enable run.googleapis.com
-        gcloud services enable containerregistry.googleapis.com
-        gcloud services enable cloudbuild.googleapis.com
-        gcloud services enable artifactregistry.googleapis.com
-    
-    - name: Configure Docker for Google Cloud
-      run: |
-        gcloud auth configure-docker
-    
-    - name: Build and push Docker image
-      run: |
-        docker build -t gcr.io/${{ secrets.GCP_PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }} .
-        docker push gcr.io/${{ secrets.GCP_PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
-    
-    - name: Deploy to Cloud Run
-      uses: google-github-actions/deploy-cloudrun@v2
-      with:
-        service: ${{ env.SERVICE_NAME }}
-        image: gcr.io/${{ secrets.GCP_PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
-        region: ${{ env.REGION }}
-        memory: 8Gi
-        cpu: 2
-        timeout: 3600
-        concurrency: 80
-        max_instances: 10
-        env_vars: |
-          MONGO_URI=${{ secrets.MONGO_URI }}
-          DATABASE_NAME=${{ secrets.DATABASE_NAME }}
-          FIREBASE_SERVICE_ACCOUNT_BASE64=${{ secrets.FIREBASE_SERVICE_ACCOUNT_BASE64 }}
-          FIREBASE_STORAGE_BUCKET=${{ secrets.FIREBASE_STORAGE_BUCKET }}
-          ELEVENLABS_API_KEY=${{ secrets.ELEVENLABS_API_KEY }}
-          CORS_ORIGINS=${{ secrets.CORS_ORIGINS }}
-          AI4BHARAT_MODELS_PATH=${{ secrets.AI4BHARAT_MODELS_PATH }}
-          LOG_LEVEL=${{ secrets.LOG_LEVEL }}
-    
-    - name: Show service URL
-      run: |
-        echo "🎉 Deployment complete!"
-        echo "🌐 Service URL: https://${{ env.SERVICE_NAME }}-${{ secrets.GCP_PROJECT_ID }}-uc.a.run.app"
-        echo "📚 API Documentation: https://${{ env.SERVICE_NAME }}-${{ secrets.GCP_PROJECT_ID }}-uc.a.run.app/docs"
-        echo "❤️ Health Check: https://${{ env.SERVICE_NAME }}-${{ secrets.GCP_PROJECT_ID }}-uc.a.run.app/health" 
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Enable required Google APIs
+        run: |
+          gcloud services enable run.googleapis.com
+          gcloud services enable containerregistry.googleapis.com
+          gcloud services enable cloudbuild.googleapis.com
+
+      - name: Configure Docker for Google Container Registry
+        run: |
+          gcloud auth configure-docker --quiet
+
+      - name: Build and push Docker image
+        run: |
+          docker build -t gcr.io/${{ env.GCP_PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }} .
+          docker push gcr.io/${{ env.GCP_PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
+
+      - name: Deploy to Cloud Run
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: ${{ env.SERVICE_NAME }}
+          image: gcr.io/${{ env.GCP_PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
+          region: ${{ env.REGION }}
+          memory: 16Gi   # Critical: AI models need RAM
+          cpu: 2
+          timeout: 900   # 15 mins (for slow startup)
+          concurrency: 50
+          max_instances: 5
+          env_vars: |
+            MONGO_URI=${{ secrets.MONGO_URI }},
+            DATABASE_NAME=${{ secrets.DATABASE_NAME }},
+            FIREBASE_SERVICE_ACCOUNT_BASE64=${{ secrets.FIREBASE_SERVICE_ACCOUNT_BASE64 }},
+            FIREBASE_STORAGE_BUCKET=${{ secrets.FIREBASE_STORAGE_BUCKET }},
+            ELEVENLABS_API_KEY=${{ secrets.ELEVENLABS_API_KEY }},
+            CORS_ORIGINS=${{ secrets.CORS_ORIGINS }},
+            LOG_LEVEL=${{ secrets.LOG_LEVEL }}
+
+      - name: Show deployment success
+        run: |
+          echo "🚀 Deployed successfully!"
+          echo "🌐 Service URL: https://${{ env.SERVICE_NAME }}-${{ env.GCP_PROJECT_ID }}-uc.a.run.app"
+          echo "📘 Docs: https://${{ env.SERVICE_NAME }}-${{ env.GCP_PROJECT_ID }}-uc.a.run.app/docs"
+          echo "💚 Health: https://${{ env.SERVICE_NAME }}-${{ env.GCP_PROJECT_ID }}-uc.a.run.app/health"
