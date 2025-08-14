@@ -47,23 +47,27 @@ jobs:
           service: ${{ env.SERVICE_NAME }}
           image: gcr.io/${{ env.GCP_PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
           region: ${{ env.REGION }}
-          memory: 16Gi   # Critical: AI models need RAM
-          cpu: 2
-          timeout: 900   # 15 mins (for slow startup)
-          concurrency: 50
-          max_instances: 5
+          flags: |
+            --memory=8Gi
+            --cpu=4
+            --timeout=900
+            --concurrency=50
+            --max-instances=5
+            --startup-cpu-boost
+            --execution-environment=gen2
+            --port=8080
           env_vars: |
-            MONGO_URI=${{ secrets.MONGO_URI }},
-            DATABASE_NAME=${{ secrets.DATABASE_NAME }},
-            FIREBASE_SERVICE_ACCOUNT_BASE64=${{ secrets.FIREBASE_SERVICE_ACCOUNT_BASE64 }},
-            FIREBASE_STORAGE_BUCKET=${{ secrets.FIREBASE_STORAGE_BUCKET }},
-            ELEVENLABS_API_KEY=${{ secrets.ELEVENLABS_API_KEY }},
-            CORS_ORIGINS=${{ secrets.CORS_ORIGINS }},
+            MONGO_URI=${{ secrets.MONGO_URI }}
+            DATABASE_NAME=${{ secrets.DATABASE_NAME }}
+            FIREBASE_SERVICE_ACCOUNT_BASE64=${{ secrets.FIREBASE_SERVICE_ACCOUNT_BASE64 }}
+            FIREBASE_STORAGE_BUCKET=${{ secrets.FIREBASE_STORAGE_BUCKET }}
+            ELEVENLABS_API_KEY=${{ secrets.ELEVENLABS_API_KEY }}
+            CORS_ORIGINS=${{ secrets.CORS_ORIGINS }}
             LOG_LEVEL=${{ secrets.LOG_LEVEL }}
 
       - name: Show deployment success
         run: |
           echo "🚀 Deployed successfully!"
-          echo "🌐 Service URL: https://${{ env.SERVICE_NAME }}-${{ env.GCP_PROJECT_ID }}-uc.a.run.app"
-          echo "📘 Docs: https://${{ env.SERVICE_NAME }}-${{ env.GCP_PROJECT_ID }}-uc.a.run.app/docs"
-          echo "💚 Health: https://${{ env.SERVICE_NAME }}-${{ env.GCP_PROJECT_ID }}-uc.a.run.app/health"
+          echo "🌐 Service URL: https://${{ env.SERVICE_NAME }}-${{ hashFiles('**') }}-uc.a.run.app"
+          echo "📘 Docs: https://${{ env.SERVICE_NAME }}-${{ hashFiles('**') }}-uc.a.run.app/docs"
+          echo "💚 Health: https://${{ env.SERVICE_NAME }}-${{ hashFiles('**') }}-uc.a.run.app/health"
