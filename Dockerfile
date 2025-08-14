@@ -22,20 +22,18 @@ RUN pip install --no-cache-dir -r requirements.txt
 ENV HF_HOME=/root/.cache/huggingface
 ENV TRANSFORMERS_CACHE=/root/.cache/huggingface/transformers
 
-RUN python -c "
+RUN python -c <<EOF
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 print('🔽 Downloading AI4Bharat IndicTrans2 models...')
 
-# Download English → Indic model
 AutoTokenizer.from_pretrained('ai4bharat/IndicTrans2-en-indic-1B', trust_remote_code=True)
 AutoModelForSeq2SeqLM.from_pretrained('ai4bharat/IndicTrans2-en-indic-1B', trust_remote_code=True)
 
-# Download Indic → English model
 AutoTokenizer.from_pretrained('ai4bharat/IndicTrans2-indic-en-1B', trust_remote_code=True)
 AutoModelForSeq2SeqLM.from_pretrained('ai4bharat/IndicTrans2-indic-en-1B', trust_remote_code=True)
 
 print('✅ Models downloaded and saved to cache')
-"
+EOF
 
 # Copy your app code into the container
 COPY app/ ./app/
