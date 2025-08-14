@@ -22,18 +22,16 @@ RUN pip install --no-cache-dir -r requirements.txt
 ENV HF_HOME=/root/.cache/huggingface
 ENV TRANSFORMERS_CACHE=/root/.cache/huggingface/transformers
 
-RUN python -c <<EOF
-from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
-print('🔽 Downloading AI4Bharat IndicTrans2 models...')
+# Download models in separate steps for better error handling
+RUN python -c "from transformers import AutoTokenizer, AutoModelForSeq2SeqLM; import os; print('🔽 Downloading AI4Bharat IndicTrans2 models...'); os.makedirs('/root/.cache/huggingface/transformers', exist_ok=True)"
 
-AutoTokenizer.from_pretrained('ai4bharat/IndicTrans2-en-indic-1B', trust_remote_code=True)
-AutoModelForSeq2SeqLM.from_pretrained('ai4bharat/IndicTrans2-en-indic-1B', trust_remote_code=True)
+RUN python -c "from transformers import AutoTokenizer, AutoModelForSeq2SeqLM; AutoTokenizer.from_pretrained('ai4bharat/IndicTrans2-en-indic-1B', trust_remote_code=True); print('✅ Downloaded en-indic tokenizer')"
 
-AutoTokenizer.from_pretrained('ai4bharat/IndicTrans2-indic-en-1B', trust_remote_code=True)
-AutoModelForSeq2SeqLM.from_pretrained('ai4bharat/IndicTrans2-indic-en-1B', trust_remote_code=True)
+RUN python -c "from transformers import AutoTokenizer, AutoModelForSeq2SeqLM; AutoModelForSeq2SeqLM.from_pretrained('ai4bharat/IndicTrans2-en-indic-1B', trust_remote_code=True); print('✅ Downloaded en-indic model')"
 
-print('✅ Models downloaded and saved to cache')
-EOF
+RUN python -c "from transformers import AutoTokenizer, AutoModelForSeq2SeqLM; AutoTokenizer.from_pretrained('ai4bharat/IndicTrans2-indic-en-1B', trust_remote_code=True); print('✅ Downloaded indic-en tokenizer')"
+
+RUN python -c "from transformers import AutoTokenizer, AutoModelForSeq2SeqLM; AutoModelForSeq2SeqLM.from_pretrained('ai4bharat/IndicTrans2-indic-en-1B', trust_remote_code=True); print('✅ Downloaded indic-en model')"
 
 # Copy your app code into the container
 COPY app/ ./app/
