@@ -3,16 +3,21 @@ name: Deploy to Google Cloud Run
 on:
   push:
     branches: [ main ]
-  workflow_dispatch:  # Allows manual trigger
+  workflow_dispatch:
 
 env:
   GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   REGION: us-central1
   SERVICE_NAME: news-tts-service
+  # Increased timeouts for model loading
+  DEPLOY_TIMEOUT: 900
+  STARTUP_TIMEOUT: 300
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 30  # Overall workflow timeout
+    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -32,13 +37,14 @@ jobs:
           gcloud services enable containerregistry.googleapis.com
           gcloud services enable cloudbuild.googleapis.com
 
-      - name: Configure Docker for Google Container Registry
-        run: |
-          gcloud auth configure-docker --quiet
+      - name: Configure Docker for GCR
+        run: gcloud auth configure-docker --quiet
 
       - name: Build and push Docker image
         run: |
-          docker build -t gcr.io/${{ env.GCP_PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }} .
+          docker build \
+            --build-arg PYTHON_VERSION=3.11 \
+            -t gcr.io/${{ env.GCP_PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }} .
           docker push gcr.io/${{ env.GCP_PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
 
       - name: Deploy to Cloud Run
@@ -50,12 +56,15 @@ jobs:
           flags: |
             --memory=8Gi
             --cpu=4
-            --timeout=900
+            --timeout=${{ env.DEPLOY_TIMEOUT }}
             --concurrency=50
             --max-instances=5
-            --startup-cpu-boost
+            --cpu-boost
             --execution-environment=gen2
             --port=8080
+            --min-instances=1  # Keep one warm instance
+            --startup-timeout=${{ env.STARTUP_TIMEOUT }}
+            --allow-unauthenticated
           env_vars: |
             MONGO_URI=${{ secrets.MONGO_URI }}
             DATABASE_NAME=${{ secrets.DATABASE_NAME }}
@@ -64,10 +73,14 @@ jobs:
             ELEVENLABS_API_KEY=${{ secrets.ELEVENLABS_API_KEY }}
             CORS_ORIGINS=${{ secrets.CORS_ORIGINS }}
             LOG_LEVEL=${{ secrets.LOG_LEVEL }}
+            HF_HOME=/app/.cache/huggingface
+            TRANSFORMERS_CACHE=/app/.cache/huggingface/transformers
 
-      - name: Show deployment success
+      - name: Verify deployment
         run: |
-          echo "🚀 Deployed successfully!"
-          echo "🌐 Service URL: https://${{ env.SERVICE_NAME }}-${{ hashFiles('**') }}-uc.a.run.app"
-          echo "📘 Docs: https://${{ env.SERVICE_NAME }}-${{ hashFiles('**') }}-uc.a.run.app/docs"
-          echo "💚 Health: https://${{ env.SERVICE_NAME }}-${{ hashFiles('**') }}-uc.a.run.app/health"
+          SERVICE_URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} \
+            --region ${{ env.REGION }} \
+            --format 'value(status.url)')
+          echo "🚀 Service deployed successfully to: ${SERVICE_URL}"
+          echo "⏳ Running health check..."
+          curl -sSf "${SERVICE_URL}/health" && echo "Health check passed!" || echo "Health check failed"
