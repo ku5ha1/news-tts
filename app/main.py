@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api import news
 from app.config.settings import Settings
+import os 
 
 settings = Settings()
 
@@ -40,3 +41,7 @@ async def root():
         "docs": "/docs",
         "health": "/health"
     }
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
