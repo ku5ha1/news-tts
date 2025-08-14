@@ -20,12 +20,14 @@ transformers==4.39.3
 torch==2.2.2
 sentencepiece==0.2.0
 sacremoses==0.1.1
+tokenizers==0.15.2
+protobuf==4.25.3
 
 # Text-to-Speech - ElevenLabs
 elevenlabs==0.2.27
 
 # Firebase integration
-firebase-admin==6.5.0
+firebase-admin==6.6.0
 
 # Language detection
 langdetect==1.0.9
@@ -43,6 +45,4 @@ pytest-asyncio==0.21.1
 
 # Logging and monitoring
 structlog==23.2.0
-
-# CORS support
-fastapi-cors==0.0.6
+colorama==0.4.6
