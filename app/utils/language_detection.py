@@ -1,11 +1,16 @@
 from langdetect import detect
 
+LANGUAGE_TAGS = {
+    "en": "eng_Latn",
+    "hi": "hin_Deva",
+    "kn": "kan_Knda"
+}
+
 def detect_language(text: str) -> str:
-    # Returns 'en', 'hi', or 'kn' (fallback to 'en' if unsupported)
     lang = detect(text)
     if lang.startswith("hi"):
-        return "hi"
+        return LANGUAGE_TAGS["hi"]
     elif lang.startswith("kn"):
-        return "kn"
+        return LANGUAGE_TAGS["kn"]
     else:
-        return "en"
+        return LANGUAGE_TAGS["en"]

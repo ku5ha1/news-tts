@@ -4,6 +4,13 @@ import os
 from pathlib import Path
 import asyncio
 
+LANGUAGE_TAGS = {
+    "en": "eng_Latn",
+    "hi": "hin_Deva",
+    "kn": "kan_Knda"
+}
+
+
 class TranslationService:
     _instance = None
     _models_loaded = False
@@ -69,31 +76,42 @@ class TranslationService:
             print(f"❌ Error loading translation models: {str(e)}")
             raise e
 
-    def _translate(self, text: str, source: str, target: str) -> str:
-        """Translate text from source to target, lazy-loading models if needed."""
-        try:
-            if not text.strip():
-                return text
+    LANGUAGE_TAGS = {
+    "en": "eng_Latn",
+    "hi": "hin_Deva",
+    "kn": "kan_Knda"
+}
 
-            # Load models only when needed
-            if not self._models_loaded:
-                self._load_models()
+def _translate(self, text: str, source: str, target: str) -> str:
+    """Translate text from source to target, lazy-loading models if needed."""
+    try:
+        if not text.strip():
+            return text
 
-            target_token = f"<2{target}> {text}"
+        # Load models only when needed
+        if not self._models_loaded:
+            self._load_models()
 
-            if source == "en":
-                tokenizer, model = self.tokenizer_en_indic, self.model_en_indic
-            else:
-                tokenizer, model = self.tokenizer_indic_en, self.model_indic_en
+        # ✅ Map short code ("en", "hi", "kn") to IndicTrans2 tag
+        target_tag = LANGUAGE_TAGS.get(target)
+        if not target_tag:
+            raise ValueError(f"Unsupported target language: {target}")
 
-            with torch.no_grad():
-                inputs = tokenizer(target_token, return_tensors="pt", padding=True).to(self.device)
-                outputs = model.generate(**inputs, max_length=256)
-                return tokenizer.decode(outputs[0], skip_special_tokens=True)
+        input_text = f"<2{target_tag}> {text}"
 
-        except Exception as e:
-            print(f"⚠️ Translation error ({source}→{target}): {str(e)}")
-            return text  # fallback
+        if source == "en":
+            tokenizer, model = self.tokenizer_en_indic, self.model_en_indic
+        else:
+            tokenizer, model = self.tokenizer_indic_en, self.model_indic_en
+
+        with torch.no_grad():
+            inputs = tokenizer(input_text, return_tensors="pt", padding=True).to(self.device)
+            outputs = model.generate(**inputs, max_length=256)
+            return tokenizer.decode(outputs[0], skip_special_tokens=True)
+
+    except Exception as e:
+        print(f"⚠️ Translation error ({source}→{target}): {str(e)}")
+        return text  # fallback
         
     async def translate_async(self, text: str, source: str, target: str) -> str:
         """Async wrapper so routes can `await` translation"""
