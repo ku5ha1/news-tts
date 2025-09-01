@@ -19,3 +19,4 @@ secrets.json
 
 deploy.sh
 key/
+gcp-key.json.base64
