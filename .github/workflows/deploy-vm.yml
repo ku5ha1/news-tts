@@ -33,12 +33,14 @@ jobs:
           docker build -t $IMAGE_NAME .
           docker push $IMAGE_NAME
 
-      # --- Deploy on VM ---
+            # --- Deploy on VM ---
       - name: Deploy on VM
         env:
           IMAGE_NAME: us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/newservice-repo/newservice:latest
         run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} << EOF
+          echo "${{ secrets.VM_SSH_KEY }}" > private_key.pem
+          chmod 600 private_key.pem
+          ssh -i private_key.pem -o StrictHostKeyChecking=no ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} << EOF
             docker stop newservice || true
             docker rm newservice || true
             docker pull $IMAGE_NAME
@@ -49,3 +51,4 @@ jobs:
               --name newservice \
               $IMAGE_NAME
           EOF
+
