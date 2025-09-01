@@ -112,3 +112,5 @@ class TranslationService:
             "en_indic_model": "ai4bharat/IndicTrans2-en-indic-1B",
             "indic_en_model": "ai4bharat/IndicTrans2-indic-en-1B"
         }
+
+translation_service = TranslationService()
