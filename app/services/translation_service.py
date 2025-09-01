@@ -2,6 +2,7 @@ from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 import torch
 import os
 from pathlib import Path
+import asyncio
 
 class TranslationService:
     _instance = None
@@ -93,6 +94,11 @@ class TranslationService:
         except Exception as e:
             print(f"⚠️ Translation error ({source}→{target}): {str(e)}")
             return text  # fallback
+        
+    async def translate_async(self, text: str, source: str, target: str) -> str:
+        """Async wrapper so routes can `await` translation"""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self._translate, text, source, target)
 
     def translate_to_all(self, title: str, description: str, source_lang: str):
         """Translate text to all supported languages except the source."""
