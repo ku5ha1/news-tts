@@ -16,3 +16,6 @@ gcp-service-account-key.json
 *.key
 *.pem
 secrets.json
+
+deploy.sh 
+key/
