@@ -16,9 +16,10 @@ aiofiles==23.2.1
 python-multipart==0.0.6
 
 # Translation - AI4Bharat IndicTrans2
+numpy<2
 transformers==4.39.3
 torch==2.2.2
-sentencepiece==0.2.0
+sentencepiece==0.2.0    
 sacremoses==0.1.1
 tokenizers==0.15.2
 protobuf==4.25.3

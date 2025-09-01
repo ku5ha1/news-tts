@@ -15,7 +15,9 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 
 # Install Python packages
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt \
+    --extra-index-url https://download.pytorch.org/whl/cpu \
+    --timeout 3600 --retries 10 --progress-bar off
 
 # Set environment variables for model cache
 ENV HF_HOME=/app/.cache/huggingface
@@ -27,12 +29,12 @@ ENV PORT=8080
 # Create cache directory
 RUN mkdir -p ${HF_HOME}/transformers
 
-# Pre-download AI4Bharat models
-RUN python -c "from transformers import AutoTokenizer, AutoModelForSeq2SeqLM; \
-    AutoTokenizer.from_pretrained('ai4bharat/IndicTrans2-en-indic-1B', trust_remote_code=True, cache_dir='${TRANSFORMERS_CACHE}'); \
-    AutoModelForSeq2SeqLM.from_pretrained('ai4bharat/IndicTrans2-en-indic-1B', trust_remote_code=True, cache_dir='${TRANSFORMERS_CACHE}'); \
-    AutoTokenizer.from_pretrained('ai4bharat/IndicTrans2-indic-en-1B', trust_remote_code=True, cache_dir='${TRANSFORMERS_CACHE}'); \
-    AutoModelForSeq2SeqLM.from_pretrained('ai4bharat/IndicTrans2-indic-en-1B', trust_remote_code=True, cache_dir='${TRANSFORMERS_CACHE}')" 
+# # Pre-download AI4Bharat models
+# RUN python -c "from transformers import AutoTokenizer, AutoModelForSeq2SeqLM; \
+#     AutoTokenizer.from_pretrained('ai4bharat/IndicTrans2-en-indic-1B', trust_remote_code=True, cache_dir='${TRANSFORMERS_CACHE}'); \
+#     AutoModelForSeq2SeqLM.from_pretrained('ai4bharat/IndicTrans2-en-indic-1B', trust_remote_code=True, cache_dir='${TRANSFORMERS_CACHE}'); \
+#     AutoTokenizer.from_pretrained('ai4bharat/IndicTrans2-indic-en-1B', trust_remote_code=True, cache_dir='${TRANSFORMERS_CACHE}'); \
+#     AutoModelForSeq2SeqLM.from_pretrained('ai4bharat/IndicTrans2-indic-en-1B', trust_remote_code=True, cache_dir='${TRANSFORMERS_CACHE}')" 
 
 # Copy application code
 COPY app/ ./app/

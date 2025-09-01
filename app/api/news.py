@@ -7,7 +7,7 @@ from app.models.news import (
     TranslationRequest, TranslationResponse,
     TTSRequest, TTSResponse, HealthResponse
 )
-from app.services.translation_service import translation_service
+from app.services.translation_service import TranslationService, translation_service
 from app.services.tts_service import TTSService
 from app.services.firebase_service import FirebaseService
 from app.services.db_service import DBService
@@ -27,7 +27,7 @@ async def create_news(payload: NewsCreateRequest):
         source_lang = detect_language(payload.title + " " + payload.description)
 
         # Translate to all required languages asynchronously
-        translations = await translation_service.translate_to_all_async(
+        translations = await translation_service.translate_to_all(
             payload.title, payload.description, source_lang
         )
 
