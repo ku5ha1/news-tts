@@ -1,62 +1,58 @@
-name: Deploy to GCP VM
+name: Deploy to VM
 
 on:
   push:
     branches:
-      - main
+      - main   # 👈 adjust if your default branch is different
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-      # 🔑 Authenticate with Google Cloud using service account JSON
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
-        with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
-
-      - name: Set up gcloud CLI
+      # Authenticate to Google Cloud with Service Account
+      - name: Set up gcloud
         uses: google-github-actions/setup-gcloud@v2
         with:
           project_id: ${{ secrets.GCP_PROJECT_ID }}
+          service_account_key: ${{ secrets.GCP_SA_KEY }}
+          export_default_credentials: true
 
-      # 🐳 Configure Docker for Artifact Registry
-      - name: Configure Docker for Artifact Registry
+      # Configure Docker to push to Artifact Registry
+      - name: Configure Docker
         run: gcloud auth configure-docker us-central1-docker.pkg.dev -q
 
-      # 📦 Build & Push Docker image
-      - name: Build & Push Docker image
+      # Build & push Docker image
+      - name: Build and push Docker image
         run: |
-          IMAGE_NAME=us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/newservice-repo/newservice:latest
-          echo "IMAGE_NAME=$IMAGE_NAME" >> $GITHUB_ENV
-          docker build -t $IMAGE_NAME .
-          docker push $IMAGE_NAME
+          IMAGE="us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/newservice-repo/newservice:latest"
+          docker build -t $IMAGE .
+          docker push $IMAGE
 
-      # 🚀 Deploy to VM via SSH
+      # Deploy to VM via SSH
       - name: Deploy on VM
-        uses: appleboy/ssh-action@v1.0.0
+        uses: appleboy/ssh-action@v0.1.8
         with:
           host: ${{ secrets.VM_HOST }}
           username: ${{ secrets.VM_USER }}
           key: ${{ secrets.VM_SSH_KEY }}
           script: |
-            IMAGE_NAME=us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/newservice-repo/newservice:latest
-
-            echo "🛑 Stopping old container..."
+            echo "🛑 Stopping old container if exists..."
             docker stop newservice || true
             docker rm newservice || true
 
             echo "📥 Pulling latest image..."
-            docker pull $IMAGE_NAME
+            docker pull us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/newservice-repo/newservice:latest
 
             echo "🚀 Starting new container..."
             docker run -d \
               -p 8080:8080 \
               --restart=always \
-              --env-file /home/${{ secrets.VM_USER }}/.env \
+              --env-file /home/kushal/.env \
               --name newservice \
-              $IMAGE_NAME
+              us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/newservice-repo/newservice:latest
+
+            echo "✅ Deployment complete! Service running on http://${{ secrets.VM_HOST }}:8080/docs"
