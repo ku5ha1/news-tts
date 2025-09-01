@@ -3,7 +3,7 @@ name: Deploy to GCP VM
 on:
   push:
     branches:
-      - main   # Trigger deployment only on pushes to main
+      - main
 
 jobs:
   deploy:
@@ -13,15 +13,18 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 🔑 Authenticate with Google Cloud
-      - name: Set up gcloud
+      # 🔑 Authenticate with Google Cloud using service account JSON
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up gcloud CLI
         uses: google-github-actions/setup-gcloud@v2
         with:
           project_id: ${{ secrets.GCP_PROJECT_ID }}
-          service_account_key: ${{ secrets.GCP_SA_KEY }}
-          export_default_credentials: true
 
-      # 🐳 Configure Docker auth for Artifact Registry
+      # 🐳 Configure Docker for Artifact Registry
       - name: Configure Docker for Artifact Registry
         run: gcloud auth configure-docker us-central1-docker.pkg.dev -q
 
