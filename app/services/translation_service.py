@@ -13,19 +13,31 @@ class TranslationService:
         return cls._instance
 
     def __init__(self):
-        if not self._models_loaded:
-            self._load_models()
-            TranslationService._models_loaded = True
+        # Don't load models at startup, only initialize placeholders
+        if not hasattr(self, "device"):
+            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            self.tokenizer_en_indic = None
+            self.model_en_indic = None
+            self.tokenizer_indic_en = None
+            self.model_indic_en = None
 
     def _load_models(self):
-        """Load AI4Bharat translation models with caching."""
+        """Load AI4Bharat translation models if not already loaded."""
+        if self._models_loaded:
+            return
+
         try:
-            cache_dir = Path(os.environ.get("TRANSFORMERS_CACHE", Path.home() / ".cache" / "huggingface" / "transformers"))
+            cache_dir = Path(
+                os.environ.get(
+                    "TRANSFORMERS_CACHE",
+                    Path.home() / ".cache" / "huggingface" / "transformers"
+                )
+            )
             cache_dir.mkdir(parents=True, exist_ok=True)
 
             print("🚀 Loading AI4Bharat translation models...")
 
-            # Load en→indic model
+            # en→indic
             self.tokenizer_en_indic = AutoTokenizer.from_pretrained(
                 "ai4bharat/IndicTrans2-en-indic-1B",
                 trust_remote_code=True,
@@ -35,9 +47,9 @@ class TranslationService:
                 "ai4bharat/IndicTrans2-en-indic-1B",
                 trust_remote_code=True,
                 cache_dir=cache_dir
-            )
+            ).to(self.device).eval()
 
-            # Load indic→en model
+            # indic→en
             self.tokenizer_indic_en = AutoTokenizer.from_pretrained(
                 "ai4bharat/IndicTrans2-indic-en-1B",
                 trust_remote_code=True,
@@ -47,25 +59,24 @@ class TranslationService:
                 "ai4bharat/IndicTrans2-indic-en-1B",
                 trust_remote_code=True,
                 cache_dir=cache_dir
-            )
+            ).to(self.device).eval()
 
-            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-            print(f"✅ Using device: {self.device}")
-
-            self.model_en_indic.to(self.device).eval()
-            self.model_indic_en.to(self.device).eval()
-
-            print("✅ AI4Bharat translation models loaded successfully!")
+            TranslationService._models_loaded = True
+            print(f"✅ Models loaded successfully on device: {self.device}")
 
         except Exception as e:
             print(f"❌ Error loading translation models: {str(e)}")
             raise e
 
     def _translate(self, text: str, source: str, target: str) -> str:
-        """Translate text from source language to target language."""
+        """Translate text from source to target, lazy-loading models if needed."""
         try:
             if not text.strip():
                 return text
+
+            # Load models only when needed
+            if not self._models_loaded:
+                self._load_models()
 
             target_token = f"<2{target}> {text}"
 
@@ -81,11 +92,14 @@ class TranslationService:
 
         except Exception as e:
             print(f"⚠️ Translation error ({source}→{target}): {str(e)}")
-            return text  # Fallback to original text
+            return text  # fallback
 
     def translate_to_all(self, title: str, description: str, source_lang: str):
         """Translate text to all supported languages except the source."""
         try:
+            if not self._models_loaded:
+                self._load_models()
+
             languages = ["en", "hi", "kn"]
             result = {}
 
@@ -103,14 +117,16 @@ class TranslationService:
             return {}
 
     def is_models_loaded(self) -> bool:
-        return self._models_loaded and hasattr(self, 'model_en_indic') and hasattr(self, 'model_indic_en')
+        return self._models_loaded
 
     def get_model_info(self) -> dict:
         return {
             "models_loaded": self.is_models_loaded(),
-            "device": str(self.device) if hasattr(self, 'device') else "unknown",
+            "device": str(self.device),
             "en_indic_model": "ai4bharat/IndicTrans2-en-indic-1B",
             "indic_en_model": "ai4bharat/IndicTrans2-indic-en-1B"
         }
 
+
+# ✅ Export a single instance
 translation_service = TranslationService()
