@@ -15,22 +15,20 @@ httpx==0.25.2
 aiofiles==23.2.1
 python-multipart==0.0.6
 
-# Translation - AI4Bharat IndicTrans2
-numpy==1.26.4
+# PyTorch CPU-only (install first to avoid conflicts)
+--find-links https://download.pytorch.org/whl/cpu/torch_stable.html
 torch==2.2.0+cpu
 torchvision==0.17.0+cpu
 torchaudio==2.2.0+cpu
--f https://download.pytorch.org/whl/cpu/torch_stable.html
 
+# Translation - AI4Bharat IndicTrans2
+numpy==1.26.4
 transformers==4.39.3
 sentencepiece==0.2.0
 sacremoses==0.1.1
 tokenizers==0.15.2
 protobuf==4.25.3
 indic-nlp-library==0.92
-
-# IndicTransToolkit (official mirror)
-git+https://github.com/VarunGumma/IndicTransToolkit.git
 
 # Text-to-Speech - ElevenLabs
 elevenlabs==0.2.27
@@ -45,7 +43,6 @@ langdetect==1.0.9
 python-dotenv==1.0.1
 
 # Utilities
-uuid==1.30
 python-dateutil==2.8.2
 
 # Testing
@@ -55,3 +52,6 @@ pytest-asyncio==0.21.1
 # Logging and monitoring
 structlog==23.2.0
 colorama==0.4.6
+
+# IndicTransToolkit (install after other dependencies)
+git+https://github.com/VarunGumma/IndicTransToolkit.git

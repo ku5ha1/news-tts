@@ -7,11 +7,14 @@ from app.models.news import (
     TranslationRequest, TranslationResponse,
     TTSRequest, TTSResponse, HealthResponse
 )
-from app.services.translation_service import TranslationService, translation_service
+from app.services.translation_service import translation_service
 from app.services.tts_service import TTSService
 from app.services.firebase_service import FirebaseService
 from app.services.db_service import DBService
 from app.utils.language_detection import detect_language
+import logging 
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -86,13 +89,58 @@ async def create_news(payload: NewsCreateRequest):
 async def translate_text(payload: TranslationRequest):
     """Translate text between languages"""
     try:
-        start_time = datetime.utcnow()
-        translated_text = await translation_service.translate_async(
-            payload.text, payload.source_language, payload.target_language
-        )
-        translation_time = (datetime.utcnow() - start_time).total_seconds()
+        logger.info(f"Received translation request: {payload.source_language} -> {payload.target_language}")
+        logger.info(f"Request payload: {payload}")
+        
+        # Validate input
+        if not payload.text.strip():
+            logger.error("Empty text provided")
+            raise HTTPException(status_code=400, detail="Text cannot be empty")
+        
+        if payload.source_language == payload.target_language:
+            logger.info("Source and target languages are the same, returning original text")
+            return TranslationResponse(
+                success=True,
+                data={
+                    "original_text": payload.text,
+                    "translated_text": payload.text,
+                    "source_language": payload.source_language,
+                    "target_language": payload.target_language,
+                    "translation_time": 0.0
+                }
+            )
 
-        return TranslationResponse(
+        start_time = datetime.utcnow()
+        logger.info("Starting translation process...")
+        
+        # Add timeout for translation (5 minutes for model loading)
+        try:
+            logger.info("Calling translation_service.translate_async...")
+            translated_text = await asyncio.wait_for(
+                translation_service.translate_async(
+                    payload.text, 
+                    payload.source_language, 
+                    payload.target_language
+                ),
+                timeout=300.0  # 5 minutes timeout
+            )
+            logger.info(f"Translation service returned: '{translated_text}'")
+            
+        except asyncio.TimeoutError:
+            logger.error("Translation request timed out")
+            raise HTTPException(
+                status_code=504, 
+                detail="Translation request timed out. This may happen during initial model loading."
+            )
+        except Exception as e:
+            logger.error(f"Translation service threw exception: {str(e)}")
+            raise
+        
+        translation_time = (datetime.utcnow() - start_time).total_seconds()
+        
+        logger.info(f"Translation completed in {translation_time:.2f} seconds")
+
+        response = TranslationResponse(
             success=True,
             data={
                 "original_text": payload.text,
@@ -102,8 +150,20 @@ async def translate_text(payload: TranslationRequest):
                 "translation_time": translation_time
             }
         )
+        
+        logger.info(f"Returning response: {response}")
+        return response
+        
+    except HTTPException as he:
+        logger.error(f"HTTP Exception: {he.detail}")
+        # Re-raise HTTP exceptions
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Translation error: {str(e)}")
+        logger.error(f"Unexpected error in translate_text: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Translation error: {str(e)}"
+        )   
 
 @router.post("/tts/generate", response_model=TTSResponse)
 async def generate_tts(payload: TTSRequest):
@@ -131,7 +191,7 @@ async def health_check():
     """Health check endpoint"""
     return HealthResponse(
         status="healthy",
-        models_loaded=translation_service.is_models_loaded(),
+        models_loaded=translation_service.is_models_loaded(), # type: ignore
         database_connected=await db_service.is_connected(),
         firebase_connected=firebase_service.is_connected(),
         timestamp=datetime.utcnow(),

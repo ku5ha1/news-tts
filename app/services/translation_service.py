@@ -2,15 +2,20 @@ import torch
 import os
 from pathlib import Path
 import asyncio
+import logging
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 from IndicTransToolkit import IndicProcessor
 
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 # Select model size from env: "1B" or "dist-200M"
-MODEL_SIZE = os.getenv("MODEL_SIZE", "1B")
+MODEL_SIZE = os.getenv("MODEL_SIZE", "dist-200M")  # Use smaller model by default
 
 MODEL_NAMES = {
     "en_indic": f"ai4bharat/indictrans2-en-indic-{MODEL_SIZE}",
-    "indic_en": f"ai4bharat/indictrans2-indic-en-{MODEL_SIZE}"
+    "indic_en": f"ai4bharat/indictrans2-indic-en-{MODEL_SIZE}",
 }
 
 
@@ -26,6 +31,7 @@ class TranslationService:
         if not hasattr(self, "device"):
             # Prefer CUDA if available, else CPU
             self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            logger.info(f"Using device: {self.device}")
 
             # Processor handles normalization, tagging, and detokenization
             self.ip = IndicProcessor(inference=True)
@@ -35,13 +41,17 @@ class TranslationService:
             self.model_en_indic = None
             self.tokenizer_indic_en = None
             self.model_indic_en = None
+            
+            # Track loading status
+            self.loading_en_indic = False
+            self.loading_indic_en = False
 
     def _get_cache_dir(self):
         """Resolve Hugging Face cache dir inside container."""
         cache_dir = Path(
             os.environ.get(
                 "TRANSFORMERS_CACHE",
-                Path.home() / ".cache" / "huggingface" / "transformers"
+                Path.home() / ".cache" / "huggingface" / "transformers",
             )
         )
         cache_dir.mkdir(parents=True, exist_ok=True)
@@ -49,27 +59,59 @@ class TranslationService:
 
     def _load_en_indic(self):
         """Load en→indic model lazily."""
-        if self.model_en_indic is None:
-            print(f"🚀 Loading {MODEL_NAMES['en_indic']} ...")
-            cache_dir = self._get_cache_dir()
-            self.tokenizer_en_indic = AutoTokenizer.from_pretrained(
-                MODEL_NAMES["en_indic"], trust_remote_code=True, cache_dir=cache_dir
-            )
-            self.model_en_indic = AutoModelForSeq2SeqLM.from_pretrained(
-                MODEL_NAMES["en_indic"], trust_remote_code=True, cache_dir=cache_dir
-            ).to(self.device).eval()
+        if self.model_en_indic is None and not self.loading_en_indic:
+            try:
+                self.loading_en_indic = True
+                logger.info(f"🚀 Loading {MODEL_NAMES['en_indic']} ...")
+                cache_dir = self._get_cache_dir()
+                
+                self.tokenizer_en_indic = AutoTokenizer.from_pretrained(
+                    MODEL_NAMES["en_indic"], 
+                    trust_remote_code=True, 
+                    cache_dir=cache_dir
+                )
+                
+                self.model_en_indic = AutoModelForSeq2SeqLM.from_pretrained(
+                    MODEL_NAMES["en_indic"], 
+                    trust_remote_code=True, 
+                    cache_dir=cache_dir,
+                    torch_dtype=torch.float16 if self.device.type == 'cuda' else torch.float32  # Use half precision for GPU
+                ).to(self.device).eval()
+                
+                logger.info("✅ EN→Indic model loaded successfully")
+            except Exception as e:
+                logger.error(f"❌ Failed to load EN→Indic model: {str(e)}")
+                raise
+            finally:
+                self.loading_en_indic = False
 
     def _load_indic_en(self):
         """Load indic→en model lazily."""
-        if self.model_indic_en is None:
-            print(f"🚀 Loading {MODEL_NAMES['indic_en']} ...")
-            cache_dir = self._get_cache_dir()
-            self.tokenizer_indic_en = AutoTokenizer.from_pretrained(
-                MODEL_NAMES["indic_en"], trust_remote_code=True, cache_dir=cache_dir
-            )
-            self.model_indic_en = AutoModelForSeq2SeqLM.from_pretrained(
-                MODEL_NAMES["indic_en"], trust_remote_code=True, cache_dir=cache_dir
-            ).to(self.device).eval()
+        if self.model_indic_en is None and not self.loading_indic_en:
+            try:
+                self.loading_indic_en = True
+                logger.info(f"🚀 Loading {MODEL_NAMES['indic_en']} ...")
+                cache_dir = self._get_cache_dir()
+                
+                self.tokenizer_indic_en = AutoTokenizer.from_pretrained(
+                    MODEL_NAMES["indic_en"], 
+                    trust_remote_code=True, 
+                    cache_dir=cache_dir
+                )
+                
+                self.model_indic_en = AutoModelForSeq2SeqLM.from_pretrained(
+                    MODEL_NAMES["indic_en"], 
+                    trust_remote_code=True, 
+                    cache_dir=cache_dir,
+                    torch_dtype=torch.float16 if self.device.type == 'cuda' else torch.float32  # Use half precision for GPU
+                ).to(self.device).eval()
+                
+                logger.info("✅ Indic→EN model loaded successfully")
+            except Exception as e:
+                logger.error(f"❌ Failed to load Indic→EN model: {str(e)}")
+                raise
+            finally:
+                self.loading_indic_en = False
 
     def _translate(self, text: str, source: str, target: str) -> str:
         """Translate text using IndicTrans2 official pipeline."""
@@ -77,56 +119,100 @@ class TranslationService:
             if not text.strip():
                 return text
 
-            # Pick direction
+            logger.info(f"Translating: '{text[:50]}...' from {source} to {target}")
+
+            # Pick correct direction
             if source == "en":
+                logger.info("Loading EN->Indic model")
                 self._load_en_indic()
                 tokenizer, model = self.tokenizer_en_indic, self.model_en_indic
             else:
+                logger.info("Loading Indic->EN model")
                 self._load_indic_en()
                 tokenizer, model = self.tokenizer_indic_en, self.model_indic_en
 
+            logger.info("Models loaded, starting preprocessing...")
+
             # Preprocess (adds tags + normalization)
-            batch = self.ip.preprocess_batch([text], src_lang=source, tgt_lang=target)
+            try:
+                batch = self.ip.preprocess_batch([text], src_lang=source, tgt_lang=target)
+                logger.info(f"Preprocessed batch: {batch}")
+            except Exception as e:
+                logger.error(f"Preprocessing failed: {str(e)}")
+                raise
 
-            with torch.no_grad():
-                inputs = tokenizer(
-                    batch,
-                    truncation=True,
-                    padding="longest",
-                    return_tensors="pt",
-                    return_attention_mask=True,
-                ).to(self.device)
+            logger.info("Starting tokenization...")
+            try:
+                with torch.no_grad():
+                    inputs = tokenizer(
+                        batch,
+                        truncation=True,
+                        padding="longest",
+                        return_tensors="pt",
+                        return_attention_mask=True,
+                    ).to(self.device)
+                    
+                    logger.info(f"Input shape: {inputs['input_ids'].shape}")
+                    
+                    logger.info("Starting model generation...")
+                    outputs = model.generate(
+                        **inputs,
+                        use_cache=True,
+                        min_length=0,
+                        max_length=256,
+                        num_beams=5,
+                        num_return_sequences=1,
+                    )
+                    
+                    logger.info(f"Generation completed, output shape: {outputs.shape}")
 
-                outputs = model.generate(
-                    **inputs,
-                    use_cache=True,
-                    min_length=0,
-                    max_length=256,
-                    num_beams=5,
-                    num_return_sequences=1,
-                )
+            except Exception as e:
+                logger.error(f"Generation failed: {str(e)}")
+                raise
 
-            # Decode with proper target tokenizer context
-            with tokenizer.as_target_tokenizer():
-                decoded = tokenizer.batch_decode(
-                    outputs.detach().cpu().tolist(),
-                    skip_special_tokens=True,
-                    clean_up_tokenization_spaces=True,
-                )
+            logger.info("Starting decoding...")
+            try:
+                # Decode with proper target tokenizer context
+                with tokenizer.as_target_tokenizer():
+                    decoded = tokenizer.batch_decode(
+                        outputs.detach().cpu().tolist(),
+                        skip_special_tokens=True,
+                        clean_up_tokenization_spaces=True,
+                    )
+                
+                logger.info(f"Decoded output: {decoded}")
 
-            # Postprocess (detokenization/entity replacement)
-            translations = self.ip.postprocess_batch(decoded, lang=target)
+                # Postprocess (detokenization/entity replacement)
+                translations = self.ip.postprocess_batch(decoded, lang=target)
+                result = translations[0] if translations else text
+                
+                logger.info(f"Final translation result: '{result}'")
+                return result
 
-            return translations[0] if translations else text
+            except Exception as e:
+                logger.error(f"Decoding/postprocessing failed: {str(e)}")
+                raise
 
         except Exception as e:
-            print(f"⚠️ Translation error ({source}→{target}): {str(e)}")
-            return text
+            import traceback
+            logger.error(f"Full traceback:")
+            traceback.print_exc()
+            logger.error(f"⚠️ Translation error ({source}→{target}): {str(e)}")
+            # Don't return fallback - let the error bubble up so we can see what's happening
+            raise
 
     async def translate_async(self, text: str, source: str, target: str) -> str:
         """Async wrapper so routes can await translation."""
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, self._translate, text, source, target)
+        try:
+            # Use a larger thread pool for CPU-intensive tasks
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                loop = asyncio.get_event_loop()
+                result = await loop.run_in_executor(executor, self._translate, text, source, target)
+                return result
+        except Exception as e:
+            logger.error(f"Error in translate_async: {str(e)}")
+            raise
 
     def translate_to_all(self, title: str, description: str, source_lang: str):
         """Translate title/description to all supported langs except source."""
@@ -142,14 +228,23 @@ class TranslationService:
                 }
             return result
         except Exception as e:
-            print(f"⚠️ Error in translate_to_all: {str(e)}")
+            logger.error(f"⚠️ Error in translate_to_all: {str(e)}")
             return {}
 
+    @property
+    def is_models_loaded(self) -> bool:
+        """Check if any models are loaded"""
+        return (self.model_en_indic is not None) or (self.model_indic_en is not None)
+    
     def get_model_info(self) -> dict:
         return {
             "device": str(self.device),
+            "model_size": MODEL_SIZE,
             "en_indic_model": MODEL_NAMES["en_indic"] if self.model_en_indic else None,
             "indic_en_model": MODEL_NAMES["indic_en"] if self.model_indic_en else None,
+            "en_indic_loaded": self.model_en_indic is not None,
+            "indic_en_loaded": self.model_indic_en is not None,
+            "any_model_loaded": self.is_models_loaded,
         }
 
 
