@@ -54,7 +54,7 @@ async def preload_models() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Kick model loading without blocking ASGI startup
-    await preload_models()
+    # await preload_models()
     yield
     # (Optional) cleanup here
 

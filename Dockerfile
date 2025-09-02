@@ -11,8 +11,7 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 
 # Install Python packages (CPU-only Torch)
-RUN pip install --no-cache-dir -r requirements.txt \
-    -f https://download.pytorch.org/whl/cpu/torch_stable.html
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Env vars
 ENV HF_HOME=/app/.cache/huggingface

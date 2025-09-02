@@ -16,13 +16,21 @@ aiofiles==23.2.1
 python-multipart==0.0.6
 
 # Translation - AI4Bharat IndicTrans2
-numpy<2
+numpy==1.26.4
+torch==2.2.0+cpu
+torchvision==0.17.0+cpu
+torchaudio==2.2.0+cpu
+-f https://download.pytorch.org/whl/cpu/torch_stable.html
+
 transformers==4.39.3
-torch==2.2.0+cpu -f https://download.pytorch.org/whl/cpu/torch_stable.html
-sentencepiece==0.2.0    
+sentencepiece==0.2.0
 sacremoses==0.1.1
 tokenizers==0.15.2
 protobuf==4.25.3
+indic-nlp-library==0.92
+
+# IndicTransToolkit (official mirror)
+git+https://github.com/VarunGumma/IndicTransToolkit.git
 
 # Text-to-Speech - ElevenLabs
 elevenlabs==0.2.27
@@ -40,7 +48,7 @@ python-dotenv==1.0.1
 uuid==1.30
 python-dateutil==2.8.2
 
-# Testing (optional)
+# Testing
 pytest==7.4.3
 pytest-asyncio==0.21.1
 

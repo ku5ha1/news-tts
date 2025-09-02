@@ -1,8 +1,7 @@
 #!/bin/bash
-echo "🔥 Warming up AI4Bharat translation models..."
-python -c "from app.services.translation_service import TranslationService; TranslationService(); print('✅ Models loaded successfully!')"
+set -e
 
-# Start the FastAPI server
+echo "🚀 Starting FastAPI server without preload (lazy model loading)..."
 exec uvicorn app.main:app \
     --host 0.0.0.0 \
     --port ${PORT:-8080} \
