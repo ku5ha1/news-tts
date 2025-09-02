@@ -1,4 +1,5 @@
 from pydantic_settings import BaseSettings
+from typing import Optional
 
 class Settings(BaseSettings):
     # API Configuration
@@ -16,11 +17,13 @@ class Settings(BaseSettings):
     AI4BHARAT_MODELS_PATH: str
     ELEVENLABS_API_KEY: str
     
-    # AWS/Azure Configuration
+    # Cloud Configuration
     CLOUD_PROVIDER: str
-    REGION: str
-    CLUSTER_NAME: str
-    SERVICE_NAME: str
+    # These fields are now optional, which is what we need to avoid the validation error.
+    # We'll default them to None if they are not found in the environment.
+    REGION: Optional[str] = None
+    CLUSTER_NAME: Optional[str] = None
+    SERVICE_NAME: Optional[str] = None
     
     # Logging
     LOG_LEVEL: str

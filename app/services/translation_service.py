@@ -10,7 +10,6 @@ LANGUAGE_TAGS = {
     "kn": "kan_Knda"
 }
 
-
 class TranslationService:
     _instance = None
     _models_loaded = False
