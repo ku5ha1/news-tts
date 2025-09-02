@@ -1,45 +1,32 @@
-# Use a slim Python image
 FROM python:3.11-slim
 
-# Set working directory inside the container
 WORKDIR /app
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
-    gcc \
-    g++ \
-    curl \
+    gcc g++ git curl libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first for better caching
+# Copy requirements first
 COPY requirements.txt .
 
-# Install Python packages
+# Install Python packages (CPU-only Torch)
 RUN pip install --no-cache-dir -r requirements.txt \
-    --extra-index-url https://download.pytorch.org/whl/cpu \
-    --timeout 3600 --retries 10 --progress-bar off
+    -f https://download.pytorch.org/whl/cpu/torch_stable.html
 
-# Set environment variables for model cache
+# Env vars
 ENV HF_HOME=/app/.cache/huggingface
 ENV TRANSFORMERS_CACHE=${HF_HOME}/transformers
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 ENV PORT=8080
 
-# Create cache directory
 RUN mkdir -p ${HF_HOME}/transformers
 
-# # Pre-download AI4Bharat models
-# RUN python -c "from transformers import AutoTokenizer, AutoModelForSeq2SeqLM; \
-#     AutoTokenizer.from_pretrained('ai4bharat/IndicTrans2-en-indic-1B', trust_remote_code=True, cache_dir='${TRANSFORMERS_CACHE}'); \
-#     AutoModelForSeq2SeqLM.from_pretrained('ai4bharat/IndicTrans2-en-indic-1B', trust_remote_code=True, cache_dir='${TRANSFORMERS_CACHE}'); \
-#     AutoTokenizer.from_pretrained('ai4bharat/IndicTrans2-indic-en-1B', trust_remote_code=True, cache_dir='${TRANSFORMERS_CACHE}'); \
-#     AutoModelForSeq2SeqLM.from_pretrained('ai4bharat/IndicTrans2-indic-en-1B', trust_remote_code=True, cache_dir='${TRANSFORMERS_CACHE}')" 
-
-# Copy application code
+# Copy app code
 COPY app/ ./app/
 
-# Add warm-up script
+# Entrypoint
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
