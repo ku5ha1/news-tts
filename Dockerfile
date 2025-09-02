@@ -20,6 +20,8 @@ RUN pip install --no-cache-dir --verbose -r requirements.txt
 # Env vars
 ENV HF_HOME=/app/.cache/huggingface
 ENV TRANSFORMERS_CACHE=${HF_HOME}/transformers
+ENV HF_HUB_DISABLE_PROGRESS_BARS=1
+ENV TOKENIZERS_PARALLELISM=false
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 ENV PORT=8080

@@ -54,7 +54,14 @@ async def preload_models() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Kick model loading without blocking ASGI startup
-    # await preload_models()
+    # Optional global preload for HF cache: await preload_models()
+    # Service-level warmup to avoid first-request stalls
+    try:
+        from app.services.translation_service import translation_service
+        # Run warmup in background so startup isn't blocked for long
+        asyncio.create_task(asyncio.to_thread(translation_service.warmup))
+    except Exception:
+        log.exception("Warmup scheduling failed")
     yield
     # (Optional) cleanup here
 
@@ -76,10 +83,14 @@ app = FastAPI(
 )
 
 # CORS configuration
+_cors_origins = _parse_cors(os.getenv("CORS_ORIGINS"))
+# If using wildcard origins, do not allow credentials per CORS spec
+_allow_credentials = False if _cors_origins == ["*"] else True
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_parse_cors(os.getenv("CORS_ORIGINS")),
-    allow_credentials=True,
+    allow_origins=_cors_origins,
+    allow_credentials=_allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )

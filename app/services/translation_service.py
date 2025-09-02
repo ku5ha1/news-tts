@@ -5,6 +5,7 @@ import asyncio
 import logging
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 from IndicTransToolkit import IndicProcessor
+import time
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -121,21 +122,59 @@ class TranslationService:
 
             logger.info(f"Translating: '{text[:50]}...' from {source} to {target}")
 
-            # Pick correct direction
-            if source == "en":
-                logger.info("Loading EN->Indic model")
+            # Map ISO short codes to IndicTrans tags
+            def _to_indictrans_tag(code: str) -> str:
+                mapping = {
+                    "en": "eng_Latn",
+                    "hi": "hin_Deva",
+                    "kn": "kan_Knda",
+                }
+                if code not in mapping:
+                    raise ValueError(f"Unsupported language code: {code}")
+                return mapping[code]
+
+            src_tag = _to_indictrans_tag(source)
+            tgt_tag = _to_indictrans_tag(target)
+
+            # Pick correct direction and ensure model is ready
+            def _ensure_ready_en_indic(timeout_sec: float = 600.0):
+                start = time.monotonic()
+                # Trigger load if not started
                 self._load_en_indic()
+                while self.model_en_indic is None or self.tokenizer_en_indic is None:
+                    if time.monotonic() - start > timeout_sec:
+                        raise TimeoutError("Timeout waiting for EN→Indic model to load")
+                    # If not actively loading, try loading again
+                    if not self.loading_en_indic:
+                        self._load_en_indic()
+                    time.sleep(0.5)
+
+            def _ensure_ready_indic_en(timeout_sec: float = 600.0):
+                start = time.monotonic()
+                # Trigger load if not started
+                self._load_indic_en()
+                while self.model_indic_en is None or self.tokenizer_indic_en is None:
+                    if time.monotonic() - start > timeout_sec:
+                        raise TimeoutError("Timeout waiting for Indic→EN model to load")
+                    # If not actively loading, try loading again
+                    if not self.loading_indic_en:
+                        self._load_indic_en()
+                    time.sleep(0.5)
+
+            if source == "en":
+                logger.info("Ensuring EN->Indic model is ready")
+                _ensure_ready_en_indic()
                 tokenizer, model = self.tokenizer_en_indic, self.model_en_indic
             else:
-                logger.info("Loading Indic->EN model")
-                self._load_indic_en()
+                logger.info("Ensuring Indic->EN model is ready")
+                _ensure_ready_indic_en()
                 tokenizer, model = self.tokenizer_indic_en, self.model_indic_en
 
             logger.info("Models loaded, starting preprocessing...")
 
             # Preprocess (adds tags + normalization)
             try:
-                batch = self.ip.preprocess_batch([text], src_lang=source, tgt_lang=target)
+                batch = self.ip.preprocess_batch([text], src_lang=src_tag, tgt_lang=tgt_tag)
                 logger.info(f"Preprocessed batch: {batch}")
             except Exception as e:
                 logger.error(f"Preprocessing failed: {str(e)}")
@@ -183,7 +222,7 @@ class TranslationService:
                 logger.info(f"Decoded output: {decoded}")
 
                 # Postprocess (detokenization/entity replacement)
-                translations = self.ip.postprocess_batch(decoded, lang=target)
+                translations = self.ip.postprocess_batch(decoded, lang=tgt_tag)
                 result = translations[0] if translations else text
                 
                 logger.info(f"Final translation result: '{result}'")
@@ -246,6 +285,33 @@ class TranslationService:
             "indic_en_loaded": self.model_indic_en is not None,
             "any_model_loaded": self.is_models_loaded,
         }
+
+    def warmup(self) -> None:
+        """Preload tokenizers/models and prime preprocessing resources to avoid first-call latency."""
+        try:
+            logger.info("🔥 Warmup: loading models and priming preprocess...")
+            # Load both directions
+            self._load_en_indic()
+            self._load_indic_en()
+
+            # Prime IndicProcessor resources and tokenizers with a tiny sample
+            try:
+                _ = self.ip.preprocess_batch(["warmup"], src_lang="eng_Latn", tgt_lang="hin_Deva")
+            except Exception as e:
+                logger.warning(f"Warmup preprocess failed (continuing): {e}")
+
+            # Run a very small forward pass to initialize model graph/caches
+            try:
+                if self.tokenizer_en_indic and self.model_en_indic:
+                    with torch.no_grad():
+                        inputs = self.tokenizer_en_indic(["warmup"], return_tensors="pt").to(self.device)
+                        _ = self.model_en_indic.generate(**inputs, max_length=8)
+            except Exception as e:
+                logger.warning(f"Warmup generation failed (continuing): {e}")
+
+            logger.info("✅ Warmup completed")
+        except Exception as e:
+            logger.error(f"Warmup error: {e}")
 
 
 # ✅ Export singleton instance
