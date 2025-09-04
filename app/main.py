@@ -15,7 +15,7 @@ logging.basicConfig(
     level=os.getenv("LOG_LEVEL", "INFO").upper(),
     format="%(asctime)s %(levelname)s %(name)s - %(message)s",
 )
-log = logging.getLogger("news-tts-service")
+log = logging.getLogger("news-tts-service") 
 
 # ---------- model state ----------
 _is_ready = False

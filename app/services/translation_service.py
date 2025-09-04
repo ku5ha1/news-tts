@@ -66,6 +66,13 @@ class TranslationService:
                 logger.info(f"🚀 Loading {MODEL_NAMES['en_indic']} ...")
                 cache_dir = self._get_cache_dir()
                 
+                # Check if model files exist in cache
+                model_path = cache_dir / "models--ai4bharat--indictrans2-en-indic-dist-200M"
+                if model_path.exists():
+                    logger.info("📦 Loading model from local cache...")
+                else:
+                    logger.info("🌐 Downloading model from Hugging Face Hub...")
+                
                 self.tokenizer_en_indic = AutoTokenizer.from_pretrained(
                     MODEL_NAMES["en_indic"], 
                     trust_remote_code=True, 
