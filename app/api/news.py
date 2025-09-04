@@ -29,9 +29,12 @@ async def create_news(payload: NewsCreateRequest):
         document_id = str(uuid.uuid4())
         source_lang = detect_language(payload.title + " " + payload.description)
 
-        # Translate to all required languages asynchronously
-        translations = await translation_service.translate_to_all(
-            payload.title, payload.description, source_lang
+        # Translate to all required languages in a worker thread (sync function)
+        translations = await asyncio.to_thread(
+            translation_service.translate_to_all,
+            payload.title,
+            payload.description,
+            source_lang,
         )
 
         # Generate TTS audio for each language concurrently
