@@ -10,12 +10,9 @@ def normalize_bucket_name(name: str) -> str:
         return name
     if name.startswith("gs://"):
         name = name.replace("gs://", "", 1)
-    # Firebase Console shows ".firebasestorage.app", but Admin SDK wants ".appspot.com"
-    if name.endswith(".firebasestorage.app"):
-        name = name.replace(".firebasestorage.app", ".appspot.com")
+    # Modern Firebase Storage buckets use ".firebasestorage.app" format
+    # Keep the bucket name as-is since Firebase Admin SDK supports both formats
     return name.strip()
-
-
 
 class FirebaseService:
     def __init__(self):
