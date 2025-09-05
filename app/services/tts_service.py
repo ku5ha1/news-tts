@@ -11,9 +11,9 @@ class TTSService:
         
         # Voice mappings for different languages
         self.voice_mappings = {
-            "en": "OwIqdhRPD2fFMmedVUrS",  # Adam voice
-            "hi": "OwIqdhRPD2fFMmedVUrS",  # Hindi voice
-            "kn": "OwIqdhRPD2fFMmedVUrS"   # Default to Adam for Kannada
+            "en": "0s2MqkqwzPYZVFGZpMXE",  
+            "hi": "0s2MqkqwzPYZVFGZpMXE",  
+            "kn": "0s2MqkqwzPYZVFGZpMXE"   
         }
 
     def generate_audio(self, text: str, language: str) -> str:
@@ -44,7 +44,7 @@ class TTSService:
         except Exception as e:
             print(f"Error generating audio for {language}: {str(e)}")
             # Return a placeholder file path for now
-            return f"/tmp/audio_{language}_{uuid.uuid4().hex[:8]}.mp3"
+            return None
 
     def get_audio_duration(self, file_path: str) -> float:
         """Get audio duration in seconds"""
