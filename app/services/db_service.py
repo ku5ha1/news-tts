@@ -1,4 +1,5 @@
 from motor.motor_asyncio import AsyncIOMotorClient
+from bson import ObjectId
 from app.config.settings import Settings
 
 class DBService:
@@ -34,7 +35,8 @@ class DBService:
     async def get_news_by_id(self, news_id: str):
         """Get news by ID"""
         try:
-            return await self.collection.find_one({"_id": news_id})
+            oid = ObjectId(news_id) if not isinstance(news_id, ObjectId) else news_id
+            return await self.collection.find_one({"_id": oid})
         except Exception as e:
             print(f"Database get error: {str(e)}")
             return None

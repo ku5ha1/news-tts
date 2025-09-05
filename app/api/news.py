@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from datetime import datetime
-import uuid
+from bson import ObjectId
 import asyncio
 from app.models.news import (
     NewsCreateRequest, NewsResponse,
@@ -22,11 +22,40 @@ tts_service = TTSService()
 firebase_service = FirebaseService()
 db_service = DBService()
 
+def _to_extended_json(document: dict) -> dict:
+    def oidify(value):
+        try:
+            return {"$oid": str(ObjectId(value))}
+        except Exception:
+            return {"$oid": str(value)} if isinstance(value, ObjectId) else value
+
+    def dateify(value: datetime):
+        return {"$date": value.replace(microsecond=0).isoformat() + "Z"}
+
+    # Shallow copy
+    doc = dict(document)
+
+    # ObjectId fields
+    for key in ["_id", "category", "createdBy"]:
+        if key in doc:
+            val = doc[key]
+            if isinstance(val, ObjectId) or (isinstance(val, str) and len(val) == 24):
+                doc[key] = oidify(val)
+
+    # Date fields
+    for key in ["publishedAt", "createdTime", "last_updated"]:
+        if key in doc and isinstance(doc[key], datetime):
+            doc[key] = dateify(doc[key])
+
+    return doc
+
+
 @router.post("/create", response_model=NewsResponse)
 async def create_news(payload: NewsCreateRequest):
     """Main endpoint for news creation with translation and TTS"""
     try:
-        document_id = str(uuid.uuid4())
+        # Use MongoDB ObjectId for document identity
+        document_id = ObjectId()
         source_lang = detect_language(payload.title + " " + payload.description)
 
         # Translate to all required languages in a worker thread (sync function)
@@ -44,7 +73,7 @@ async def create_news(payload: NewsCreateRequest):
             else:
                 text = f"{translations[lang]['title']}. {translations[lang]['description']}"
             audio_file = await asyncio.to_thread(tts_service.generate_audio, text, lang)
-            audio_url = firebase_service.upload_audio(audio_file, lang, document_id)
+            audio_url = firebase_service.upload_audio(audio_file, lang, str(document_id))
             return lang, audio_url
 
         audio_results = await asyncio.gather(*(process_lang(lang) for lang in ["en", "hi", "kn"]))
@@ -55,7 +84,7 @@ async def create_news(payload: NewsCreateRequest):
             "title": payload.title,
             "description": payload.description,
             "newsImage": payload.newsImage,
-            "category": payload.category,
+            "category": ObjectId(payload.category) if isinstance(payload.category, str) and len(payload.category) == 24 else payload.category,
             "author": payload.author,
             "publishedAt": payload.publishedAt,
             "isLive": True,
@@ -82,8 +111,9 @@ async def create_news(payload: NewsCreateRequest):
         }
 
         inserted_id = await db_service.insert_news(news_document)
-        news_document["_id"] = str(inserted_id)
-        return NewsResponse(success=True, data=news_document)
+        # Prepare response in Mongo Extended JSON style
+        response_doc = _to_extended_json(news_document)
+        return NewsResponse(success=True, data=response_doc)
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error creating news: {str(e)}")
