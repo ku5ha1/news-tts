@@ -116,7 +116,7 @@ async def ready():
 
 @app.get("/")
 async def root():
-    return {"message": "FastAPI News Translation & TTS Service", "docs": "/docs", "health": "/health", "ready": "/ready"}
+    return {"message": "Translation & TTS", "docs": "/docs", "health": "/health", "ready": "/ready"}
 
 if __name__ == "__main__":
     import uvicorn

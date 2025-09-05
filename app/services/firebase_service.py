@@ -9,14 +9,14 @@ class FirebaseService:
     def __init__(self):
         self.settings = Settings()
         
-        # Normalize bucket name: users often set the HTTPS hostname instead of the GCS bucket id
-        def _normalize_bucket_name(name: str) -> str:
-            # Expected: {project}.appspot.com
-            if name.endswith(".firebasestorage.app"):
-                return name.replace(".firebasestorage.app", ".appspot.com")
-            return name
+        # # Normalize bucket name: users often set the HTTPS hostname instead of the GCS bucket id
+        # def _normalize_bucket_name(name: str) -> str:
+        #     # Expected: {project}.appspot.com
+        #     if name.endswith(".firebasestorage.app"):
+        #         return name.replace(".firebasestorage.app", ".appspot.com")
+        #     return name
         
-        self.bucket_name = _normalize_bucket_name(self.settings.FIREBASE_STORAGE_BUCKET)
+        self.bucket_name = self.settings.FIREBASE_STORAGE_BUCKET
         
         # Initialize Firebase Admin SDK with base64 decoded credentials
         try:
