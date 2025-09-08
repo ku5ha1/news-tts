@@ -63,16 +63,14 @@ async def _generate_and_attach_audio(document_id: ObjectId, payload: NewsCreateR
                 text = text[:1200]
                 logger.info(f"[BG-TTS] Generating audio for {lang} (doc={document_id})")
                 audio_file = await asyncio.to_thread(tts_service.generate_audio, text, lang)
-                audio_url = firebase_service.upload_audio(audio_file, lang, str(document_id))
+                audio_url = await asyncio.to_thread(firebase_service.upload_audio, audio_file, lang, str(document_id))
                 logger.info(f"[BG-TTS] Uploaded audio for {lang} -> {audio_url}")
                 return lang, audio_url
             except Exception as e:
                 logger.error(f"[BG-TTS] {lang} failed: {e}")
                 return e
 
-        audio_results = []
-        for lang in ["en", "hi", "kn"]:
-            audio_results.append(await process_lang(lang))
+        audio_results = await asyncio.gather(*(process_lang(lang) for lang in ["en", "hi", "kn"]), return_exceptions=True)
 
         # Build update fields only for successes
         updates = {"last_updated": datetime.utcnow()}
@@ -88,7 +86,12 @@ async def _generate_and_attach_audio(document_id: ObjectId, payload: NewsCreateR
         # If at least one audio succeeded, set isLive true; else keep false but mark last_updated
         updates["isLive"] = any_success
 
-        await db_service.update_news_fields(document_id, updates)
+        try:
+            ok = await db_service.update_news_fields(document_id, updates)
+            if not ok:
+                logger.error(f"[BG-TTS] Mongo update returned modified_count=0 for doc={document_id}")
+        except Exception as e:
+            logger.error(f"[BG-TTS] Mongo update failed for doc={document_id}: {e}")
     except Exception as e:
         logger.error(f"Background TTS job failed for {document_id}: {e}")
 
@@ -102,8 +105,8 @@ async def create_news(payload: NewsCreateRequest, background_tasks: BackgroundTa
         source_lang = detect_language(payload.title + " " + payload.description)
 
         # Translate to required languages (sync in thread)
-        translations = await asyncio.to_thread(
-            translation_service.translate_to_all,
+        # Parallelize translations
+        translations = await translation_service.translate_to_all_async(
             payload.title,
             payload.description,
             source_lang,
