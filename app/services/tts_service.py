@@ -21,9 +21,9 @@ class TTSService:
 
         # Voice/style presets via caption prompts (female newsreader per language)
         self.female_news_caption_by_lang: Dict[str, str] = {
-            "en": "A female Indian English newsreader, neutral, clear diction, medium pace, studio recording, no background noise.",
-            "hi": "एक महिला हिंदी समाचार वाचक, स्पष्ट उच्चारण, मध्यम गति, न्यूट्रल टोन, स्टूडियो क्वालिटी रिकॉर्डिंग।",
-            "kn": "ಮಹಿಳಾ ಕನ್ನಡ ಸುದ್ದಿವಾಚಕಿ, ಸ್ಪಷ್ಟ ಉಚ್ಚಾರಣೆ, ಮಧ್ಯಮ ವೇಗ, ನ್ಯೂಟ್ರಲ್ ಶೈಲಿ, ಸ್ಟುಡಿಯೋ ಗುಣಮಟ್ಟದ ಧ್ವನಿ.",
+            "en": "Adult female Indian English news anchor, neutral news style, clear diction, slightly higher pitch, medium pace, studio-quality recording, no background noise.",
+            "hi": "प्रौढ़ महिला हिंदी समाचार वाचक, न्यूट्रल न्यूज़ शैली, स्पष्ट उच्चारण, थोड़ी ऊँची पिच, मध्यम गति, स्टूडियो-क्वालिटी रिकॉर्डिंग, बिना पृष्ठभूमि शोर।",
+            "kn": "ಪ್ರೌಢ ಮಹಿಳಾ ಕನ್ನಡ ಸುದ್ದಿವಾಚಕಿ, ನ್ಯೂಟ್ರಲ್ ನ್ಯೂಸ್ ಶೈಲಿ, ಸ್ಪಷ್ಟ ಉಚ್ಚಾರಣೆ, ಸ್ವಲ್ಪ ಹೆಚ್ಚಿನ ಪಿಚ್, ಮಧ್ಯಮ ವೇಗ, ಸ್ಟುಡಿಯೋ-ಗುಣಮಟ್ಟದ ಧ್ವನಿ, ಹಿನ್ನಲೆ ಶಬ್ದವಿಲ್ಲದೆ.",
         }
 
         # Lazy-load model/tokenizers on first use to reduce startup time
