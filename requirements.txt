@@ -23,15 +23,15 @@ torchaudio==2.2.0+cpu
 
 # Translation - AI4Bharat IndicTrans2
 numpy==1.26.4
-transformers==4.39.3
+transformers==4.46.1
 sentencepiece==0.2.0
 sacremoses==0.1.1
-tokenizers==0.15.2
 protobuf==4.25.3
 indic-nlp-library==0.92
 
-# Text-to-Speech - ElevenLabs
-elevenlabs==0.2.27
+# Text-to-Speech - Indic Parler-TTS
+git+https://github.com/huggingface/parler-tts.git
+soundfile==0.12.1
 
 # Firebase integration
 firebase-admin==6.6.0

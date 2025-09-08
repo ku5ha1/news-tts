@@ -54,15 +54,25 @@ async def _generate_and_attach_audio(document_id: ObjectId, payload: NewsCreateR
     """Background job: generate TTS for langs, upload to Firebase, update Mongo doc."""
     try:
         async def process_lang(lang):
-            if lang == source_lang:
-                text = f"{payload.title}. {payload.description}"
-            else:
-                text = f"{translations.get(lang, {}).get('title', payload.title)}. {translations.get(lang, {}).get('description', payload.description)}"
-            audio_file = await asyncio.to_thread(tts_service.generate_audio, text, lang)
-            audio_url = firebase_service.upload_audio(audio_file, lang, str(document_id))
-            return lang, audio_url
+            try:
+                if lang == source_lang:
+                    text = f"{payload.title}. {payload.description}"
+                else:
+                    text = f"{translations.get(lang, {}).get('title', payload.title)}. {translations.get(lang, {}).get('description', payload.description)}"
+                # Truncate excessive input to keep CPU inference bounded
+                text = text[:1200]
+                logger.info(f"[BG-TTS] Generating audio for {lang} (doc={document_id})")
+                audio_file = await asyncio.to_thread(tts_service.generate_audio, text, lang)
+                audio_url = firebase_service.upload_audio(audio_file, lang, str(document_id))
+                logger.info(f"[BG-TTS] Uploaded audio for {lang} -> {audio_url}")
+                return lang, audio_url
+            except Exception as e:
+                logger.error(f"[BG-TTS] {lang} failed: {e}")
+                return e
 
-        audio_results = await asyncio.gather(*(process_lang(lang) for lang in ["en", "hi", "kn"]), return_exceptions=True)
+        audio_results = []
+        for lang in ["en", "hi", "kn"]:
+            audio_results.append(await process_lang(lang))
 
         # Build update fields only for successes
         updates = {"last_updated": datetime.utcnow()}

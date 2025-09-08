@@ -5,7 +5,7 @@ WORKDIR /app
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     gcc g++ git curl libglib2.0-0 \
-    build-essential \
+    build-essential libsndfile1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Upgrade pip and install build tools
