@@ -20,6 +20,16 @@ class DBService:
             self.connected = False
             raise e
 
+    async def update_news_fields(self, news_id: str | ObjectId, updates: dict) -> bool:
+        """Update specific fields on a news document."""
+        try:
+            oid = ObjectId(news_id) if not isinstance(news_id, ObjectId) else news_id
+            result = await self.collection.update_one({"_id": oid}, {"$set": updates})
+            return result.modified_count > 0
+        except Exception as e:
+            print(f"Database update error: {str(e)}")
+            return False
+
     async def is_connected(self) -> bool:
         """Check if MongoDB is connected"""
         try:

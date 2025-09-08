@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, BackgroundTasks
 from datetime import datetime
 from bson import ObjectId
 import asyncio
@@ -50,34 +50,54 @@ def _to_extended_json(document: dict) -> dict:
     return doc
 
 
+async def _generate_and_attach_audio(document_id: ObjectId, payload: NewsCreateRequest, translations: dict, source_lang: str):
+    """Background job: generate TTS for langs, upload to Firebase, update Mongo doc."""
+    try:
+        async def process_lang(lang):
+            if lang == source_lang:
+                text = f"{payload.title}. {payload.description}"
+            else:
+                text = f"{translations.get(lang, {}).get('title', payload.title)}. {translations.get(lang, {}).get('description', payload.description)}"
+            audio_file = await asyncio.to_thread(tts_service.generate_audio, text, lang)
+            audio_url = firebase_service.upload_audio(audio_file, lang, str(document_id))
+            return lang, audio_url
+
+        audio_results = await asyncio.gather(*(process_lang(lang) for lang in ["en", "hi", "kn"]), return_exceptions=True)
+
+        # Build update fields only for successes
+        updates = {"last_updated": datetime.utcnow()}
+        lang_map = {"hi": "hindi", "kn": "kannada", "en": "English"}
+        any_success = False
+        for item in audio_results:
+            if isinstance(item, tuple) and len(item) == 2:
+                lang, url = item
+                field = f"{lang_map[lang]}.audio_description"
+                updates[field] = url
+                any_success = True
+
+        # If at least one audio succeeded, set isLive true; else keep false but mark last_updated
+        updates["isLive"] = any_success
+
+        await db_service.update_news_fields(document_id, updates)
+    except Exception as e:
+        logger.error(f"Background TTS job failed for {document_id}: {e}")
+
+
 @router.post("/create", response_model=NewsResponse)
-async def create_news(payload: NewsCreateRequest):
+async def create_news(payload: NewsCreateRequest, background_tasks: BackgroundTasks):
     """Main endpoint for news creation with translation and TTS"""
     try:
         # Use MongoDB ObjectId for document identity
         document_id = ObjectId()
         source_lang = detect_language(payload.title + " " + payload.description)
 
-        # Translate to all required languages in a worker thread (sync function)
+        # Translate to required languages (sync in thread)
         translations = await asyncio.to_thread(
             translation_service.translate_to_all,
             payload.title,
             payload.description,
             source_lang,
         )
-
-        # Generate TTS audio for each language concurrently
-        async def process_lang(lang):
-            if lang == source_lang:
-                text = f"{payload.title}. {payload.description}"
-            else:
-                text = f"{translations[lang]['title']}. {translations[lang]['description']}"
-            audio_file = await asyncio.to_thread(tts_service.generate_audio, text, lang)
-            audio_url = firebase_service.upload_audio(audio_file, lang, str(document_id))
-            return lang, audio_url
-
-        audio_results = await asyncio.gather(*(process_lang(lang) for lang in ["en", "hi", "kn"]))
-        audio_urls = dict(audio_results)
 
         news_document = {
             "_id": document_id,
@@ -87,7 +107,8 @@ async def create_news(payload: NewsCreateRequest):
             "category": ObjectId(payload.category) if isinstance(payload.category, str) and len(payload.category) == 24 else payload.category,
             "author": payload.author,
             "publishedAt": payload.publishedAt,
-            "isLive": True,
+            # Set false until audio generation finishes
+            "isLive": False,
             "views": 0,
             "total_Likes": 0,
             "comments": [],
@@ -96,21 +117,23 @@ async def create_news(payload: NewsCreateRequest):
             "hindi": {
                 "title": translations.get("hi", {}).get("title", payload.title),
                 "description": translations.get("hi", {}).get("description", payload.description),
-                "audio_description": audio_urls.get("hi", "")
+                "audio_description": ""
             },
             "kannada": {
                 "title": translations.get("kn", {}).get("title", payload.title),
                 "description": translations.get("kn", {}).get("description", payload.description),
-                "audio_description": audio_urls.get("kn", "")
+                "audio_description": ""
             },
             "English": {
                 "title": translations.get("en", {}).get("title", payload.title),
                 "description": translations.get("en", {}).get("description", payload.description),
-                "audio_description": audio_urls.get("en", "")
+                "audio_description": ""
             }
         }
 
         inserted_id = await db_service.insert_news(news_document)
+        # Schedule background generation of audio and document update
+        background_tasks.add_task(_generate_and_attach_audio, document_id, payload, translations, source_lang)
         # Prepare response in Mongo Extended JSON style
         response_doc = _to_extended_json(news_document)
         return NewsResponse(success=True, data=response_doc)
