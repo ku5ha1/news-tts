@@ -29,11 +29,16 @@ class TTSService:
                 model="eleven_multilingual_v2"
             )
             
-            # Create temporary file
+            # Create temporary file with explicit directory
+            temp_dir = "/tmp" if os.path.exists("/tmp") else "/app/tmp"
+            if not os.path.exists(temp_dir):
+                os.makedirs(temp_dir, exist_ok=True)
+            
             temp_file = tempfile.NamedTemporaryFile(
                 delete=False, 
                 suffix=".mp3",
-                prefix=f"audio_{language}_{uuid.uuid4().hex[:8]}_"
+                prefix=f"audio_{language}_{uuid.uuid4().hex[:8]}_",
+                dir=temp_dir
             )
             
             # Save audio to file

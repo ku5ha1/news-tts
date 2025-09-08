@@ -26,8 +26,11 @@ ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 ENV PORT=8080
 
-# Create cache directories
-RUN mkdir -p ${HF_HOME}/transformers
+# Create cache directories and temp directories
+RUN mkdir -p ${HF_HOME}/transformers && \
+    mkdir -p /tmp /var/tmp /usr/tmp /app/tmp && \
+    chmod 1777 /tmp /var/tmp /usr/tmp && \
+    chmod 755 /app/tmp
 
 # Copy app code
 COPY app/ ./app/
