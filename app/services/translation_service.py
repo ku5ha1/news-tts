@@ -277,6 +277,32 @@ class TranslationService:
             logger.error(f"⚠️ Error in translate_to_all: {str(e)}")
             return {}
 
+    async def translate_to_all_async(self, title: str, description: str, source_lang: str):
+        """Translate to all supported langs concurrently."""
+        try:
+            import concurrent.futures
+            languages = ["en", "hi", "kn"]
+            loop = asyncio.get_event_loop()
+
+            async def run_for_lang(lang: str):
+                if lang == source_lang:
+                    return None, None
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                    t = await loop.run_in_executor(executor, self._translate, title, source_lang, lang)
+                    d = await loop.run_in_executor(executor, self._translate, description, source_lang, lang)
+                return lang, {"title": t, "description": d}
+
+            tasks = [run_for_lang(l) for l in languages]
+            results = await asyncio.gather(*tasks)
+            out = {}
+            for lang, payload in results:
+                if lang and payload:
+                    out[lang] = payload
+            return out
+        except Exception as e:
+            logger.error(f"⚠️ Error in translate_to_all_async: {str(e)}")
+            return {}
+
     @property
     def is_models_loaded(self) -> bool:
         """Check if any models are loaded"""
