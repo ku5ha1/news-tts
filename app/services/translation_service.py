@@ -63,27 +63,24 @@ class TranslationService:
         if self.model_en_indic is None and not self.loading_en_indic:
             try:
                 self.loading_en_indic = True
-                logger.info(f"🚀 Loading {MODEL_NAMES['en_indic']} ...")
                 cache_dir = self._get_cache_dir()
-                
-                # Check if model files exist in cache
-                model_path = cache_dir / "models--ai4bharat--indictrans2-en-indic-dist-200M"
-                if model_path.exists():
-                    logger.info("📦 Loading model from local cache...")
-                else:
-                    logger.info("🌐 Downloading model from Hugging Face Hub...")
-                
+                local_path = os.getenv("MODEL_LOCAL_EN_INDIC")
+                model_id_or_path = local_path if local_path else MODEL_NAMES["en_indic"]
+                logger.info(f"🚀 Loading EN→Indic from: {model_id_or_path}")
+
                 self.tokenizer_en_indic = AutoTokenizer.from_pretrained(
-                    MODEL_NAMES["en_indic"], 
-                    trust_remote_code=True, 
-                    cache_dir=cache_dir
-                )
-                
-                self.model_en_indic = AutoModelForSeq2SeqLM.from_pretrained(
-                    MODEL_NAMES["en_indic"], 
-                    trust_remote_code=True, 
+                    model_id_or_path,
+                    trust_remote_code=True,
                     cache_dir=cache_dir,
-                    torch_dtype=torch.float16 if self.device.type == 'cuda' else torch.float32  # Use half precision for GPU
+                    local_files_only=bool(local_path)
+                )
+
+                self.model_en_indic = AutoModelForSeq2SeqLM.from_pretrained(
+                    model_id_or_path,
+                    trust_remote_code=True,
+                    cache_dir=cache_dir,
+                    local_files_only=bool(local_path),
+                    torch_dtype=torch.float16 if self.device.type == 'cuda' else torch.float32
                 ).to(self.device).eval()
                 
                 logger.info("✅ EN→Indic model loaded successfully")
@@ -98,20 +95,24 @@ class TranslationService:
         if self.model_indic_en is None and not self.loading_indic_en:
             try:
                 self.loading_indic_en = True
-                logger.info(f"🚀 Loading {MODEL_NAMES['indic_en']} ...")
                 cache_dir = self._get_cache_dir()
-                
+                local_path = os.getenv("MODEL_LOCAL_INDIC_EN")
+                model_id_or_path = local_path if local_path else MODEL_NAMES["indic_en"]
+                logger.info(f"🚀 Loading Indic→EN from: {model_id_or_path}")
+
                 self.tokenizer_indic_en = AutoTokenizer.from_pretrained(
-                    MODEL_NAMES["indic_en"], 
-                    trust_remote_code=True, 
-                    cache_dir=cache_dir
-                )
-                
-                self.model_indic_en = AutoModelForSeq2SeqLM.from_pretrained(
-                    MODEL_NAMES["indic_en"], 
-                    trust_remote_code=True, 
+                    model_id_or_path,
+                    trust_remote_code=True,
                     cache_dir=cache_dir,
-                    torch_dtype=torch.float16 if self.device.type == 'cuda' else torch.float32  # Use half precision for GPU
+                    local_files_only=bool(local_path)
+                )
+
+                self.model_indic_en = AutoModelForSeq2SeqLM.from_pretrained(
+                    model_id_or_path,
+                    trust_remote_code=True,
+                    cache_dir=cache_dir,
+                    local_files_only=bool(local_path),
+                    torch_dtype=torch.float16 if self.device.type == 'cuda' else torch.float32
                 ).to(self.device).eval()
                 
                 logger.info("✅ Indic→EN model loaded successfully")
