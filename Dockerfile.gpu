@@ -28,7 +28,6 @@ RUN pip install --no-cache-dir --verbose -r requirements-gpu.txt
 ENV HF_HOME=/app/.cache/huggingface
 ENV TRANSFORMERS_CACHE=/app/.cache/huggingface/transformers
 ENV HF_HUB_DISABLE_PROGRESS_BARS=1
-ENV HF_HUB_OFFLINE=1
 ENV TOKENIZERS_PARALLELISM=false
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
@@ -44,8 +43,22 @@ RUN mkdir -p ${TRANSFORMERS_CACHE} && \
 # Copy app code
 COPY app/ ./app/
 
-# Preload HF models into cache at build time (bake weights into image)
-RUN python3 -c "import os; os.environ.setdefault('MODEL_SIZE','dist-200M'); os.environ.setdefault('TRANSFORMERS_CACHE','/app/.cache/huggingface/transformers'); import runpy; runpy.run_path('app/scripts/preload_models.py')"
+# Optional: pin a specific HF model revision at build time
+ARG MODEL_REV
+ENV MODEL_REV=${MODEL_REV}
+
+# Preload HF model snapshots directly into the Transformers cache so runtime can load offline
+RUN pip install --no-cache-dir huggingface-hub==0.23.4 && \
+    HF_HUB_OFFLINE= TRANSFORMERS_OFFLINE= python3 - <<'PY'
+from huggingface_hub import snapshot_download
+import os
+rev = os.getenv('MODEL_REV') or None
+cache_dir = os.getenv('TRANSFORMERS_CACHE', '/app/.cache/huggingface/transformers')
+print('Downloading snapshots to cache:', cache_dir)
+snapshot_download('ai4bharat/indictrans2-en-indic-dist-200M', revision=rev, cache_dir=cache_dir, local_dir_use_symlinks=False)
+snapshot_download('ai4bharat/indictrans2-indic-en-dist-200M', revision=rev, cache_dir=cache_dir, local_dir_use_symlinks=False)
+print('Snapshots ready')
+PY
 
 # Entrypoint script
 COPY entrypoint.sh /app/entrypoint.sh
@@ -64,4 +77,7 @@ EXPOSE ${PORT}
 
 ENTRYPOINT ["/app/entrypoint.sh"]
 
+# After baking models, enforce offline mode at runtime.
+ENV HF_HUB_OFFLINE=1
+ENV TRANSFORMERS_OFFLINE=1
 
