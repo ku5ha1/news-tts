@@ -28,6 +28,7 @@ RUN pip install --no-cache-dir --verbose -r requirements-gpu.txt
 ENV HF_HOME=/app/.cache/huggingface
 ENV TRANSFORMERS_CACHE=/app/.cache/huggingface/transformers
 ENV HF_HUB_DISABLE_PROGRESS_BARS=1
+ENV HF_HUB_OFFLINE=1
 ENV TOKENIZERS_PARALLELISM=false
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
@@ -42,6 +43,9 @@ RUN mkdir -p ${TRANSFORMERS_CACHE} && \
 
 # Copy app code
 COPY app/ ./app/
+
+# Preload HF models into cache at build time (bake weights into image)
+RUN python3 -c "import os; os.environ.setdefault('MODEL_SIZE','dist-200M'); os.environ.setdefault('TRANSFORMERS_CACHE','/app/.cache/huggingface/transformers'); import runpy; runpy.run_path('app/scripts/preload_models.py')"
 
 # Entrypoint script
 COPY entrypoint.sh /app/entrypoint.sh

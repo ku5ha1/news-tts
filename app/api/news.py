@@ -96,16 +96,48 @@ async def _generate_and_attach_audio(document_id: ObjectId, payload: NewsCreateR
         logger.error(f"Background TTS job failed for {document_id}: {e}")
 
 
+async def _translate_and_attach(document_id: ObjectId, payload: NewsCreateRequest, source_lang: str):
+    """Background: translate to target langs, update doc, then generate TTS and attach URLs."""
+    try:
+        translations = await translation_service.translate_to_all_async(
+            payload.title,
+            payload.description,
+            source_lang,
+        )
+
+        updates = {
+            "hindi.title": translations.get("hi", {}).get("title", payload.title),
+            "hindi.description": translations.get("hi", {}).get("description", payload.description),
+            "kannada.title": translations.get("kn", {}).get("title", payload.title),
+            "kannada.description": translations.get("kn", {}).get("description", payload.description),
+            "English.title": translations.get("en", {}).get("title", payload.title),
+            "English.description": translations.get("en", {}).get("description", payload.description),
+            "last_updated": datetime.utcnow(),
+        }
+
+        try:
+            await db_service.update_news_fields(document_id, updates)
+        except Exception as e:
+            logger.error(f"[BG] Mongo update (translations) failed for doc={document_id}: {e}")
+
+        # proceed to audio generation
+        await _generate_and_attach_audio(document_id, payload, translations, source_lang)
+    except Exception as e:
+        logger.error(f"[BG] translate+tts failed for doc={document_id}: {e}")
+
+
 @router.post("/create", response_model=NewsResponse)
 async def create_news(payload: NewsCreateRequest, background_tasks: BackgroundTasks):
-    """Main endpoint for news creation with translation and TTS"""
+    """Create doc after doing translations synchronously; TTS runs in background.
+
+    Returns the news document containing translated title/description fields so
+    clients can use translations immediately while audio is generated later.
+    """
     try:
-        # Use MongoDB ObjectId for document identity
         document_id = ObjectId()
         source_lang = detect_language(payload.title + " " + payload.description)
 
-        # Translate to required languages (sync in thread)
-        # Parallelize translations
+        # Translate synchronously so response contains translations
         translations = await translation_service.translate_to_all_async(
             payload.title,
             payload.description,
@@ -120,7 +152,6 @@ async def create_news(payload: NewsCreateRequest, background_tasks: BackgroundTa
             "category": ObjectId(payload.category) if isinstance(payload.category, str) and len(payload.category) == 24 else payload.category,
             "author": payload.author,
             "publishedAt": payload.publishedAt,
-            # Set false until audio generation finishes
             "isLive": False,
             "views": 0,
             "total_Likes": 0,
@@ -130,27 +161,28 @@ async def create_news(payload: NewsCreateRequest, background_tasks: BackgroundTa
             "hindi": {
                 "title": translations.get("hi", {}).get("title", payload.title),
                 "description": translations.get("hi", {}).get("description", payload.description),
-                "audio_description": ""
+                "audio_description": "",
             },
             "kannada": {
                 "title": translations.get("kn", {}).get("title", payload.title),
                 "description": translations.get("kn", {}).get("description", payload.description),
-                "audio_description": ""
+                "audio_description": "",
             },
             "English": {
                 "title": translations.get("en", {}).get("title", payload.title),
                 "description": translations.get("en", {}).get("description", payload.description),
-                "audio_description": ""
-            }
+                "audio_description": "",
+            },
         }
 
-        inserted_id = await db_service.insert_news(news_document)
-        # Schedule background generation of audio and document update
+        await db_service.insert_news(news_document)
+
+        # Schedule only TTS (translations already done)
         background_tasks.add_task(_generate_and_attach_audio, document_id, payload, translations, source_lang)
-        # Prepare response in Mongo Extended JSON style
+
+        # Return immediately so LB doesn't timeout
         response_doc = _to_extended_json(news_document)
         return NewsResponse(success=True, data=response_doc)
-
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error creating news: {str(e)}")
 
