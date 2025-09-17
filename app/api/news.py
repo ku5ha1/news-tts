@@ -137,12 +137,22 @@ async def create_news(payload: NewsCreateRequest, background_tasks: BackgroundTa
         document_id = ObjectId()
         source_lang = detect_language(payload.title + " " + payload.description)
 
-        # Translate synchronously so response contains translations
-        translations = await translation_service.translate_to_all_async(
-            payload.title,
-            payload.description,
-            source_lang,
-        )
+        # Translate synchronously so response contains translations, but cap time
+        try:
+            translations = await asyncio.wait_for(
+                translation_service.translate_to_all_async(
+                    payload.title,
+                    payload.description,
+                    source_lang,
+                ),
+                timeout=120.0,
+            )
+        except asyncio.TimeoutError:
+            logger.warning("/create translation timed out; returning originals and continuing BG TTS")
+            translations = {}
+        except Exception as e:
+            logger.error(f"/create translation failed: {e}")
+            translations = {}
 
         news_document = {
             "_id": document_id,
@@ -175,7 +185,13 @@ async def create_news(payload: NewsCreateRequest, background_tasks: BackgroundTa
             },
         }
 
-        await db_service.insert_news(news_document)
+        # Insert into DB with timeout to avoid request hang
+        try:
+            await asyncio.wait_for(db_service.insert_news(news_document), timeout=15.0)
+        except asyncio.TimeoutError:
+            logger.error("Mongo insert_news timed out; proceeding to schedule BG tasks")
+        except Exception as e:
+            logger.error(f"Mongo insert_news failed: {e}")
 
         # Schedule only TTS (translations already done)
         background_tasks.add_task(_generate_and_attach_audio, document_id, payload, translations, source_lang)
