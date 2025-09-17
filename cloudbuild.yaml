@@ -44,3 +44,6 @@ steps:
 
 images:
 - '$_AR_REGION-docker.pkg.dev/$PROJECT_ID/$_REPOSITORY/$_SERVICE:$SHORT_SHA'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
