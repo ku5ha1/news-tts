@@ -19,7 +19,6 @@ MODEL_NAMES = {
     "indic_en": f"ai4bharat/indictrans2-indic-en-{MODEL_SIZE}",
 }
 
-
 class TranslationService:
     _instance = None
 
@@ -31,8 +30,13 @@ class TranslationService:
     def __init__(self):
         if not hasattr(self, "device"):
             # Prefer CUDA if available, else CPU
-            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-            logger.info(f"Using device: {self.device}")
+            if torch.cuda.is_available():
+                self.device = torch.device("cuda")
+                device_name = torch.cuda.get_device_name(0)
+                logger.info(f"[Translation] GPU detected: {device_name}")
+            else:
+                self.device = torch.device("cpu")
+                logger.warning("[Translation] No GPU detected, using CPU")
 
             # Processor handles normalization, tagging, and detokenization
             self.ip = IndicProcessor(inference=True)
@@ -64,28 +68,42 @@ class TranslationService:
             try:
                 self.loading_en_indic = True
                 cache_dir = self._get_cache_dir()
+                
+                # Check for local model paths in priority order
                 local_path = os.getenv("MODEL_LOCAL_EN_INDIC")
-                model_id_or_path = local_path if local_path else MODEL_NAMES["en_indic"]
-                logger.info(f"🚀 Loading EN→Indic from: {model_id_or_path}")
+                local_model_dir = f"/app/models/indictrans2-en-indic-{MODEL_SIZE}"
+                
+                if local_path:
+                    model_id_or_path = local_path
+                    use_local_files = True
+                    logger.info(f"🚀 Loading EN→Indic from env path: {model_id_or_path}")
+                elif os.path.exists(local_model_dir):
+                    model_id_or_path = local_model_dir
+                    use_local_files = True
+                    logger.info(f"🚀 Loading EN→Indic from local downloaded model: {model_id_or_path}")
+                else:
+                    model_id_or_path = MODEL_NAMES["en_indic"]
+                    use_local_files = False
+                    logger.info(f"🚀 Loading EN→Indic from remote: {model_id_or_path}")
 
                 self.tokenizer_en_indic = AutoTokenizer.from_pretrained(
                     model_id_or_path,
                     trust_remote_code=True,
                     cache_dir=cache_dir,
-                    local_files_only=bool(local_path)
+                    local_files_only=use_local_files
                 )
 
                 self.model_en_indic = AutoModelForSeq2SeqLM.from_pretrained(
                     model_id_or_path,
                     trust_remote_code=True,
                     cache_dir=cache_dir,
-                    local_files_only=bool(local_path),
+                    local_files_only=use_local_files,
                     torch_dtype=torch.float16 if self.device.type == 'cuda' else torch.float32
                 ).to(self.device).eval()
                 
                 logger.info("✅ EN→Indic model loaded successfully")
             except Exception as e:
-                logger.error(f"❌ Failed to load EN→Indic model: {str(e)}")
+                logger.error(f"❌ Failed to load EN→Indic model: {str(e)}", exc_info=True)
                 raise
             finally:
                 self.loading_en_indic = False
@@ -96,28 +114,42 @@ class TranslationService:
             try:
                 self.loading_indic_en = True
                 cache_dir = self._get_cache_dir()
+                
+                # Check for local model paths in priority order
                 local_path = os.getenv("MODEL_LOCAL_INDIC_EN")
-                model_id_or_path = local_path if local_path else MODEL_NAMES["indic_en"]
-                logger.info(f"🚀 Loading Indic→EN from: {model_id_or_path}")
+                local_model_dir = f"/app/models/indictrans2-indic-en-{MODEL_SIZE}"
+                
+                if local_path:
+                    model_id_or_path = local_path
+                    use_local_files = True
+                    logger.info(f"🚀 Loading Indic→EN from env path: {model_id_or_path}")
+                elif os.path.exists(local_model_dir):
+                    model_id_or_path = local_model_dir
+                    use_local_files = True
+                    logger.info(f"🚀 Loading Indic→EN from local downloaded model: {model_id_or_path}")
+                else:
+                    model_id_or_path = MODEL_NAMES["indic_en"]
+                    use_local_files = False
+                    logger.info(f"🚀 Loading Indic→EN from remote: {model_id_or_path}")
 
                 self.tokenizer_indic_en = AutoTokenizer.from_pretrained(
                     model_id_or_path,
                     trust_remote_code=True,
                     cache_dir=cache_dir,
-                    local_files_only=bool(local_path)
+                    local_files_only=use_local_files
                 )
 
                 self.model_indic_en = AutoModelForSeq2SeqLM.from_pretrained(
                     model_id_or_path,
                     trust_remote_code=True,
                     cache_dir=cache_dir,
-                    local_files_only=bool(local_path),
+                    local_files_only=use_local_files,
                     torch_dtype=torch.float16 if self.device.type == 'cuda' else torch.float32
                 ).to(self.device).eval()
                 
                 logger.info("✅ Indic→EN model loaded successfully")
             except Exception as e:
-                logger.error(f"❌ Failed to load Indic→EN model: {str(e)}")
+                logger.error(f"❌ Failed to load Indic→EN model: {str(e)}", exc_info=True)
                 raise
             finally:
                 self.loading_indic_en = False
@@ -233,7 +265,7 @@ class TranslationService:
                 translations = self.ip.postprocess_batch(decoded, lang=tgt_tag)
                 result = translations[0] if translations else text
                 
-                logger.info(f"Final translation result: '{result}'")
+                logger.info(f"✅ Final translation result: '{result}'")
                 return result
 
             except Exception as e:
@@ -346,7 +378,6 @@ class TranslationService:
             logger.info("✅ Warmup completed")
         except Exception as e:
             logger.error(f"Warmup error: {e}")
-
 
 # ✅ Export singleton instance
 translation_service = TranslationService()

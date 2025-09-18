@@ -287,7 +287,7 @@ async def generate_tts(payload: TTSRequest):
     """Generate TTS audio"""
     try:
         audio_file = await asyncio.to_thread(tts_service.generate_audio, payload.text, payload.language)
-        audio_url = firebase_service.upload_audio(audio_file, payload.language)
+        audio_url = await asyncio.to_thread(firebase_service.upload_audio, audio_file, payload.language)  # ADD await asyncio.to_thread
         duration = tts_service.get_audio_duration(audio_file)
         file_size = tts_service.get_file_size(audio_file)
 
@@ -301,7 +301,9 @@ async def generate_tts(payload: TTSRequest):
             }
         )
     except Exception as e:
+        logger.error(f"TTS endpoint error: {str(e)}", exc_info=True)  # ADD logging
         raise HTTPException(status_code=500, detail=f"TTS error: {str(e)}")
+
 
 @router.get("/health", response_model=HealthResponse)
 async def health_check():

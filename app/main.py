@@ -22,46 +22,54 @@ _is_ready = False
 _model_err: str | None = None
 
 async def preload_models() -> None:
-    """
-    Preload heavy models so the first request is fast.
-    This assumes you already baked weights into the image via TRANSFORMERS_CACHE.
-    """
+
     global _is_ready, _model_err
     try:
         t0 = perf_counter()
         log.info("🔁 Preloading ai4bharat models...")
         # Import here to avoid slowing startup if module import is heavy.
         from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+        from parler_tts import ParlerTTSForConditionalGeneration
 
-        base = "ai4bharat"
+        MODEL_SIZE = os.getenv("MODEL_SIZE", "dist-200M")
         cache_dir = os.getenv("TRANSFORMERS_CACHE", "/app/.cache/huggingface/transformers")
 
-        # Load both directions (baked weights should make this quick)
-        AutoTokenizer.from_pretrained(f"{base}/IndicTrans2-en-indic-1B", trust_remote_code=True, cache_dir=cache_dir)
-        AutoModelForSeq2SeqLM.from_pretrained(f"{base}/IndicTrans2-en-indic-1B", trust_remote_code=True, cache_dir=cache_dir)
-        AutoTokenizer.from_pretrained(f"{base}/IndicTrans2-indic-en-1B", trust_remote_code=True, cache_dir=cache_dir)
-        AutoModelForSeq2SeqLM.from_pretrained(f"{base}/IndicTrans2-indic-en-1B", trust_remote_code=True, cache_dir=cache_dir)
+        # Load translation models with correct names
+        en_indic_model = f"ai4bharat/indictrans2-en-indic-{MODEL_SIZE}"
+        indic_en_model = f"ai4bharat/indictrans2-indic-en-{MODEL_SIZE}"
+        tts_model = "ai4bharat/indic-parler-tts"
+        
+        log.info(f"Loading translation models: {en_indic_model}, {indic_en_model}")
+        AutoTokenizer.from_pretrained(en_indic_model, trust_remote_code=True, cache_dir=cache_dir)
+        AutoModelForSeq2SeqLM.from_pretrained(en_indic_model, trust_remote_code=True, cache_dir=cache_dir)
+        AutoTokenizer.from_pretrained(indic_en_model, trust_remote_code=True, cache_dir=cache_dir)
+        AutoModelForSeq2SeqLM.from_pretrained(indic_en_model, trust_remote_code=True, cache_dir=cache_dir)
+
+        log.info(f"Loading TTS model: {tts_model}")
+        AutoTokenizer.from_pretrained(tts_model, trust_remote_code=True, cache_dir=cache_dir)
+        ParlerTTSForConditionalGeneration.from_pretrained(tts_model, trust_remote_code=True, cache_dir=cache_dir)
 
         dt = perf_counter() - t0
         _is_ready = True
-        log.info(f"✅ Models ready in {dt:.2f}s")
+        log.info(f"All models ready in {dt:.2f}s")
+        
     except Exception as e:
         _model_err = repr(e)
         _is_ready = False
-        log.exception("❌ Model preload failed")
+        log.exception("Model preload failed")
 
 # ---------- lifespan: load on startup ----------
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Kick model loading without blocking ASGI startup
-    # Optional global preload for HF cache: await preload_models()
     # Service-level warmup to avoid first-request stalls
     try:
+        log.info("Starting service warmup...")
         from app.services.translation_service import translation_service
         # Run warmup in background so startup isn't blocked for long
         asyncio.create_task(asyncio.to_thread(translation_service.warmup))
-    except Exception:
-        log.exception("Warmup scheduling failed")
+        log.info("Warmup scheduled successfully")
+    except Exception as e:
+        log.exception(f"Warmup scheduling failed: {e}")
     yield
     # (Optional) cleanup here
 
@@ -83,7 +91,7 @@ app = FastAPI(
 )
 
 # CORS configuration
-_cors_origins = _parse_cors(os.getenv("CORS_ORIGINS"))
+_cors_origins = _parse_cors(settings.CORS_ORIGINS)  # Use settings instead of env
 # If using wildcard origins, do not allow credentials per CORS spec
 _allow_credentials = False if _cors_origins == ["*"] else True
 
@@ -121,5 +129,3 @@ async def root():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("app.main:app", host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
-    
-    

@@ -3,30 +3,28 @@ from typing import Optional
 
 class Settings(BaseSettings):
     # API Configuration
-    CORS_ORIGINS: str
+    CORS_ORIGINS: Optional[str] = None
     
     # Database
-    MONGO_URI: str
-    DATABASE_NAME: str
+    MONGO_URI: Optional[str] = None
+    DATABASE_NAME: Optional[str] = None
     
     # Firebase
-    FIREBASE_SERVICE_ACCOUNT_BASE64: str
-    FIREBASE_STORAGE_BUCKET: str
+    FIREBASE_SERVICE_ACCOUNT_BASE64: Optional[str] = None
+    FIREBASE_STORAGE_BUCKET: Optional[str] = None
     
     # AI Models
-    AI4BHARAT_MODELS_PATH: str
-    ELEVENLABS_API_KEY: str
+    AI4BHARAT_MODELS_PATH: Optional[str] = None
+    ELEVENLABS_API_KEY: Optional[str] = None
     
     # Cloud Configuration
-    CLOUD_PROVIDER: str
-    # These fields are now optional, which is what we need to avoid the validation error.
-    # We'll default them to None if they are not found in the environment.
+    CLOUD_PROVIDER: Optional[str] = None
     REGION: Optional[str] = None
     CLUSTER_NAME: Optional[str] = None
     SERVICE_NAME: Optional[str] = None
     
     # Logging
-    LOG_LEVEL: str
+    LOG_LEVEL: Optional[str] = None
 
     class Config:
         env_file = ".env"
