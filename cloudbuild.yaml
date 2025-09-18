@@ -4,6 +4,9 @@ substitutions:
   _REPOSITORY: news-tts
   _SERVICE: news-tts
 
+options:
+  logging: CLOUD_LOGGING_ONLY
+
 steps:
 - name: 'gcr.io/cloud-builders/docker'
   id: 'Build CPU image'
