@@ -78,5 +78,4 @@ HEALTHCHECK --interval=30s --timeout=60s --start-period=300s --retries=3 \
     CMD curl -f http://localhost:${PORT}/health || exit 1
 
 EXPOSE ${PORT}
-
 ENTRYPOINT ["/app/entrypoint.sh"]
