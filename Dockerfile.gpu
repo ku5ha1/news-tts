@@ -47,7 +47,7 @@ RUN mkdir -p ${TRANSFORMERS_CACHE} && \
     mkdir -p /tmp /var/tmp /usr/tmp /app/tmp && \
     chmod 1777 /tmp /var/tmp /usr/tmp && \
     chmod 755 /app/tmp && \
-    mkdir -p /app/.cache && chmod -R 755 /app/.cache
+    mkdir -p /app/.cache && chmod -R 755 /app/.cache && \
     mkdir -p /app/models
 
 # Copy app code
