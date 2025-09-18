@@ -13,8 +13,7 @@ def normalize_bucket_name(name: str) -> str:
         return name
     if name.startswith("gs://"):
         name = name.replace("gs://", "", 1)
-    # Modern Firebase Storage buckets use ".firebasestorage.app" format
-    # Keep the bucket name as-is since Firebase Admin SDK supports both formats
+    
     return name.strip()
 
 class FirebaseService:
