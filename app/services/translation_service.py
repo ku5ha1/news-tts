@@ -7,9 +7,11 @@ from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 from IndicTransToolkit import IndicProcessor
 import time
 
+
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
 
 # Fixed model names for dist-200M
 MODEL_NAMES = {
@@ -17,13 +19,16 @@ MODEL_NAMES = {
     "indic_en": "ai4bharat/indictrans2-indic-en-dist-200M",
 }
 
+
 class TranslationService:
     _instance = None
+
 
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super(TranslationService, cls).__new__(cls)
         return cls._instance
+
 
     def __init__(self):
         if not hasattr(self, "device"):
@@ -44,6 +49,7 @@ class TranslationService:
             self.loading_en_indic = False
             self.loading_indic_en = False
 
+
     def _get_cache_dir(self):
         """Resolve Hugging Face cache dir inside container."""
         cache_dir = Path(
@@ -55,24 +61,32 @@ class TranslationService:
         cache_dir.mkdir(parents=True, exist_ok=True)
         return cache_dir
 
-    def _load_en_indic(self):
-        """Load en→indic dist-200M model lazily."""
+
+    def _ensure_en_indic_model(self):
+        """Load EN→Indic model (use local path first)."""
         if self.model_en_indic is None and not self.loading_en_indic:
             try:
                 self.loading_en_indic = True
+                
+                # Check for baked-in model first
+                local_path = "/app/models/indictrans2-en-indic-dist-200M"
+                if os.path.exists(local_path):
+                    logger.info(f"Loading EN→Indic from local path: {local_path}")
+                    model_path = local_path
+                else:
+                    logger.info("Loading EN→Indic from HuggingFace...")
+                    model_path = MODEL_NAMES["en_indic"]
+                
                 cache_dir = self._get_cache_dir()
                 
-                model_id_or_path = MODEL_NAMES["en_indic"]
-                logger.info(f"Loading EN→Indic dist-200M: {model_id_or_path}")
-
                 self.tokenizer_en_indic = AutoTokenizer.from_pretrained(
-                    model_id_or_path,
+                    model_path,
                     trust_remote_code=True,
                     cache_dir=cache_dir,
                 )
 
                 self.model_en_indic = AutoModelForSeq2SeqLM.from_pretrained(
-                    model_id_or_path,
+                    model_path,
                     trust_remote_code=True,
                     cache_dir=cache_dir,
                     torch_dtype=torch.float32  # CPU uses float32
@@ -85,24 +99,32 @@ class TranslationService:
             finally:
                 self.loading_en_indic = False
 
-    def _load_indic_en(self):
-        """Load indic→en dist-200M model lazily."""
+
+    def _ensure_indic_en_model(self):
+        """Load Indic→EN model (use local path first)."""
         if self.model_indic_en is None and not self.loading_indic_en:
             try:
                 self.loading_indic_en = True
+                
+                # Check for baked-in model first
+                local_path = "/app/models/indictrans2-indic-en-dist-200M"
+                if os.path.exists(local_path):
+                    logger.info(f"Loading Indic→EN from local path: {local_path}")
+                    model_path = local_path
+                else:
+                    logger.info("Loading Indic→EN from HuggingFace...")
+                    model_path = MODEL_NAMES["indic_en"]
+                
                 cache_dir = self._get_cache_dir()
                 
-                model_id_or_path = MODEL_NAMES["indic_en"]
-                logger.info(f"Loading Indic→EN dist-200M: {model_id_or_path}")
-
                 self.tokenizer_indic_en = AutoTokenizer.from_pretrained(
-                    model_id_or_path,
+                    model_path,
                     trust_remote_code=True,
                     cache_dir=cache_dir,
                 )
 
                 self.model_indic_en = AutoModelForSeq2SeqLM.from_pretrained(
-                    model_id_or_path,
+                    model_path,
                     trust_remote_code=True,
                     cache_dir=cache_dir,
                     torch_dtype=torch.float32  # CPU uses float32
@@ -115,13 +137,29 @@ class TranslationService:
             finally:
                 self.loading_indic_en = False
 
+
+    def translate(self, text: str, source_lang: str, target_lang: str) -> str:
+        """Main translate method with correct routing."""
+        logger.info(f"Translating: '{text[:50]}...' from {source_lang} to {target_lang}")
+        
+        # Route to correct model based on direction
+        if source_lang == "en" and target_lang in ["hi", "kn"]:
+            # English to Indic
+            logger.info("Using EN→Indic model")
+            return self._translate(text, source_lang, target_lang)
+        elif source_lang in ["hi", "kn"] and target_lang == "en":
+            # Indic to English  
+            logger.info("Using Indic→EN model")
+            return self._translate(text, source_lang, target_lang)
+        else:
+            raise ValueError(f"Unsupported translation: {source_lang} → {target_lang}")
+
+
     def _translate(self, text: str, source: str, target: str) -> str:
         """Translate text using IndicTrans2 dist-200M models."""
         try:
             if not text.strip():
                 return text
-
-            logger.info(f"Translating: '{text[:50]}...' from {source} to {target}")
 
             # Map ISO short codes to IndicTrans tags
             def _to_indictrans_tag(code: str) -> str:
@@ -140,22 +178,22 @@ class TranslationService:
             # Pick correct direction and ensure model is ready
             def _ensure_ready_en_indic(timeout_sec: float = 300.0):
                 start = time.monotonic()
-                self._load_en_indic()
+                self._ensure_en_indic_model()
                 while self.model_en_indic is None or self.tokenizer_en_indic is None:
                     if time.monotonic() - start > timeout_sec:
                         raise TimeoutError("Timeout waiting for EN→Indic model to load")
                     if not self.loading_en_indic:
-                        self._load_en_indic()
+                        self._ensure_en_indic_model()
                     time.sleep(0.5)
 
             def _ensure_ready_indic_en(timeout_sec: float = 300.0):
                 start = time.monotonic()
-                self._load_indic_en()
+                self._ensure_indic_en_model()
                 while self.model_indic_en is None or self.tokenizer_indic_en is None:
                     if time.monotonic() - start > timeout_sec:
                         raise TimeoutError("Timeout waiting for Indic→EN model to load")
                     if not self.loading_indic_en:
-                        self._load_indic_en()
+                        self._ensure_indic_en_model()
                     time.sleep(0.5)
 
             if source == "en":
@@ -237,17 +275,19 @@ class TranslationService:
             logger.error(f"⚠️ Translation error ({source}→{target}): {str(e)}")
             raise
 
+
     async def translate_async(self, text: str, source: str, target: str) -> str:
         """Async wrapper so routes can await translation."""
         try:
             import concurrent.futures
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
                 loop = asyncio.get_event_loop()
-                result = await loop.run_in_executor(executor, self._translate, text, source, target)
+                result = await loop.run_in_executor(executor, self.translate, text, source, target)
                 return result
         except Exception as e:
             logger.error(f"Error in translate_async: {str(e)}")
             raise
+
 
     def translate_to_all(self, title: str, description: str, source_lang: str):
         """Translate title/description to all supported langs except source."""
@@ -258,13 +298,14 @@ class TranslationService:
                 if lang == source_lang:
                     continue
                 result[lang] = {
-                    "title": self._translate(title, source_lang, lang),
-                    "description": self._translate(description, source_lang, lang),
+                    "title": self.translate(title, source_lang, lang),
+                    "description": self.translate(description, source_lang, lang),
                 }
             return result
         except Exception as e:
             logger.error(f"Error in translate_to_all: {str(e)}")
             return {}
+
 
     async def translate_to_all_async(self, title: str, description: str, source_lang: str):
         """Translate to all supported langs concurrently."""
@@ -277,8 +318,8 @@ class TranslationService:
                 if lang == source_lang:
                     return None, None
                 with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-                    t = await loop.run_in_executor(executor, self._translate, title, source_lang, lang)
-                    d = await loop.run_in_executor(executor, self._translate, description, source_lang, lang)
+                    t = await loop.run_in_executor(executor, self.translate, title, source_lang, lang)
+                    d = await loop.run_in_executor(executor, self.translate, description, source_lang, lang)
                 return lang, {"title": t, "description": d}
 
             tasks = [run_for_lang(l) for l in languages]
@@ -291,6 +332,7 @@ class TranslationService:
         except Exception as e:
             logger.error(f"Error in translate_to_all_async: {str(e)}")
             return {}
+
 
     @property
     def is_models_loaded(self) -> bool:
@@ -308,30 +350,28 @@ class TranslationService:
             "any_model_loaded": self.is_models_loaded,
         }
 
+
     def warmup(self) -> None:
-        """Preload tokenizers/models and prime preprocessing resources to avoid first-call latency."""
+        """Warm up the translation models with a simple test."""
         try:
             logger.info("Warmup: loading dist-200M models and priming preprocess...")
-            # Load both directions
-            self._load_en_indic()
-            self._load_indic_en()
-
-            # Prime IndicProcessor resources and tokenizers with a tiny sample
-            try:
-                _ = self.ip.preprocess_batch(["warmup"], src_lang="eng_Latn", tgt_lang="hin_Deva")
-            except Exception as e:
-                logger.warning(f"Warmup preprocess failed (continuing): {e}")
-
-            try:
-                if self.tokenizer_en_indic and self.model_en_indic:
-                    with torch.no_grad():
-                        inputs = self.tokenizer_en_indic(["warmup"], return_tensors="pt").to(self.device)
-                        _ = self.model_en_indic.generate(**inputs, max_length=8)
-            except Exception as e:
-                logger.warning(f"Warmup generation failed (continuing): {e}")
-
-            logger.info("Warmup completed")
+            
+            # Load both models
+            self._ensure_en_indic_model()
+            self._ensure_indic_en_model()
+            
+            # Simple test translation (FIXED: no tuple unpacking)
+            test_result = self.translate("Hello", "en", "hi")
+            
+            if test_result:
+                logger.info("Warmup completed successfully")
+            else:
+                logger.info("Warmup completed with warnings")
+                
         except Exception as e:
-            logger.error(f"Warmup error: {e}")
+            logger.warning(f"Warmup failed (continuing): {e}")
+            # Don't raise - let the service continue
 
+
+# Singleton instance
 translation_service = TranslationService()
