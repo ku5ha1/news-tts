@@ -20,7 +20,7 @@ fi
 
 echo "Models ready. Starting FastAPI server..."
 
-# Start FastAPI app
+# Start FastAPI app 
 exec uvicorn app.main:app \
     --host 0.0.0.0 \
     --port ${PORT} \
