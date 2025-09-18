@@ -28,37 +28,44 @@ ENV HF_HOME=/app/.cache/huggingface \
     PORT=8080
 
 # Create cache & temp directories with proper permissions
-RUN mkdir -p ${HF_HOME}/transformers /tmp /var/tmp /usr/tmp /app/tmp && \
+RUN mkdir -p ${HF_HOME}/transformers /app/models /tmp /var/tmp /usr/tmp /app/tmp && \
     chmod 1777 /tmp /var/tmp /usr/tmp && \
     chmod 755 /app/tmp
 
 # Copy application code
 COPY app/ ./app/
 
-# Download dist-200M models during build (baked into image)
-# Use a heredoc to avoid quoting issues in Docker RUN
+# Download ONLY dist-200M models - baked into image
 RUN python3 - <<'PY'
 from huggingface_hub import snapshot_download
-print('Downloading dist-200M translation models...')
+import os, subprocess
+
+print("=== Starting model downloads ===")
+
+# EN->Indic dist-200M
+print("Downloading EN->Indic dist-200M...")
 snapshot_download(
-    repo_id='ai4bharat/indictrans2-en-indic-dist-200M',
-    local_dir='/app/models/indictrans2-en-indic-dist-200M',
+    repo_id="ai4bharat/indictrans2-en-indic-dist-200M",
+    local_dir="/app/models/indictrans2-en-indic-dist-200M",
     local_dir_use_symlinks=False,
-    cache_dir='/app/.cache/huggingface'
 )
+
+# Indic->EN dist-200M
+print("Downloading Indic->EN dist-200M...")
 snapshot_download(
-    repo_id='ai4bharat/indictrans2-indic-en-dist-200M',
-    local_dir='/app/models/indictrans2-indic-en-dist-200M',
+    repo_id="ai4bharat/indictrans2-indic-en-dist-200M",
+    local_dir="/app/models/indictrans2-indic-en-dist-200M",
     local_dir_use_symlinks=False,
-    cache_dir='/app/.cache/huggingface'
 )
-print('Translation models downloaded successfully')
-print('TTS will use ElevenLabs API - no local models needed')
+
+print("=== Checking model sizes ===")
+subprocess.run(["du", "-sh", "/app/models"], check=False)
+print("=== Download complete ===")
 PY
 
-# Copy entrypoint and make executable
+# Copy entrypoint from root directory (same level as Dockerfile)
 COPY entrypoint.sh /app/entrypoint.sh
-RUN chmod +x /app/entrypoint.sh
+RUN sed -i 's/\r$//' /app/entrypoint.sh && chmod +x /app/entrypoint.sh
 
 # Create non-root user and give ownership of /app
 RUN useradd --create-home --shell /bin/bash app && \
