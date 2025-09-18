@@ -1,4 +1,3 @@
-#!/bin/bash
 set -e
 
 echo "🚀 Starting FastAPI server without preload (lazy model loading)..."

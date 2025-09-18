@@ -84,7 +84,7 @@ async def _generate_and_attach_audio(document_id: ObjectId, payload: NewsCreateR
                 any_success = True
 
         # If at least one audio succeeded, set isLive true; else keep false but mark last_updated
-        updates["isLive"] = any_success
+        updates["isLive"] = any_success 
 
         try:
             ok = await db_service.update_news_fields(document_id, updates)
