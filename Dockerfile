@@ -62,7 +62,6 @@ print("=== Checking model sizes ===")
 subprocess.run(["du", "-sh", "/app/models"], check=False)
 print("=== Download complete ===")
 PY
-
 # Copy entrypoint from root directory (same level as Dockerfile)
 COPY entrypoint.sh /app/entrypoint.sh
 RUN sed -i 's/\r$//' /app/entrypoint.sh && chmod +x /app/entrypoint.sh
