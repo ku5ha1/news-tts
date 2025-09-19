@@ -48,6 +48,11 @@ class TranslationService:
             # Track loading status
             self.loading_en_indic = False
             self.loading_indic_en = False
+            os.environ.setdefault("HF_HOME", "/app/.cache/huggingface")
+            os.environ.setdefault("HF_HUB_CACHE", "/app/.cache/huggingface/hub")
+            os.environ.setdefault("TRANSFORMERS_CACHE", "/app/.cache/huggingface/transformers")
+            Path("/app/.cache/huggingface/hub").mkdir(parents=True, exist_ok=True)
+            Path("/app/.cache/huggingface/transformers").mkdir(parents=True, exist_ok=True)
 
 
     def _get_cache_dir(self):

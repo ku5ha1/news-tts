@@ -46,6 +46,7 @@ steps:
       --set-env-vars=LOG_LEVEL=INFO \
       --set-env-vars=TRANSLATION_PER_CALL_TIMEOUT=45,TRANSLATION_PER_CALL_TIMEOUT_RETRY=60 \
       --set-secrets=FIREBASE_SERVICE_ACCOUNT_BASE64=FIREBASE_SERVICE_ACCOUNT_BASE64:latest
+      --set-env-vars=HF_HOME=/app/.cache/huggingface,HF_HUB_CACHE=/app/.cache/huggingface/hub,TRANSFORMERS_CACHE=/app/.cache/huggingface/transformers \
 
 - name: 'gcr.io/cloud-builders/gcloud'
   id: 'Allow unauthenticated invoke'
