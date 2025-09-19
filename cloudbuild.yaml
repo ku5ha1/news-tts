@@ -28,9 +28,9 @@ steps:
   args:
   - -c
   - |
-    gcloud run deploy news-tts \
-      --image "asia-south1-docker.pkg.dev/$PROJECT_ID/news-tts/news-tts:latest" \
-      --region "asia-south1" \
+    gcloud run deploy $_SERVICE \
+      --image "$_AR_REGION-docker.pkg.dev/$PROJECT_ID/$_REPOSITORY/$_SERVICE:latest" \
+      --region "$_RUN_REGION" \
       --allow-unauthenticated \
       --concurrency=4 \
       --timeout=1200 \
@@ -42,11 +42,9 @@ steps:
       --set-secrets=DATABASE_NAME=DATABASE_NAME:latest \
       --set-secrets=FIREBASE_STORAGE_BUCKET=FIREBASE_STORAGE_BUCKET:latest \
       --set-secrets=ELEVENLABS_API_KEY=ELEVENLABS_API_KEY:latest \
-      --set-env-vars=TRANSFORMERS_CACHE=/app/.cache/huggingface/transformers \
-      --set-env-vars=LOG_LEVEL=INFO \
-      --set-env-vars=TRANSLATION_PER_CALL_TIMEOUT=45,TRANSLATION_PER_CALL_TIMEOUT_RETRY=60 \
+      --set-env-vars=HF_HOME=/app/.cache/huggingface,HF_HUB_CACHE=/app/.cache/huggingface/hub,TRANSFORMERS_CACHE=/app/.cache/huggingface/transformers,LOG_LEVEL=INFO,TRANSLATION_PER_CALL_TIMEOUT=45,TRANSLATION_PER_CALL_TIMEOUT_RETRY=60 \
       --set-secrets=FIREBASE_SERVICE_ACCOUNT_BASE64=FIREBASE_SERVICE_ACCOUNT_BASE64:latest
-      --set-env-vars=HF_HOME=/app/.cache/huggingface,HF_HUB_CACHE=/app/.cache/huggingface/hub,TRANSFORMERS_CACHE=/app/.cache/huggingface/transformers \
+
 
 - name: 'gcr.io/cloud-builders/gcloud'
   id: 'Allow unauthenticated invoke'
