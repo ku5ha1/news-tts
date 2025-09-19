@@ -62,14 +62,12 @@ RUN adduser --system --group app && \
 
 USER app
 
-# Environment variables
 ENV PORT=8080 \
     PYTHONUNBUFFERED=1 \
     HF_HOME=/app/.cache/huggingface \
     HF_HUB_CACHE=/app/.cache/huggingface/hub \
     TRANSFORMERS_CACHE=/app/.cache/huggingface/transformers
 
-# Health check with longer timeout for model loading
 HEALTHCHECK --interval=30s --timeout=60s --start-period=300s --retries=3 \
     CMD curl -f http://localhost:${PORT}/ready || exit 1
 
