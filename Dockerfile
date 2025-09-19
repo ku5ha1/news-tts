@@ -42,39 +42,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy application code
+# Copy application code and scripts
 COPY app/ ./app/
 COPY entrypoint.sh .
+
+# Copy verification script
+COPY app/scripts/verify_cache.py /app/scripts/
+
+# Optional: quick cache verification (non-blocking)
+RUN python /app/scripts/verify_cache.py || true
 
 # Setup user + permissions
 RUN addgroup --system app && \
     adduser --system --ingroup app app && \
     chown -R app:app /app && \
     chmod +x entrypoint.sh
-
-# Optional: quick cache verification (non-blocking)
-RUN python - <<'PYCODE' || true
-import os
-from huggingface_hub import scan_cache_dir
-
-cache_dir = "/app/.cache/huggingface/hub"
-print(f"Verifying cache in production stage: {cache_dir}")
-
-if not os.path.exists(cache_dir):
-    print("⚠️ Cache directory not found, models may download at runtime.")
-else:
-    expected_repos = [
-        "ai4bharat/indictrans2-en-indic-dist-200M",
-        "ai4bharat/indictrans2-indic-en-dist-200M",
-    ]
-    repos = [repo.repo_id for repo in scan_cache_dir(cache_dir).repos]
-    for repo in expected_repos:
-        if repo not in repos:
-            print(f"⚠️ {repo} not found in cache, will be fetched at runtime if needed.")
-        else:
-            print(f"✅ Found {repo} in cache")
-print("Production stage model verification complete.")
-PYCODE
 
 USER app
 

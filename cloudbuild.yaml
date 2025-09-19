@@ -15,6 +15,7 @@ steps:
   id: 'Build CPU image'
   args:
   - build
+  - '--no-cache'
   - '-t'
   - '$_AR_REGION-docker.pkg.dev/$PROJECT_ID/$_REPOSITORY/$_SERVICE:latest'
   - '.'
