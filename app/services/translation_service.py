@@ -325,6 +325,7 @@ class TranslationService:
                     return None, None
                 with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
                     per_call_timeout = float(os.getenv("TRANSLATION_PER_CALL_TIMEOUT", "30"))
+                    per_call_timeout_retry = float(os.getenv("TRANSLATION_PER_CALL_TIMEOUT_RETRY", str(min(60, int(per_call_timeout) * 2))))
                     logger.info(f"translate_to_all_async.lang.start {source_lang}->{lang} (title) timeout={per_call_timeout}s")
                     try:
                         t = await asyncio.wait_for(
@@ -332,8 +333,19 @@ class TranslationService:
                             timeout=per_call_timeout,
                         )
                         logger.info(f"translate_to_all_async.lang.done {source_lang}->{lang} (title)")
+                    except asyncio.TimeoutError as e:
+                        logger.warning(f"translate_to_all_async.lang.timeout {source_lang}->{lang} (title) t={per_call_timeout}s; retrying with {per_call_timeout_retry}s")
+                        try:
+                            t = await asyncio.wait_for(
+                                loop.run_in_executor(executor, self.translate, title, source_lang, lang),
+                                timeout=per_call_timeout_retry,
+                            )
+                            logger.info(f"translate_to_all_async.lang.done.retry {source_lang}->{lang} (title)")
+                        except Exception as e2:
+                            logger.warning(f"translate_to_all_async.lang.retry_failed {source_lang}->{lang} (title) err={e2}; using original")
+                            t = title
                     except Exception as e:
-                        logger.warning(f"translate_to_all_async.lang.timeout_or_error {source_lang}->{lang} (title) err={e}; using original")
+                        logger.warning(f"translate_to_all_async.lang.error {source_lang}->{lang} (title) err={e}; using original")
                         t = title
 
                     logger.info(f"translate_to_all_async.lang.start {source_lang}->{lang} (description) timeout={per_call_timeout}s")
@@ -343,8 +355,19 @@ class TranslationService:
                             timeout=per_call_timeout,
                         )
                         logger.info(f"translate_to_all_async.lang.done {source_lang}->{lang} (description)")
+                    except asyncio.TimeoutError as e:
+                        logger.warning(f"translate_to_all_async.lang.timeout {source_lang}->{lang} (description) t={per_call_timeout}s; retrying with {per_call_timeout_retry}s")
+                        try:
+                            d = await asyncio.wait_for(
+                                loop.run_in_executor(executor, self.translate, description, source_lang, lang),
+                                timeout=per_call_timeout_retry,
+                            )
+                            logger.info(f"translate_to_all_async.lang.done.retry {source_lang}->{lang} (description)")
+                        except Exception as e2:
+                            logger.warning(f"translate_to_all_async.lang.retry_failed {source_lang}->{lang} (description) err={e2}; using original")
+                            d = description
                     except Exception as e:
-                        logger.warning(f"translate_to_all_async.lang.timeout_or_error {source_lang}->{lang} (description) err={e}; using original")
+                        logger.warning(f"translate_to_all_async.lang.error {source_lang}->{lang} (description) err={e}; using original")
                         d = description
                 return lang, {"title": t, "description": d}
 
