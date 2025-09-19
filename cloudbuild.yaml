@@ -6,7 +6,11 @@ substitutions:
 
 options:
   logging: CLOUD_LOGGING_ONLY
-  machineType: E2_HIGHCPU_8 
+  # Increased machine type for building ML models
+  machineType: E2_HIGHCPU_16
+  # Increase timeout for model downloads
+  timeout: 3600s
+
 steps:
 - name: 'gcr.io/cloud-builders/docker'
   id: 'Build CPU image'
@@ -15,12 +19,14 @@ steps:
   - '-t'
   - '$_AR_REGION-docker.pkg.dev/$PROJECT_ID/$_REPOSITORY/$_SERVICE:latest'
   - '.'
+  timeout: 2400s  # 40 minutes for building with model downloads
 
 - name: 'gcr.io/cloud-builders/docker'
   id: 'Push image'
   args:
   - push
   - '$_AR_REGION-docker.pkg.dev/$PROJECT_ID/$_REPOSITORY/$_SERVICE:latest'
+  timeout: 600s  # 10 minutes for push
 
 - name: 'gcr.io/cloud-builders/gcloud'
   id: 'Deploy to Cloud Run (CPU)'
@@ -34,28 +40,17 @@ steps:
       --allow-unauthenticated \
       --concurrency=1 \
       --timeout=1800 \
-      --memory=4Gi \
-      --cpu=1 \
+      --memory=8Gi \
+      --cpu=2 \
       --min-instances=0 \
-      --max-instances=2 \
+      --max-instances=3 \
       --set-secrets=MONGO_URI=MONGO_URI:latest \
       --set-secrets=DATABASE_NAME=DATABASE_NAME:latest \
       --set-secrets=FIREBASE_STORAGE_BUCKET=FIREBASE_STORAGE_BUCKET:latest \
       --set-secrets=ELEVENLABS_API_KEY=ELEVENLABS_API_KEY:latest \
-      --set-env-vars=HF_HOME=/app/.cache/huggingface,HF_HUB_CACHE=/app/.cache/huggingface/hub,TRANSFORMERS_CACHE=/app/.cache/huggingface/transformers,TRANSLATION_PER_CALL_TIMEOUT=90,TRANSLATION_PER_CALL_TIMEOUT_RETRY=120 \
-      --set-secrets=FIREBASE_SERVICE_ACCOUNT_BASE64=FIREBASE_SERVICE_ACCOUNT_BASE64:latest
-
-
-- name: 'gcr.io/cloud-builders/gcloud'
-  id: 'Allow unauthenticated invoke'
-  entrypoint: bash
-  args:
-  - -c
-  - |
-    gcloud beta run services add-iam-policy-binding $_SERVICE \
-      --region "$_RUN_REGION" \
-      --member="allUsers" \
-      --role="roles/run.invoker"
+      --set-secrets=FIREBASE_SERVICE_ACCOUNT_BASE64=FIREBASE_SERVICE_ACCOUNT_BASE64:latest \
+      --set-env-vars=HF_HOME=/app/.cache/huggingface,HF_HUB_CACHE=/app/.cache/huggingface/hub,TRANSFORMERS_CACHE=/app/.cache/huggingface/transformers,HF_HUB_OFFLINE=1,TRUST_REMOTE_CODE=1,TRANSLATION_PER_CALL_TIMEOUT=90,TRANSLATION_PER_CALL_TIMEOUT_RETRY=120
+  timeout: 600s
 
 images:
 - '$_AR_REGION-docker.pkg.dev/$PROJECT_ID/$_REPOSITORY/$_SERVICE:latest'

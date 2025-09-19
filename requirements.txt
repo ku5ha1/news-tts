@@ -17,13 +17,14 @@ python-multipart==0.0.6
 
 # PyTorch CPU-only (fixed syntax)
 --find-links https://download.pytorch.org/whl/cpu/torch_stable.html
-torch==2.2.0+cpu
+torch>=2.0.0
 torchvision==0.17.0+cpu  
 torchaudio==2.2.0+cpu
 
 # Translation - AI4Bharat IndicTrans2 (dist-200M only)
 numpy==1.26.4
-transformers==4.46.1
+transformers>=4.30.0    
+huggingface_hub>=0.15.0
 sentencepiece==0.2.0
 sacremoses==0.1.1
 protobuf==4.25.3

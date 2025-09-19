@@ -48,6 +48,8 @@ class TranslationService:
             # Track loading status
             self.loading_en_indic = False
             self.loading_indic_en = False
+            
+            # Set up cache directories - FIXED: Use HF_HUB_CACHE for models
             os.environ.setdefault("HF_HOME", "/app/.cache/huggingface")
             os.environ.setdefault("HF_HUB_CACHE", "/app/.cache/huggingface/hub")
             os.environ.setdefault("TRANSFORMERS_CACHE", "/app/.cache/huggingface/transformers")
@@ -56,11 +58,11 @@ class TranslationService:
 
 
     def _get_cache_dir(self):
-        """Resolve Hugging Face cache dir inside container."""
+        """Resolve Hugging Face cache dir inside container - FIXED: Use HF_HUB_CACHE."""
         cache_dir = Path(
             os.environ.get(
-                "TRANSFORMERS_CACHE",
-                "/app/.cache/huggingface/transformers",
+                "HF_HUB_CACHE",  # CHANGED: Use HF_HUB_CACHE instead of TRANSFORMERS_CACHE
+                "/app/.cache/huggingface/hub",
             )
         )
         cache_dir.mkdir(parents=True, exist_ok=True)
@@ -73,27 +75,36 @@ class TranslationService:
             try:
                 self.loading_en_indic = True
                 
-                # Check for baked-in model first
-                local_path = "/app/.cache/huggingface/hub/models--ai4bharat--indictrans2-en-indic-dist-200M"
-                if os.path.exists(local_path):
+                # FIXED: Use the correct cache directory structure
+                cache_dir = self._get_cache_dir()
+                local_path = cache_dir / "models--ai4bharat--indictrans2-en-indic-dist-200M"
+                
+                if local_path.exists():
                     logger.info(f"Loading EN→Indic from local cache: {local_path}")
-                    model_path = local_path
+                    # FIXED: Find the actual snapshot directory
+                    snapshots = list((local_path / "snapshots").glob("*"))
+                    if snapshots:
+                        model_path = str(snapshots[0])  # Use latest snapshot
+                        logger.info(f"Using snapshot: {model_path}")
+                    else:
+                        logger.warning(f"No snapshots found in {local_path}, falling back to model name")
+                        model_path = MODEL_NAMES["en_indic"]
                 else:
                     logger.info("Loading EN→Indic from HuggingFace...")
                     model_path = MODEL_NAMES["en_indic"]
-                
-                cache_dir = self._get_cache_dir()
-                
+
                 self.tokenizer_en_indic = AutoTokenizer.from_pretrained(
                     model_path,
-                    trust_remote_code=True,
+                    trust_remote_code=True,  # CRITICAL: Always trust remote code
                     cache_dir=cache_dir,
+                    local_files_only=True if local_path.exists() else False,  # ADDED: Use local files when available
                 )
 
                 self.model_en_indic = AutoModelForSeq2SeqLM.from_pretrained(
                     model_path,
-                    trust_remote_code=True,
+                    trust_remote_code=True,  # CRITICAL: Always trust remote code
                     cache_dir=cache_dir,
+                    local_files_only=True if local_path.exists() else False,  # ADDED: Use local files when available
                     torch_dtype=torch.float32  # CPU uses float32
                 ).to(self.device).eval()
                 
@@ -111,27 +122,36 @@ class TranslationService:
             try:
                 self.loading_indic_en = True
                 
-                # Check for baked-in model first
-                local_path = "/app/.cache/huggingface/hub/models--ai4bharat--indictrans2-en-indic-dist-200M"
-                if os.path.exists(local_path):
-                    logger.info(f"Loading Indic→EN from local path: {local_path}")
-                    model_path = local_path
+                # FIXED: Use the correct cache directory structure and correct model name
+                cache_dir = self._get_cache_dir()
+                local_path = cache_dir / "models--ai4bharat--indictrans2-indic-en-dist-200M"  # FIXED: Use correct model name
+                
+                if local_path.exists():
+                    logger.info(f"Loading Indic→EN from local cache: {local_path}")
+                    # FIXED: Find the actual snapshot directory
+                    snapshots = list((local_path / "snapshots").glob("*"))
+                    if snapshots:
+                        model_path = str(snapshots[0])  # Use latest snapshot
+                        logger.info(f"Using snapshot: {model_path}")
+                    else:
+                        logger.warning(f"No snapshots found in {local_path}, falling back to model name")
+                        model_path = MODEL_NAMES["indic_en"]
                 else:
                     logger.info("Loading Indic→EN from HuggingFace...")
                     model_path = MODEL_NAMES["indic_en"]
-                
-                cache_dir = self._get_cache_dir()
-                
+
                 self.tokenizer_indic_en = AutoTokenizer.from_pretrained(
                     model_path,
-                    trust_remote_code=True,
+                    trust_remote_code=True,  # CRITICAL: Always trust remote code
                     cache_dir=cache_dir,
+                    local_files_only=True if local_path.exists() else False,  # ADDED: Use local files when available
                 )
 
                 self.model_indic_en = AutoModelForSeq2SeqLM.from_pretrained(
                     model_path,
-                    trust_remote_code=True,
+                    trust_remote_code=True,  # CRITICAL: Always trust remote code
                     cache_dir=cache_dir,
+                    local_files_only=True if local_path.exists() else False,  # ADDED: Use local files when available
                     torch_dtype=torch.float32  # CPU uses float32
                 ).to(self.device).eval()
                 
@@ -242,6 +262,8 @@ class TranslationService:
                         max_length=256,  # Smaller max length for dist-200M
                         num_beams=3,    # Reduced beams for speed
                         num_return_sequences=1,
+                        pad_token_id=tokenizer.pad_token_id,  
+                        eos_token_id=tokenizer.eos_token_id,  
                     )
                     
                     logger.info(f"Generation completed, output shape: {outputs.shape}")
@@ -252,13 +274,12 @@ class TranslationService:
 
             logger.info("Starting decoding...")
             try:
-                # Decode with proper target tokenizer context
-                with tokenizer.as_target_tokenizer():
-                    decoded = tokenizer.batch_decode(
-                        outputs.detach().cpu().tolist(),
-                        skip_special_tokens=True,
-                        clean_up_tokenization_spaces=True,
-                    )
+                # FIXED: Use the same tokenizer for decoding (no target tokenizer context for IndicTrans2)
+                decoded = tokenizer.batch_decode(
+                    outputs.detach().cpu().tolist(),
+                    skip_special_tokens=True,
+                    clean_up_tokenization_spaces=True,
+                )
                 
                 logger.info(f"Decoded output: {decoded}")
 
@@ -329,8 +350,8 @@ class TranslationService:
                     logger.info(f"translate_to_all_async.skip source_lang==target_lang {lang}")
                     return None, None
                 with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-                    per_call_timeout = float(os.getenv("TRANSLATION_PER_CALL_TIMEOUT", "30"))
-                    per_call_timeout_retry = float(os.getenv("TRANSLATION_PER_CALL_TIMEOUT_RETRY", str(min(60, int(per_call_timeout) * 2))))
+                    per_call_timeout = float(os.getenv("TRANSLATION_PER_CALL_TIMEOUT", "90"))  # INCREASED: Default timeout
+                    per_call_timeout_retry = float(os.getenv("TRANSLATION_PER_CALL_TIMEOUT_RETRY", str(min(120, int(per_call_timeout) * 2))))
                     logger.info(f"translate_to_all_async.lang.start {source_lang}->{lang} (title) timeout={per_call_timeout}s")
                     try:
                         t = await asyncio.wait_for(
