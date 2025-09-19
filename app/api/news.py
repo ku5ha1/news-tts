@@ -142,10 +142,13 @@ async def create_news(payload: NewsCreateRequest, background_tasks: BackgroundTa
     """
     try:
         document_id = ObjectId()
+        logger.info(f"[CREATE] start doc={document_id}")
         source_lang = detect_language(payload.title + " " + payload.description)
+        logger.info(f"[CREATE] detected_language={source_lang} doc={document_id}")
 
         # Translate synchronously so response contains translations, but cap time
         try:
+            logger.info(f"[CREATE] translation.start doc={document_id}")
             translations = await asyncio.wait_for(
                 translation_service.translate_to_all_async(
                     payload.title,
@@ -154,11 +157,12 @@ async def create_news(payload: NewsCreateRequest, background_tasks: BackgroundTa
                 ),
                 timeout=120.0,
             )
+            logger.info(f"[CREATE] translation.done langs={list(translations.keys()) if translations else []} doc={document_id}")
         except asyncio.TimeoutError:
-            logger.warning("/create translation timed out; returning originals and continuing BG TTS")
+            logger.warning(f"[CREATE] translation.timeout doc={document_id}; returning originals and continuing BG TTS")
             translations = {}
         except Exception as e:
-            logger.error(f"/create translation failed: {e}")
+            logger.error(f"[CREATE] translation.failed doc={document_id} error={e}")
             translations = {}
 
         news_document = {
@@ -194,19 +198,24 @@ async def create_news(payload: NewsCreateRequest, background_tasks: BackgroundTa
 
         # Insert into DB with timeout to avoid request hang
         try:
+            logger.info(f"[CREATE] db.insert.start doc={document_id}")
             await asyncio.wait_for(db_service.insert_news(news_document), timeout=15.0)
+            logger.info(f"[CREATE] db.insert.done doc={document_id}")
         except asyncio.TimeoutError:
-            logger.error("Mongo insert_news timed out; proceeding to schedule BG tasks")
+            logger.error(f"[CREATE] db.insert.timeout doc={document_id}; proceeding to schedule BG tasks")
         except Exception as e:
-            logger.error(f"Mongo insert_news failed: {e}")
+            logger.error(f"[CREATE] db.insert.failed doc={document_id} error={e}")
 
         # Schedule only TTS (translations already done)
+        logger.info(f"[CREATE] bg_tts.schedule doc={document_id}")
         background_tasks.add_task(_generate_and_attach_audio, document_id, payload, translations, source_lang)
 
         # Return immediately so LB doesn't timeout
         response_doc = _to_extended_json(news_document)
+        logger.info(f"[CREATE] response.return doc={document_id}")
         return NewsResponse(success=True, data=response_doc)
     except Exception as e:
+        logger.error(f"[CREATE] failed doc={document_id} error={e}")
         raise HTTPException(status_code=500, detail=f"Error creating news: {str(e)}")
 
 @router.post("/translate", response_model=TranslationResponse)

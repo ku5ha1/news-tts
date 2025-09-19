@@ -42,12 +42,12 @@ class DBService:
             raise RuntimeError("Database not connected")
             
         try:
-            logger.info(f"[MongoDB] Inserting document with ID: {data.get('_id')}")
+            logger.info(f"[MongoDB] Insert.start id={data.get('_id')}")
             result = await self.collection.insert_one(data)
-            logger.info(f"[MongoDB] Document inserted successfully: {result.inserted_id}")
+            logger.info(f"[MongoDB] Insert.done id={result.inserted_id}")
             return result.inserted_id
         except Exception as e:
-            logger.error(f"[MongoDB] Insert error: {str(e)}", exc_info=True)
+            logger.error(f"[MongoDB] Insert.failed error={str(e)}", exc_info=True)
             self.connected = False
             raise RuntimeError(f"Database insert failed: {str(e)}")
 
@@ -59,18 +59,18 @@ class DBService:
             
         try:
             oid = ObjectId(news_id) if not isinstance(news_id, ObjectId) else news_id
-            logger.info(f"[MongoDB] Updating document {oid} with {len(updates)} fields")
+            logger.info(f"[MongoDB] Update.start id={oid} fields={len(updates)}")
             result = await self.collection.update_one({"_id": oid}, {"$set": updates})
             
             if result.modified_count > 0:
-                logger.info(f"[MongoDB] Document updated successfully: {oid}")
+                logger.info(f"[MongoDB] Update.done id={oid} modified={result.modified_count}")
                 return True
             else:
-                logger.warning(f"[MongoDB] No document updated for ID: {oid}")
+                logger.warning(f"[MongoDB] Update.none id={oid}")
                 return False
                 
         except Exception as e:
-            logger.error(f"[MongoDB] Update error for {news_id}: {str(e)}", exc_info=True)
+            logger.error(f"[MongoDB] Update.failed id={news_id} error={str(e)}", exc_info=True)
             return False
 
     async def is_connected(self) -> bool:

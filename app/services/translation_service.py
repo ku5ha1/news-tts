@@ -258,7 +258,9 @@ class TranslationService:
                 logger.info(f"Decoded output: {decoded}")
 
                 # Postprocess (detokenization/entity replacement)
+                logger.info("Postprocess.start")
                 translations = self.ip.postprocess_batch(decoded, lang=tgt_tag)
+                logger.info("Postprocess.end")
                 result = translations[0] if translations else text
                 
                 logger.info(f"Final translation result: '{result}'")
@@ -280,9 +282,11 @@ class TranslationService:
         """Async wrapper so routes can await translation."""
         try:
             import concurrent.futures
+            logger.info(f"translate_async.start {source}->{target} text_len={len(text)}")
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
                 loop = asyncio.get_event_loop()
                 result = await loop.run_in_executor(executor, self.translate, text, source, target)
+                logger.info(f"translate_async.done {source}->{target} result_len={len(result) if result else 0}")
                 return result
         except Exception as e:
             logger.error(f"Error in translate_async: {str(e)}")
@@ -313,13 +317,19 @@ class TranslationService:
             import concurrent.futures
             languages = ["en", "hi", "kn"]
             loop = asyncio.get_event_loop()
+            logger.info(f"translate_to_all_async.start source={source_lang} langs={languages}")
 
             async def run_for_lang(lang: str):
                 if lang == source_lang:
+                    logger.info(f"translate_to_all_async.skip source_lang==target_lang {lang}")
                     return None, None
                 with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                    logger.info(f"translate_to_all_async.lang.start {source_lang}->{lang} (title)")
                     t = await loop.run_in_executor(executor, self.translate, title, source_lang, lang)
+                    logger.info(f"translate_to_all_async.lang.done {source_lang}->{lang} (title)")
+                    logger.info(f"translate_to_all_async.lang.start {source_lang}->{lang} (description)")
                     d = await loop.run_in_executor(executor, self.translate, description, source_lang, lang)
+                    logger.info(f"translate_to_all_async.lang.done {source_lang}->{lang} (description)")
                 return lang, {"title": t, "description": d}
 
             tasks = [run_for_lang(l) for l in languages]
@@ -328,6 +338,7 @@ class TranslationService:
             for lang, payload in results:
                 if lang and payload:
                     out[lang] = payload
+            logger.info(f"translate_to_all_async.done langs={list(out.keys())}")
             return out
         except Exception as e:
             logger.error(f"Error in translate_to_all_async: {str(e)}")

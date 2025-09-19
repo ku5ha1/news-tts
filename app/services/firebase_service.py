@@ -42,7 +42,7 @@ class FirebaseService:
             self.connected = False
 
     def upload_audio(self, file_path: str, language: str, document_id: str = None) -> str:
-        logger.info(f"[Firebase] Uploading audio: {file_path} for {language}")
+        logger.info(f"[Firebase] Upload.start path={file_path} lang={language} doc={document_id}")
         
         if not self.connected:
             raise RuntimeError("Firebase not connected")
@@ -64,8 +64,9 @@ class FirebaseService:
 
         try:
             blob = self.bucket.blob(blob_name)
+            logger.info(f"[Firebase] Uploading blob: {blob_name}")
             blob.upload_from_filename(file_path)
-            logger.info(f"[Firebase] File uploaded successfully: {blob_name}")
+            logger.info(f"[Firebase] Upload.done: {blob_name}")
 
             try:
                 blob.make_public()
@@ -74,11 +75,11 @@ class FirebaseService:
                 logger.warning(f"[Firebase] Could not make file public: {e}")
 
             public_url = f"gs://{self.bucket.name}/{blob_name}"
-            logger.info(f"[Firebase] Upload complete: {public_url}")
+            logger.info(f"[Firebase] Upload.complete url={public_url}")
             return public_url
             
         except Exception as e:
-            logger.error(f"[Firebase] Upload failed for {file_path}: {e}", exc_info=True)
+            logger.error(f"[Firebase] Upload.failed path={file_path} lang={language} error={e}", exc_info=True)
             raise RuntimeError(f"Firebase upload failed: {e}")
 
     def delete_audio(self, file_url: str) -> bool:
