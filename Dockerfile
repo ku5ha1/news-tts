@@ -16,10 +16,10 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy scripts
-COPY app/scripts/download_models.py app/scripts/preload_models.py /app/scripts/
+COPY app/scripts/download_snapshots.py app/scripts/preload_models.py /app/scripts/
 
 # Download translation models
-RUN python /app/scripts/download_models.py
+RUN python /app/scripts/download_snapshots.py
 
 # Preload models into cache (ensures they can be loaded)
 RUN python /app/scripts/preload_models.py
