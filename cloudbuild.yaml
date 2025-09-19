@@ -1,15 +1,14 @@
+#forcing a new build
 substitutions:
   _AR_REGION: asia-south1
   _RUN_REGION: asia-south1
   _REPOSITORY: news-tts
   _SERVICE: news-tts
 
+timeout: 3600s 
+
 options:
   logging: CLOUD_LOGGING_ONLY
-  # Increased machine type for building ML models
-  machineType: E2_HIGHCPU_16
-  # Increase timeout for model downloads
-  timeout: 3600s
 
 steps:
 - name: 'gcr.io/cloud-builders/docker'
@@ -19,14 +18,14 @@ steps:
   - '-t'
   - '$_AR_REGION-docker.pkg.dev/$PROJECT_ID/$_REPOSITORY/$_SERVICE:latest'
   - '.'
-  timeout: 2400s  # 40 minutes for building with model downloads
+  timeout: 2400s
 
 - name: 'gcr.io/cloud-builders/docker'
   id: 'Push image'
   args:
   - push
   - '$_AR_REGION-docker.pkg.dev/$PROJECT_ID/$_REPOSITORY/$_SERVICE:latest'
-  timeout: 600s  # 10 minutes for push
+  timeout: 600s
 
 - name: 'gcr.io/cloud-builders/gcloud'
   id: 'Deploy to Cloud Run (CPU)'
