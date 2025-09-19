@@ -74,9 +74,9 @@ class TranslationService:
                 self.loading_en_indic = True
                 
                 # Check for baked-in model first
-                local_path = "/app/models/indictrans2-en-indic-dist-200M"
+                local_path = "/app/.cache/huggingface/hub/models--ai4bharat--indictrans2-en-indic-dist-200M"
                 if os.path.exists(local_path):
-                    logger.info(f"Loading EN→Indic from local path: {local_path}")
+                    logger.info(f"Loading EN→Indic from local cache: {local_path}")
                     model_path = local_path
                 else:
                     logger.info("Loading EN→Indic from HuggingFace...")

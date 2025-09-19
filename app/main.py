@@ -52,16 +52,15 @@ async def preload_models() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    
     try:
         log.info("Starting service warmup...")
         from app.services.translation_service import translation_service
-        
-        # asyncio.create_task(asyncio.to_thread(translation_service.warmup))
-        log.info("Translation service warmup scheduled successfully")
+    
+        await asyncio.to_thread(translation_service.warmup)
+        log.info("Translation service warmup completed successfully")
         log.info("ElevenLabs TTS service ready - no warmup needed")
     except Exception as e:
-        log.exception(f"Warmup scheduling failed: {e}")
+        log.exception(f"Warmup failed: {e}")
     yield
     
 
