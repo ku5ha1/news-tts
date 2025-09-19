@@ -51,49 +51,56 @@ def _to_extended_json(document: dict) -> dict:
 
 
 async def _generate_and_attach_audio(document_id: ObjectId, payload: NewsCreateRequest, translations: dict, source_lang: str):
-    """Background job: generate TTS for langs, upload to Firebase, update Mongo doc."""
+    """Background job: generate TTS sequentially, upload to Firebase, update Mongo doc."""
     try:
-        async def process_lang(lang):
+        updates = {"last_updated": datetime.utcnow()}
+        lang_map = {"hi": "hindi", "kn": "kannada", "en": "English"}
+        any_success = False
+        
+        # Process languages SEQUENTIALLY instead of concurrently
+        for lang in ["en", "hi", "kn"]:
             try:
                 if lang == source_lang:
                     text = f"{payload.title}. {payload.description}"
                 else:
                     text = f"{translations.get(lang, {}).get('title', payload.title)}. {translations.get(lang, {}).get('description', payload.description)}"
-                # Truncate excessive input to keep CPU inference bounded
+                
+                # Truncate excessive input
                 text = text[:1200]
                 logger.info(f"[BG-TTS] Generating audio for {lang} (doc={document_id})")
+                
+                # Sequential processing with delays
                 audio_file = await asyncio.to_thread(tts_service.generate_audio, text, lang)
                 audio_url = await asyncio.to_thread(firebase_service.upload_audio, audio_file, lang, str(document_id))
-                logger.info(f"[BG-TTS] Uploaded audio for {lang} -> {audio_url}")
-                return lang, audio_url
+                
+                # Update success
+                field = f"{lang_map[lang]}.audio_description"
+                updates[field] = audio_url
+                any_success = True
+                logger.info(f"[BG-TTS] Completed audio for {lang} -> {audio_url}")
+                
+                # Add delay between requests to respect rate limits
+                if lang != "en":  # Don't delay after the last one
+                    await asyncio.sleep(10)  # 10-second delay between TTS calls
+                    
             except Exception as e:
                 logger.error(f"[BG-TTS] {lang} failed: {e}")
-                return e
+                continue  # Continue with next language instead of failing completely
 
-        audio_results = await asyncio.gather(*(process_lang(lang) for lang in ["en", "hi", "kn"]), return_exceptions=True)
-
-        # Build update fields only for successes
-        updates = {"last_updated": datetime.utcnow()}
-        lang_map = {"hi": "hindi", "kn": "kannada", "en": "English"}
-        any_success = False
-        for item in audio_results:
-            if isinstance(item, tuple) and len(item) == 2:
-                lang, url = item
-                field = f"{lang_map[lang]}.audio_description"
-                updates[field] = url
-                any_success = True
-
-        # If at least one audio succeeded, set isLive true; else keep false but mark last_updated
+        # Set isLive only if at least one audio succeeded
         updates["isLive"] = any_success 
 
+        # Update MongoDB
         try:
             ok = await db_service.update_news_fields(document_id, updates)
             if not ok:
                 logger.error(f"[BG-TTS] Mongo update returned modified_count=0 for doc={document_id}")
         except Exception as e:
             logger.error(f"[BG-TTS] Mongo update failed for doc={document_id}: {e}")
+            
     except Exception as e:
         logger.error(f"Background TTS job failed for {document_id}: {e}")
+
 
 
 async def _translate_and_attach(document_id: ObjectId, payload: NewsCreateRequest, source_lang: str):
