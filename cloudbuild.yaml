@@ -34,7 +34,7 @@ steps:
       --allow-unauthenticated \
       --concurrency=1 \
       --timeout=1800 \
-      --memory=8Gi \
+      --memory=4Gi \
       --cpu=1 \
       --min-instances=0 \
       --max-instances=2 \
@@ -42,7 +42,7 @@ steps:
       --set-secrets=DATABASE_NAME=DATABASE_NAME:latest \
       --set-secrets=FIREBASE_STORAGE_BUCKET=FIREBASE_STORAGE_BUCKET:latest \
       --set-secrets=ELEVENLABS_API_KEY=ELEVENLABS_API_KEY:latest \
-      --set-env-vars=HF_HOME=/app/.cache/huggingface,HF_HUB_CACHE=/app/.cache/huggingface/hub,TRANSFORMERS_CACHE=/app/.cache/huggingface/transformers,TRANSLATION_PER_CALL_TIMEOUT=90,TRANSLATION_PER_CALL_TIMEOUT_RETRY=120
+      --set-env-vars=HF_HOME=/app/.cache/huggingface,HF_HUB_CACHE=/app/.cache/huggingface/hub,TRANSFORMERS_CACHE=/app/.cache/huggingface/transformers,TRANSLATION_PER_CALL_TIMEOUT=90,TRANSLATION_PER_CALL_TIMEOUT_RETRY=120 \
       --set-secrets=FIREBASE_SERVICE_ACCOUNT_BASE64=FIREBASE_SERVICE_ACCOUNT_BASE64:latest
 
 
