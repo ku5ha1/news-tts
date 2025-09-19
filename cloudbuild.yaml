@@ -32,19 +32,30 @@ steps:
       --image "$_AR_REGION-docker.pkg.dev/$PROJECT_ID/$_REPOSITORY/$_SERVICE:latest" \
       --region "$_RUN_REGION" \
       --allow-unauthenticated \
-      --concurrency=1 \
+      --concurrency=4 \
       --timeout=1200 \
       --memory=4Gi \
       --cpu=2 \
       --min-instances=0 \
-      --max-instances=1 \
+      --max-instances=2 \
       --set-secrets=MONGO_URI=MONGO_URI:latest \
       --set-secrets=DATABASE_NAME=DATABASE_NAME:latest \
       --set-secrets=FIREBASE_STORAGE_BUCKET=FIREBASE_STORAGE_BUCKET:latest \
-      --set-secrets=ELEVENLABS_API_KEY=ELEVENLABS_API_KEY:latest
+      --set-secrets=ELEVENLABS_API_KEY=ELEVENLABS_API_KEY:latest \
       --set-env-vars=TRANSFORMERS_CACHE=/app/.cache/huggingface/transformers \
       --set-env-vars=LOG_LEVEL=INFO \
       --set-secrets=FIREBASE_SERVICE_ACCOUNT_BASE64=FIREBASE_SERVICE_ACCOUNT_BASE64:latest
+
+- name: 'gcr.io/cloud-builders/gcloud'
+  id: 'Allow unauthenticated invoke'
+  entrypoint: bash
+  args:
+  - -c
+  - |
+    gcloud beta run services add-iam-policy-binding $_SERVICE \
+      --region "$_RUN_REGION" \
+      --member="allUsers" \
+      --role="roles/run.invoker"
 
 images:
 - '$_AR_REGION-docker.pkg.dev/$PROJECT_ID/$_REPOSITORY/$_SERVICE:latest'
