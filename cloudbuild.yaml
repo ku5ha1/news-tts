@@ -33,15 +33,18 @@ steps:
       --region "$_RUN_REGION" \
       --allow-unauthenticated \
       --concurrency=1 \
-      --timeout=900 \
-      --memory=8Gi \
-      --cpu=4 \
+      --timeout=1200 \
+      --memory=4Gi \
+      --cpu=2 \
       --min-instances=0 \
       --max-instances=1 \
-      --set-secrets=MONGO_URI=projects/$PROJECT_ID/secrets/MONGO_URI:latest \
-      --set-secrets=DATABASE_NAME=projects/$PROJECT_ID/secrets/DATABASE_NAME:latest \
-      --set-secrets=FIREBASE_STORAGE_BUCKET=projects/$PROJECT_ID/secrets/FIREBASE_STORAGE_BUCKET:latest \
-      --set-secrets=ELEVENLABS_API_KEY=projects/$PROJECT_ID/secrets/ELEVENLABS_API_KEY:latest
+      --set-secrets=MONGO_URI=MONGO_URI:latest \
+      --set-secrets=DATABASE_NAME=DATABASE_NAME:latest \
+      --set-secrets=FIREBASE_STORAGE_BUCKET=FIREBASE_STORAGE_BUCKET:latest \
+      --set-secrets=ELEVENLABS_API_KEY=ELEVENLABS_API_KEY:latest
+      --set-env-vars=TRANSFORMERS_CACHE=/app/.cache/huggingface/transformers \
+      --set-env-vars=LOG_LEVEL=INFO \
+      --set-secrets=FIREBASE_SERVICE_ACCOUNT_BASE64=FIREBASE_SERVICE_ACCOUNT_BASE64:latest
 
 images:
 - '$_AR_REGION-docker.pkg.dev/$PROJECT_ID/$_REPOSITORY/$_SERVICE:latest'

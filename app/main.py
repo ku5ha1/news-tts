@@ -57,7 +57,7 @@ async def lifespan(app: FastAPI):
         log.info("Starting service warmup...")
         from app.services.translation_service import translation_service
         
-        asyncio.create_task(asyncio.to_thread(translation_service.warmup))
+        # asyncio.create_task(asyncio.to_thread(translation_service.warmup))
         log.info("Translation service warmup scheduled successfully")
         log.info("ElevenLabs TTS service ready - no warmup needed")
     except Exception as e:

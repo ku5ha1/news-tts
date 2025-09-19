@@ -1,24 +1,12 @@
 #!/bin/bash
 set -e
 
-# Download models if not already present
-if [ ! -d "/app/models/indictrans2-en-indic-dist-200M" ]; then
-    echo "Downloading EN->Indic dist-200M..."
-    python3 -m huggingface_hub.snapshot_download \
-        ai4bharat/indictrans2-en-indic-dist-200M \
-        --local-dir /app/models/indictrans2-en-indic-dist-200M \
-        --local-dir-use-symlinks False
-fi
+# Create cache directories
+mkdir -p /app/.cache/huggingface/transformers
+mkdir -p /app/models
 
-if [ ! -d "/app/models/indictrans2-indic-en-dist-200M" ]; then
-    echo "Downloading Indic->EN dist-200M..."
-    python3 -m huggingface_hub.snapshot_download \
-        ai4bharat/indictrans2-indic-en-dist-200M \
-        --local-dir /app/models/indictrans2-indic-en-dist-200M \
-        --local-dir-use-symlinks False
-fi
-
-echo "Models ready. Starting FastAPI server..."
+echo "Cache directories ready. Models will download on first use."
+echo "Starting FastAPI server..."
 
 # Start FastAPI app 
 exec uvicorn app.main:app \

@@ -1,48 +1,50 @@
-# Base image
-FROM python:3.11-slim
-
-ENV DEBIAN_FRONTEND=noninteractive
+# Stage 1: Builder
+FROM python:3.11 as builder
 
 WORKDIR /app
 
-# Install system dependencies
+# Install dependencies for the build stage
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential git curl ca-certificates \
+    build-essential git \
     && rm -rf /var/lib/apt/lists/*
 
-# Upgrade pip & install Python packages
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel
-
-# Copy requirements and install
+# Copy and install Python dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir --verbose -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Environment variables
-ENV HF_HOME=/app/.cache/huggingface \
-    TRANSFORMERS_CACHE=/app/.cache/huggingface/transformers \
-    HF_HUB_DISABLE_PROGRESS_BARS=1 \
-    TOKENIZERS_PARALLELISM=false \
-    PYTHONPATH=/app \
-    PYTHONUNBUFFERED=1 \
-    PORT=8080
+# Stage 2: Production
+FROM python:3.11-slim
 
-# Create cache & temp directories with proper permissions
-RUN mkdir -p ${HF_HOME}/transformers /app/models /tmp /var/tmp /usr/tmp /app/tmp && \
-    chmod 1777 /tmp /var/tmp /usr/tmp && \
-    chmod 755 /app/tmp
+WORKDIR /app
 
-# Copy app code
+# Copy installed packages from the builder stage
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+
+# Install runtime dependencies if needed (e.g., curl for health checks)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy your application code
 COPY app/ ./app/
+COPY entrypoint.sh .
 
-# Copy entrypoint script
-COPY entrypoint.sh /app/entrypoint.sh
-RUN sed -i 's/\r$//' /app/entrypoint.sh && chmod +x /app/entrypoint.sh
-
-# Create non-root user
-RUN useradd --create-home --shell /bin/bash app && \
-    chown -R app:app /app
+# Create non-root user and set permissions
+RUN adduser --system --group app && \
+    chown -R app:app /app && \
+    chmod +x entrypoint.sh
 
 USER app
+
+# Create cache and model directories with proper ownership
+RUN mkdir -p /app/.cache/huggingface/transformers && \
+    mkdir -p /app/models
+
+# Environment variables
+ENV PORT=8080 \
+    PYTHONUNBUFFERED=1
+
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=60s --start-period=300s --retries=3 \
@@ -50,5 +52,5 @@ HEALTHCHECK --interval=30s --timeout=60s --start-period=300s --retries=3 \
 
 EXPOSE ${PORT}
 
-# Start app
-ENTRYPOINT ["/app/entrypoint.sh"]
+# Start the application
+ENTRYPOINT ["./entrypoint.sh"]
