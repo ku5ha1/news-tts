@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 class TTSService:
+    ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID")
     _elevenlabs_client = None
 
     def __init__(self):
@@ -26,11 +27,10 @@ class TTSService:
             TTSService._elevenlabs_client = ElevenLabs(api_key=api_key)
             logger.info("[TTS] ElevenLabs client initialized")
 
-        # Voice mapping per language (using appropriate voices for each language)
         self.voice_mapping: Dict[str, str] = {
-            "en": "JBFqnCBsd6RMkjVDRZzb",  # Default English voice
-            "hi": "JBFqnCBsd6RMkjVDRZzb",  # Use same voice for Hindi (multilingual model)
-            "kn": "JBFqnCBsd6RMkjVDRZzb",  # Use same voice for Kannada (multilingual model)
+            "en": ELEVENLABS_VOICE_ID, 
+            "hi": ELEVENLABS_VOICE_ID,  
+            "kn": ELEVENLABS_VOICE_ID,  
         }
 
     def generate_audio(self, text: str, language: str) -> str:
@@ -46,7 +46,7 @@ class TTSService:
             audio = TTSService._elevenlabs_client.text_to_speech.convert(
                 text=text,
                 voice_id=voice_id,
-                model_id="eleven_multilingual_v2",  # Supports multiple languages
+                model_id="eleven_v3", 
                 output_format="mp3_44100_128",
             )
             
