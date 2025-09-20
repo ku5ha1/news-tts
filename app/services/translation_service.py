@@ -3,7 +3,10 @@ import os
 from pathlib import Path
 import asyncio
 import logging
-from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+import threading
+import pickle
+import hashlib
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, AutoConfig
 from IndicTransToolkit import IndicProcessor
 import time
 
@@ -50,6 +53,12 @@ class TranslationService:
             os.environ.setdefault("TRANSFORMERS_CACHE", "/app/.cache/huggingface/transformers")
             Path("/app/.cache/huggingface/hub").mkdir(parents=True, exist_ok=True)
             Path("/app/.cache/huggingface/transformers").mkdir(parents=True, exist_ok=True)
+            
+            # Model caching setup
+            self.cache_dir = Path("/tmp/translation_cache")
+            self.cache_dir.mkdir(exist_ok=True)
+            self.en_indic_cache = self.cache_dir / "en_indic_model.pkl"
+            self.indic_en_cache = self.cache_dir / "indic_en_model.pkl"
 
     def _get_cache_dir(self):
         """Resolve Hugging Face cache dir inside container"""
@@ -68,10 +77,91 @@ class TranslationService:
                 tokenizer.add_special_tokens({"pad_token": "[PAD]"})
         return tokenizer
 
+    def _cache_model(self, model_type):
+        """Cache the loaded model to disk"""
+        try:
+            if model_type == "en_indic" and self.model_en_indic is not None:
+                cache_data = {
+                    'model_state_dict': self.model_en_indic.state_dict(),
+                    'tokenizer_config': self.tokenizer_en_indic.get_vocab(),
+                    'model_config': self.model_en_indic.config.to_dict()
+                }
+                with open(self.en_indic_cache, 'wb') as f:
+                    pickle.dump(cache_data, f)
+                logger.info(f"Cached {model_type} model")
+                
+            elif model_type == "indic_en" and self.model_indic_en is not None:
+                cache_data = {
+                    'model_state_dict': self.model_indic_en.state_dict(),
+                    'tokenizer_config': self.tokenizer_indic_en.get_vocab(),
+                    'model_config': self.model_indic_en.config.to_dict()
+                }
+                with open(self.indic_en_cache, 'wb') as f:
+                    pickle.dump(cache_data, f)
+                logger.info(f"Cached {model_type} model")
+                
+        except Exception as e:
+            logger.warning(f"Failed to cache {model_type} model: {e}")
+
+    def _load_cached_model(self, model_type):
+        """Load model from cache"""
+        try:
+            cache_file = self.en_indic_cache if model_type == "en_indic" else self.indic_en_cache
+            
+            if not cache_file.exists():
+                return False
+                
+            logger.info(f"Loading {model_type} model from cache...")
+            with open(cache_file, 'rb') as f:
+                cache_data = pickle.load(f)
+            
+            # Recreate model from cache
+            if model_type == "en_indic":
+                self.model_en_indic = AutoModelForSeq2SeqLM.from_config(
+                    AutoConfig.from_dict(cache_data['model_config'])
+                )
+                self.model_en_indic.load_state_dict(cache_data['model_state_dict'])
+                self.model_en_indic.to(self.device).eval()
+                
+                # Recreate tokenizer
+                self.tokenizer_en_indic = AutoTokenizer.from_pretrained(
+                    MODEL_NAMES["en_indic"],
+                    trust_remote_code=True
+                )
+                self.tokenizer_en_indic = self._fix_tokenizer_specials(self.tokenizer_en_indic)
+                
+            else:  # indic_en
+                self.model_indic_en = AutoModelForSeq2SeqLM.from_config(
+                    AutoConfig.from_dict(cache_data['model_config'])
+                )
+                self.model_indic_en.load_state_dict(cache_data['model_state_dict'])
+                self.model_indic_en.to(self.device).eval()
+                
+                self.tokenizer_indic_en = AutoTokenizer.from_pretrained(
+                    MODEL_NAMES["indic_en"],
+                    trust_remote_code=True
+                )
+                self.tokenizer_indic_en = self._fix_tokenizer_specials(self.tokenizer_indic_en)
+            
+            logger.info(f"Successfully loaded {model_type} model from cache")
+            return True
+            
+        except Exception as e:
+            logger.warning(f"Failed to load {model_type} model from cache: {e}")
+            return False
+
     def _ensure_en_indic_model(self):
         if self.model_en_indic is None and not self.loading_en_indic:
             try:
                 self.loading_en_indic = True
+                
+                # Check for cached model first
+                if self._load_cached_model("en_indic"):
+                    logger.info("Loaded EN→Indic model from cache")
+                    return
+                
+                # Load from HuggingFace if no cache
+                logger.info("Loading EN→Indic model from HuggingFace...")
                 cache_dir = self._get_cache_dir()
                 local_path = cache_dir / "models--ai4bharat--indictrans2-en-indic-dist-200M"
 
@@ -99,7 +189,9 @@ class TranslationService:
                     torch_dtype=torch.float32
                 ).to(self.device).eval()
 
-                logger.info("EN→Indic dist-200M model loaded successfully")
+                # Cache the loaded model
+                self._cache_model("en_indic")
+                logger.info("EN→Indic dist-200M model loaded and cached successfully")
             finally:
                 self.loading_en_indic = False
 
@@ -107,6 +199,14 @@ class TranslationService:
         if self.model_indic_en is None and not self.loading_indic_en:
             try:
                 self.loading_indic_en = True
+                
+                # Check for cached model first
+                if self._load_cached_model("indic_en"):
+                    logger.info("Loaded Indic→EN model from cache")
+                    return
+                
+                # Load from HuggingFace if no cache
+                logger.info("Loading Indic→EN model from HuggingFace...")
                 cache_dir = self._get_cache_dir()
                 local_path = cache_dir / "models--ai4bharat--indictrans2-indic-en-dist-200M"
 
@@ -134,7 +234,9 @@ class TranslationService:
                     torch_dtype=torch.float32
                 ).to(self.device).eval()
 
-                logger.info("Indic→EN dist-200M model loaded successfully")
+                # Cache the loaded model
+                self._cache_model("indic_en")
+                logger.info("Indic→EN dist-200M model loaded and cached successfully")
             finally:
                 self.loading_indic_en = False
 
@@ -221,13 +323,38 @@ class TranslationService:
 
     def warmup(self) -> None:
         logger.info("Warmup: loading models and priming...")
-        self._ensure_en_indic_model()
-        self._ensure_indic_en_model()
+        
+        start_time = time.time()
+        
+        def load_en_indic():
+            self._ensure_en_indic_model()
+            logger.info("EN→Indic model ready")
+        
+        def load_indic_en():
+            self._ensure_indic_en_model()
+            logger.info("Indic→EN model ready")
+        
+        # Start both model loading in parallel
+        thread1 = threading.Thread(target=load_en_indic)
+        thread2 = threading.Thread(target=load_indic_en)
+        
+        thread1.start()
+        thread2.start()
+        
+        # Wait for both to complete
+        thread1.join()
+        thread2.join()
+        
+        load_time = time.time() - start_time
+        logger.info(f"Both models loaded in {load_time:.2f} seconds")
+        
+        # Test both directions
         try:
-            test_result = self.translate("Hello", "en", "hi")
-            logger.info(f"Warmup test translation: {test_result}")
+            test_en_hi = self.translate("Hello", "en", "hi")
+            test_hi_en = self.translate("नमस्ते", "hi", "en")
+            logger.info(f"Warmup tests: EN→HI: {test_en_hi}, HI→EN: {test_hi_en}")
         except Exception as e:
-            logger.warning(f"Warmup failed: {e}")
+            logger.warning(f"Warmup test failed: {e}")
 
     async def translate_to_all_async(self, title: str, description: str, source_lang: str) -> dict:
         """
