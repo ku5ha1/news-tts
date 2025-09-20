@@ -16,7 +16,8 @@ steps:
   id: 'Build CPU image'
   args:
   - build
-  - '--no-cache'
+  - '--cache-from'
+  - '$_AR_REGION-docker.pkg.dev/$PROJECT_ID/$_REPOSITORY/$_SERVICE:latest'
   - '-t'
   - '$_AR_REGION-docker.pkg.dev/$PROJECT_ID/$_REPOSITORY/$_SERVICE:latest'
   - '.'
@@ -39,12 +40,12 @@ steps:
       --image "$_AR_REGION-docker.pkg.dev/$PROJECT_ID/$_REPOSITORY/$_SERVICE:latest" \
       --region "$_RUN_REGION" \
       --allow-unauthenticated \
-      --concurrency=1 \
+      --concurrency=4 \
       --timeout=1800 \
-      --memory=8Gi \
-      --cpu=2 \
+      --memory=16Gi \
+      --cpu=4 \
       --min-instances=0 \
-      --max-instances=2 \
+      --max-instances=4 \
       --set-secrets=MONGO_URI=MONGO_URI:latest \
       --set-secrets=DATABASE_NAME=DATABASE_NAME:latest \
       --set-secrets=FIREBASE_STORAGE_BUCKET=FIREBASE_STORAGE_BUCKET:latest \
