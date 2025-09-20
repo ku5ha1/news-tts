@@ -171,7 +171,7 @@ async def create_news(payload: NewsCreateRequest, background_tasks: BackgroundTa
                     payload.description,
                     source_lang,
                 ),
-                timeout=20.0,
+                timeout=60.0,
             )
             logger.info(f"[CREATE] translation.done langs={list(translations.keys()) if translations else []} doc={document_id}")
         except asyncio.TimeoutError:
