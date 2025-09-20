@@ -288,23 +288,14 @@ async def translate_text(payload: TranslationRequest):
         
         # Add timeout for translation (5 minutes for model loading)
         try:
-            logger.info("Calling translation_service.translate_async...")
-            translated_text = await asyncio.wait_for(
-                translation_service.translate_async(
-                    payload.text, 
-                    payload.source_language, 
-                    payload.target_language
-                ),
-                timeout=300.0  # 5 minutes timeout
+            logger.info("Calling translation_service.translate...")
+            translated_text = translation_service.translate(
+                payload.text, 
+                payload.source_language, 
+                payload.target_language
             )
             logger.info(f"Translation service returned: '{translated_text}'")
             
-        except asyncio.TimeoutError:
-            logger.error("Translation request timed out")
-            raise HTTPException(
-                status_code=504, 
-                detail="Translation request timed out. This may happen during initial model loading."
-            )
         except Exception as e:
             logger.error(f"Translation service threw exception: {str(e)}")
             raise

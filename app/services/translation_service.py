@@ -229,5 +229,5 @@ class TranslationService:
         except Exception as e:
             logger.warning(f"Warmup failed: {e}")
 
-# Correct singleton instantiation
+# ✅ Correct singleton instantiation
 translation_service = TranslationService()
