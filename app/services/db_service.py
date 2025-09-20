@@ -10,17 +10,13 @@ class DBService:
         self.settings = Settings()
         
         try:
-            if not self.settings.MONGO_URI:
-                logger.warning("MONGO_URI is missing - Database will be disabled")
+            if not self.settings.DATABASE_NAME:
+                logger.error("DATABASE_NAME is missing - cannot connect to database")
                 self.connected = False
                 self.client = None
                 self.db = None
                 self.collection = None
                 return
-                
-            if not self.settings.DATABASE_NAME:
-                logger.warning("DATABASE_NAME is missing - using default 'newsdb'")
-                database_name = "newsdb"
             else:
                 database_name = self.settings.DATABASE_NAME
                 
