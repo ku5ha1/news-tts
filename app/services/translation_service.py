@@ -229,5 +229,53 @@ class TranslationService:
         except Exception as e:
             logger.warning(f"Warmup failed: {e}")
 
-# ✅ Correct singleton instantiation
+    async def translate_to_all_async(self, title: str, description: str, source_lang: str) -> dict:
+        """
+        Translate title and description to all supported languages (Hindi, Kannada, English).
+        Returns a dictionary with translations for each language.
+        """
+        logger.info(f"Starting translation to all languages from {source_lang}")
+        
+        # Define target languages based on source
+        if source_lang == "en":
+            target_langs = ["hi", "kn"]
+        elif source_lang in ["hi", "kn"]:
+            target_langs = ["en"]
+        else:
+            logger.warning(f"Unsupported source language: {source_lang}, using original text")
+            return {
+                "hi": {"title": title, "description": description},
+                "kn": {"title": title, "description": description},
+                "en": {"title": title, "description": description}
+            }
+        
+        result = {}
+        
+        # Add source language as-is
+        result[source_lang] = {"title": title, "description": description}
+        
+        # Translate to target languages
+        for target_lang in target_langs:
+            try:
+                logger.info(f"Translating to {target_lang}...")
+                translated_title = self.translate(title, source_lang, target_lang)
+                translated_description = self.translate(description, source_lang, target_lang)
+                result[target_lang] = {
+                    "title": translated_title,
+                    "description": translated_description
+                }
+                logger.info(f"Successfully translated to {target_lang}")
+            except Exception as e:
+                logger.error(f"Failed to translate to {target_lang}: {e}")
+                # Use original text as fallback
+                result[target_lang] = {"title": title, "description": description}
+        
+        # Ensure all languages are present
+        for lang in ["hi", "kn", "en"]:
+            if lang not in result:
+                result[lang] = {"title": title, "description": description}
+        
+        logger.info(f"Translation to all languages completed. Available languages: {list(result.keys())}")
+        return result
+
 translation_service = TranslationService()
