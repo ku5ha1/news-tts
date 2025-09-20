@@ -18,7 +18,10 @@ class TTSService:
     _elevenlabs_client = None
 
     def __init__(self):
-        # Initialize ElevenLabs client
+        voice_id = os.getenv("ELEVENLABS_VOICE_ID")
+        if not voice_id:
+            raise RuntimeError("ELEVENLABS_VOICE_ID environment variable not set")
+        
         if TTSService._elevenlabs_client is None:
             api_key = os.getenv("ELEVENLABS_API_KEY")
             if not api_key:
@@ -28,9 +31,9 @@ class TTSService:
             logger.info("[TTS] ElevenLabs client initialized")
 
         self.voice_mapping: Dict[str, str] = {
-            "en": ELEVENLABS_VOICE_ID, 
-            "hi": ELEVENLABS_VOICE_ID,  
-            "kn": ELEVENLABS_VOICE_ID,  
+            "en": voice_id, 
+            "hi": voice_id,  
+            "kn": voice_id,  
         }
 
     def generate_audio(self, text: str, language: str) -> str:
