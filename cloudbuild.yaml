@@ -41,10 +41,10 @@ steps:
       --allow-unauthenticated \
       --concurrency=1 \
       --timeout=1800 \
-      --memory=16Gi \
-      --cpu=4 \
+      --memory=8Gi \
+      --cpu=2 \
       --min-instances=0 \
-      --max-instances=10 \
+      --max-instances=2 \
       --set-secrets=MONGO_URI=MONGO_URI:latest \
       --set-secrets=DATABASE_NAME=DATABASE_NAME:latest \
       --set-secrets=FIREBASE_STORAGE_BUCKET=FIREBASE_STORAGE_BUCKET:latest \

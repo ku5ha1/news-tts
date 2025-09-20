@@ -103,8 +103,7 @@ async def _generate_and_attach_audio(document_id: ObjectId, payload: NewsCreateR
                 logger.error(f"[BG-TTS] {lang} failed for doc={document_id}: {e}")
                 continue
 
-        # Set isLive only if at least one audio succeeded
-        updates["isLive"] = any_success 
+        # updates["isLive"] = any_success  # Removed - isLive should remain False 
 
         # Update MongoDB
         try:
