@@ -1,7 +1,7 @@
 # =========================
 # Stage 1: Builder
 # =========================
-# Fix to force new build
+# Force new build
 FROM python:3.11 as builder
 
 WORKDIR /app
@@ -12,18 +12,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python deps
-COPY requirements.txt .
+COPY requirements.txt . 
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy scripts
+# Copy scripts and services
 COPY app/scripts/download_snapshots.py app/scripts/preload_models.py /app/scripts/
+COPY app/services/translation_service.py /app/services/
 
-# Download translation models
+# Download translation models (snapshots)
 RUN python /app/scripts/download_snapshots.py
 
 # Preload models into cache (ensures they can be loaded)
 RUN python /app/scripts/preload_models.py
 
+# Force warmup of TranslationService (loads both EN→Indic and Indic→EN models)
+RUN python -c "from app.services.translation_service import translation_service; translation_service.warmup()"
 
 # =========================
 # Stage 2: Production
@@ -45,8 +48,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy application code and scripts
 COPY app/ ./app/
 COPY entrypoint.sh .
-
-# Copy verification script
 COPY app/scripts/verify_cache.py /app/scripts/
 
 # Optional: quick cache verification (non-blocking)

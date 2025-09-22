@@ -86,6 +86,7 @@ class TranslationService:
             if model_type == "en_indic":
                 self.tokenizer_en_indic = AutoTokenizer.from_pretrained(
                     model_name,
+                    device_map="cpu",
                     trust_remote_code=True,
                     cache_dir=cache_dir,
                     local_files_only=True
@@ -94,6 +95,7 @@ class TranslationService:
 
                 self.model_en_indic = AutoModelForSeq2SeqLM.from_pretrained(
                     model_name,
+                    device_map="cpu",
                     trust_remote_code=True,
                     cache_dir=cache_dir,
                     local_files_only=True,
@@ -102,6 +104,7 @@ class TranslationService:
             else:
                 self.tokenizer_indic_en = AutoTokenizer.from_pretrained(
                     model_name,
+                    device_map="cpu",
                     trust_remote_code=True,
                     cache_dir=cache_dir,
                     local_files_only=True
@@ -110,6 +113,7 @@ class TranslationService:
 
                 self.model_indic_en = AutoModelForSeq2SeqLM.from_pretrained(
                     model_name,
+                    device_map="cpu",
                     trust_remote_code=True,
                     cache_dir=cache_dir,
                     local_files_only=True,
@@ -148,6 +152,7 @@ class TranslationService:
 
                 self.tokenizer_en_indic = AutoTokenizer.from_pretrained(
                     model_path,
+                    device_map="cpu",
                     trust_remote_code=True,
                     cache_dir=cache_dir,
                     local_files_only=local_path.exists(),
@@ -157,6 +162,7 @@ class TranslationService:
                 # Load model with proper initialization
                 self.model_en_indic = AutoModelForSeq2SeqLM.from_pretrained(
                     model_path,
+                    device_map="cpu",
                     trust_remote_code=True,
                     cache_dir=cache_dir,
                     local_files_only=local_path.exists(),
@@ -204,6 +210,7 @@ class TranslationService:
 
                 self.tokenizer_indic_en = AutoTokenizer.from_pretrained(
                     model_path,
+                    device_map="cpu",
                     trust_remote_code=True,
                     cache_dir=cache_dir,
                     local_files_only=local_path.exists(),
@@ -213,6 +220,7 @@ class TranslationService:
                 # Load model with proper initialization
                 self.model_indic_en = AutoModelForSeq2SeqLM.from_pretrained(
                     model_path,
+                    device_map="cpu",
                     trust_remote_code=True,
                     cache_dir=cache_dir,
                     local_files_only=local_path.exists(),
