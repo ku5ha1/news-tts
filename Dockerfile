@@ -35,23 +35,19 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Copy installed packages and cached models from builder
-COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
-COPY --from=builder /usr/local/bin /usr/local/bin
-COPY --from=builder /app/.cache/huggingface /app/.cache/huggingface
-
-# Install runtime deps
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
-
 # Copy application code and scripts
 COPY app/ ./app/
 COPY entrypoint.sh .
+
+# Copy verification script
 COPY app/scripts/verify_cache.py /app/scripts/
+
+# Warmup translation service (optional but recommended)
+RUN python -c "from app.services.translation_service import translation_service; translation_service.warmup()" || true
 
 # Optional: quick cache verification (non-blocking)
 RUN python /app/scripts/verify_cache.py || true
+
 
 # Setup user + permissions
 RUN addgroup --system app && \
