@@ -27,3 +27,5 @@ log.txt
 services.yaml
 
 env.yaml
+
+cloudbuild.yaml
