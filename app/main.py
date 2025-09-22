@@ -6,6 +6,7 @@ import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
+from fastapi.responses import JSONResponse
 from time import perf_counter
 
 settings = Settings()
@@ -27,18 +28,29 @@ async def preload_models() -> None:
         
         from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 
-        cache_dir = os.getenv("TRANSFORMERS_CACHE", "/app/.cache/huggingface/transformers")
+        # Use the same cache populated during build (hub cache)
+        cache_dir = os.getenv("HF_HUB_CACHE", "/app/.cache/huggingface/hub")
 
         en_indic_model = "ai4bharat/indictrans2-en-indic-dist-200M"
         indic_en_model = "ai4bharat/indictrans2-indic-en-dist-200M"
         
         log.info(f"Loading translation models: {en_indic_model}, {indic_en_model}")
 
-        AutoTokenizer.from_pretrained(en_indic_model, trust_remote_code=True, cache_dir=cache_dir)
-        AutoModelForSeq2SeqLM.from_pretrained(en_indic_model, trust_remote_code=True, cache_dir=cache_dir)
+        AutoTokenizer.from_pretrained(
+            en_indic_model, trust_remote_code=True, cache_dir=cache_dir, local_files_only=True
+        )
+        AutoModelForSeq2SeqLM.from_pretrained(
+            en_indic_model, trust_remote_code=True, cache_dir=cache_dir, local_files_only=True,
+            torch_dtype=None, low_cpu_mem_usage=False
+        )
  
-        AutoTokenizer.from_pretrained(indic_en_model, trust_remote_code=True, cache_dir=cache_dir)
-        AutoModelForSeq2SeqLM.from_pretrained(indic_en_model, trust_remote_code=True, cache_dir=cache_dir)
+        AutoTokenizer.from_pretrained(
+            indic_en_model, trust_remote_code=True, cache_dir=cache_dir, local_files_only=True
+        )
+        AutoModelForSeq2SeqLM.from_pretrained(
+            indic_en_model, trust_remote_code=True, cache_dir=cache_dir, local_files_only=True,
+            torch_dtype=None, low_cpu_mem_usage=False
+        )
 
         dt = perf_counter() - t0
         _is_ready = True
@@ -59,8 +71,13 @@ async def lifespan(app: FastAPI):
         await asyncio.to_thread(translation_service.warmup)
         log.info("Translation service warmup completed successfully")
         log.info("ElevenLabs TTS service ready - no warmup needed")
+        global _is_ready
+        _is_ready = True
     except Exception as e:
         log.exception(f"Warmup failed: {e}")
+        global _model_err
+        _model_err = str(e)
+        _is_ready = False
     yield
     
 
@@ -93,6 +110,21 @@ app.add_middleware(
 )
 
 app.include_router(news.router, prefix="/api", tags=["news"])
+
+@app.middleware("http")
+async def readiness_gate(request, call_next):
+    path = request.url.path
+    # Gate translation-heavy endpoints until warmup completes
+    if path in ("/api/create", "/api/translate") and not _is_ready:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "detail": "Service warming up, please retry shortly",
+                "ready": _is_ready,
+                "error": _model_err,
+            },
+        )
+    return await call_next(request)
 
 @app.get("/health")
 async def health():

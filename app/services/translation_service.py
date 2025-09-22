@@ -55,12 +55,30 @@ class TranslationService:
             Path("/app/.cache/huggingface/transformers").mkdir(parents=True, exist_ok=True)
 
     def _get_cache_dir(self):
-        """Resolve Hugging Face cache dir inside container"""
+        """Resolve HF hub cache directory inside container (matches build preload)."""
         cache_dir = Path(
             os.environ.get("HF_HUB_CACHE", "/app/.cache/huggingface/hub")
         )
         cache_dir.mkdir(parents=True, exist_ok=True)
         return cache_dir
+
+    def _resolve_local_snapshot_dir(self, model_name: str) -> Path | None:
+        """Return latest local snapshot path for a given repo inside HF hub cache.
+        Example: /app/.cache/huggingface/hub/models--{org}--{repo}/snapshots/{rev}
+        """
+        try:
+            hub_cache = Path(os.environ.get("HF_HUB_CACHE", "/app/.cache/huggingface/hub"))
+            repo_dir = hub_cache / f"models--{model_name.replace('/', '--')}" / "snapshots"
+            if not repo_dir.exists():
+                return None
+            # Choose most recently modified snapshot
+            candidates = [p for p in repo_dir.iterdir() if p.is_dir()]
+            if not candidates:
+                return None
+            latest = max(candidates, key=lambda p: p.stat().st_mtime)
+            return latest
+        except Exception:
+            return None
 
     def _fix_tokenizer_specials(self, tokenizer):
         """Ensure pad/eos tokens are set (avoid NoneType issues)"""
@@ -72,59 +90,60 @@ class TranslationService:
         return tokenizer
 
     def _load_cached_model(self, model_type):
-        """Load model from Hugging Face cache"""
+        """Load model strictly from local Transformers cache (offline)."""
         try:
             cache_dir = self._get_cache_dir()
             model_name = MODEL_NAMES["en_indic"] if model_type == "en_indic" else MODEL_NAMES["indic_en"]
-            local_path = cache_dir / f"models--{model_name.replace('/', '--')}"
-            
-            if not local_path.exists():
-                return False
-                
-            logger.info(f"Loading {model_type} model from HuggingFace cache...")
-            
+
+            logger.info(f"Loading {model_type} model from local cache: {cache_dir}")
+
+            model_name_full = MODEL_NAMES["en_indic"] if model_type == "en_indic" else MODEL_NAMES["indic_en"]
+            local_snapshot = self._resolve_local_snapshot_dir(model_name_full)
+            load_path = str(local_snapshot) if local_snapshot else model_name_full
+            if local_snapshot is None:
+                logger.warning(f"No local snapshot found for {model_name_full}; attempting ID-based local load")
+
             if model_type == "en_indic":
                 self.tokenizer_en_indic = AutoTokenizer.from_pretrained(
-                    model_name,
-                    device_map="cpu",
+                    load_path,
                     trust_remote_code=True,
                     cache_dir=cache_dir,
-                    local_files_only=True
+                    local_files_only=True,
                 )
                 self.tokenizer_en_indic = self._fix_tokenizer_specials(self.tokenizer_en_indic)
 
                 self.model_en_indic = AutoModelForSeq2SeqLM.from_pretrained(
-                    model_name,
-                    device_map="cpu",
+                    load_path,
                     trust_remote_code=True,
                     cache_dir=cache_dir,
                     local_files_only=True,
-                    torch_dtype=torch.float32
-                ).to(self.device).eval()
+                    torch_dtype=torch.float32,
+                    low_cpu_mem_usage=False,
+                )
+                self.model_en_indic = self.model_en_indic.to(self.device).eval()
             else:
                 self.tokenizer_indic_en = AutoTokenizer.from_pretrained(
-                    model_name,
-                    device_map="cpu",
+                    load_path,
                     trust_remote_code=True,
                     cache_dir=cache_dir,
-                    local_files_only=True
+                    local_files_only=True,
                 )
                 self.tokenizer_indic_en = self._fix_tokenizer_specials(self.tokenizer_indic_en)
 
                 self.model_indic_en = AutoModelForSeq2SeqLM.from_pretrained(
-                    model_name,
-                    device_map="cpu",
+                    load_path,
                     trust_remote_code=True,
                     cache_dir=cache_dir,
                     local_files_only=True,
-                    torch_dtype=torch.float32
-                ).to(self.device).eval()
-            
-            logger.info(f"Successfully loaded {model_type} model from HuggingFace cache")
+                    torch_dtype=torch.float32,
+                    low_cpu_mem_usage=False,
+                )
+                self.model_indic_en = self.model_indic_en.to(self.device).eval()
+
+            logger.info(f"Successfully loaded {model_type} model from local cache")
             return True
-            
         except Exception as e:
-            logger.warning(f"Failed to load {model_type} model from cache: {e}")
+            logger.warning(f"Failed to load {model_type} model from local cache: {e}")
             return False
 
     def _ensure_en_indic_model(self):
@@ -138,35 +157,26 @@ class TranslationService:
                     return
                 
                 # Load from HuggingFace if no cache
-                logger.info("Loading EN→Indic model from HuggingFace...")
+                logger.info("Loading EN→Indic model from local cache (strict)...")
                 cache_dir = self._get_cache_dir()
-                model_name = MODEL_NAMES["en_indic"]
-                local_path = cache_dir / f"models--{model_name.replace('/', '--')}"
-
-                if local_path.exists():
-                    logger.info(f"Loading EN→Indic from local cache: {local_path}")
-                    model_path = model_name  # Use model name, HuggingFace handles local files
-                else:
-                    logger.info("Loading EN→Indic from HuggingFace...")
-                    model_path = model_name
+                model_path = MODEL_NAMES["en_indic"]
 
                 self.tokenizer_en_indic = AutoTokenizer.from_pretrained(
                     model_path,
-                    device_map="cpu",
                     trust_remote_code=True,
                     cache_dir=cache_dir,
-                    local_files_only=local_path.exists(),
+                    local_files_only=True,
                 )
                 self.tokenizer_en_indic = self._fix_tokenizer_specials(self.tokenizer_en_indic)
 
                 # Load model with proper initialization
                 self.model_en_indic = AutoModelForSeq2SeqLM.from_pretrained(
                     model_path,
-                    device_map="cpu",
                     trust_remote_code=True,
                     cache_dir=cache_dir,
-                    local_files_only=local_path.exists(),
-                    torch_dtype=torch.float32
+                    local_files_only=True,
+                    torch_dtype=torch.float32,
+                    low_cpu_mem_usage=False,
                 )
                 
                 # Force model initialization by moving to device
@@ -196,35 +206,26 @@ class TranslationService:
                     return
                 
                 # Load from HuggingFace if no cache
-                logger.info("Loading Indic→EN model from HuggingFace...")
+                logger.info("Loading Indic→EN model from local cache (strict)...")
                 cache_dir = self._get_cache_dir()
-                model_name = MODEL_NAMES["indic_en"]
-                local_path = cache_dir / f"models--{model_name.replace('/', '--')}"
-
-                if local_path.exists():
-                    logger.info(f"Loading Indic→EN from local cache: {local_path}")
-                    model_path = model_name
-                else:
-                    logger.info("Loading Indic→EN from HuggingFace...")
-                    model_path = model_name
+                model_path = MODEL_NAMES["indic_en"]
 
                 self.tokenizer_indic_en = AutoTokenizer.from_pretrained(
                     model_path,
-                    device_map="cpu",
                     trust_remote_code=True,
                     cache_dir=cache_dir,
-                    local_files_only=local_path.exists(),
+                    local_files_only=True,
                 )
                 self.tokenizer_indic_en = self._fix_tokenizer_specials(self.tokenizer_indic_en)
 
                 # Load model with proper initialization
                 self.model_indic_en = AutoModelForSeq2SeqLM.from_pretrained(
                     model_path,
-                    device_map="cpu",
                     trust_remote_code=True,
                     cache_dir=cache_dir,
-                    local_files_only=local_path.exists(),
-                    torch_dtype=torch.float32
+                    local_files_only=True,
+                    torch_dtype=torch.float32,
+                    low_cpu_mem_usage=False,
                 )
                 
                 # Force model initialization by moving to device
