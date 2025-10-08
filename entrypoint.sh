@@ -29,6 +29,14 @@ mkdir -p /home/LogFiles 2>/dev/null || true
     # Test Python import before starting uvicorn
     echo "Testing Python imports..."
     python -c "import sys; print('Python path:', sys.path)" 2>&1
+    
+    echo "Testing IndicTransToolkit import..."
+    python -c "from IndicTransToolkit import IndicProcessor; print('IndicTransToolkit OK')" 2>&1 || {
+        echo "ERROR: IndicTransToolkit import failed"
+        python -c "import IndicTransToolkit; print(dir(IndicTransToolkit))" 2>&1 || echo "Package not found"
+    }
+    
+    echo "Testing app.main import..."
     python -c "import app.main; print('Import successful!')" 2>&1 || {
         echo "ERROR: Failed to import app.main"
         echo "Detailed error:"
