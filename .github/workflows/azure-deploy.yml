@@ -1,0 +1,62 @@
+name: Build and Deploy to Azure
+
+on:
+  push:
+    branches:
+      - main  # change if you deploy from another branch
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    env:
+      # Non-sensitive defaults
+      HF_HOME: /app/.cache/huggingface
+      HF_HUB_CACHE: /app/.cache/huggingface/hub
+      TRANSFORMERS_CACHE: /app/.cache/huggingface/transformers
+      HF_HUB_OFFLINE: 0
+      TRUST_REMOTE_CODE: 1
+      TRANSLATION_PER_CALL_TIMEOUT: 90
+      TRANSLATION_PER_CALL_TIMEOUT_RETRY: 120
+      LOG_LEVEL: INFO
+
+      # Secrets from GitHub repository
+      ACR_NAME: ${{ secrets.ACR_NAME }}
+      APP_SERVICE_NAME: ${{ secrets.APP_SERVICE_NAME }}
+      AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
+      DATABASE_NAME: ${{ secrets.DATABASE_NAME }}
+      ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+      ELEVENLABS_VOICE_ID: ${{ secrets.ELEVENLABS_VOICE_ID }}
+      FIREBASE_SERVICE_ACCOUNT_BASE64: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BASE64 }}
+      FIREBASE_STORAGE_BUCKET: ${{ secrets.FIREBASE_STORAGE_BUCKET }}
+      IMAGE_NAME: ${{ secrets.IMAGE_NAME }}
+      MONGO_URI: ${{ secrets.MONGO_URI }}
+      RESOURCE_GROUP: ${{ secrets.RESOURCE_GROUP }}
+      CORS_ORIGIN: ${{ secrets.CORS_ORIGIN }}
+      AI4BHARAT_MODELS_PATH: ${{ secrets.AI4BHARAT_MODELS_PATH }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Log in to ACR
+        run: az acr login --name $ACR_NAME
+
+      - name: Build and push Docker image
+        run: |
+          IMAGE=$ACR_NAME.azurecr.io/$IMAGE_NAME
+          docker build -t $IMAGE .
+          docker push $IMAGE
+
+      - name: Deploy to App Service
+        run: |
+          az webapp config container set \
+            --name $APP_SERVICE_NAME \
+            --resource-group $RESOURCE_GROUP \
+            --docker-custom-image-name $ACR_NAME.azurecr.io/$IMAGE_NAME \
+            --docker-registry-server-url https://$ACR_NAME.azurecr.io
