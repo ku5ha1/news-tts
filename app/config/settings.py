@@ -17,12 +17,6 @@ class Settings(BaseSettings):
     AI4BHARAT_MODELS_PATH: Optional[str] = None
     ELEVENLABS_API_KEY: Optional[str] = None
     
-    # Cloud Configuration
-    CLOUD_PROVIDER: Optional[str] = None
-    REGION: Optional[str] = None
-    CLUSTER_NAME: Optional[str] = None
-    SERVICE_NAME: Optional[str] = None
-    
     # Logging
     LOG_LEVEL: Optional[str] = None
 

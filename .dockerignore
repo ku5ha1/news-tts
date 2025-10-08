@@ -81,5 +81,3 @@ LICENSE
 *.out
 *.so
 *.o
-
-# Add any other specific large files or directories unique to your project that aren't needed inside the Docker image

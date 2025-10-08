@@ -75,4 +75,6 @@ HEALTHCHECK --interval=30s --timeout=60s --start-period=300s --retries=3 \
 
 EXPOSE ${PORT}
 
+RUN chmod 755 /app/entrypoint.sh
+
 ENTRYPOINT ["./entrypoint.sh"]
