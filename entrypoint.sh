@@ -1,55 +1,38 @@
 #!/bin/bash
+set -x  # Enable debug mode to see what's executing
 
 # Set default PORT if not provided
 PORT=${PORT:-8080}
 
-# Write debug output to Azure's log directory
-DEBUG_LOG="/home/LogFiles/startup-debug.log"
-mkdir -p /home/LogFiles 2>/dev/null || true
+echo "=== ENTRYPOINT STARTING ===" >&2
+echo "PORT: ${PORT}" >&2
+echo "USER: $(whoami)" >&2
 
-{
-    echo "=== Entrypoint Debug Info $(date) ==="
-    echo "PORT: ${PORT}"
-    echo "USER: $(whoami)"
-    echo "PWD: $(pwd)"
-    echo "Python version: $(python --version 2>&1)"
-    echo "Checking app directory..."
-    ls -la /app/ 2>&1 || echo "Cannot list /app"
-    echo "Checking cache directory..."
-    ls -la /app/.cache/huggingface/ 2>&1 || echo "Cache dir doesn't exist"
-    echo "============================="
-    
-    # Create cache directories (ignore errors if they exist)
-    mkdir -p /app/.cache/huggingface/transformers 2>&1 || true
-    mkdir -p /app/models 2>&1 || true
-    
-    echo "Cache directories ready. Models will download on first use."
-    echo "Starting FastAPI server on port ${PORT}..."
-    
-    # Test Python import before starting uvicorn
-    echo "Testing Python imports..."
-    python -c "import sys; print('Python path:', sys.path)" 2>&1
-    
-    echo "Testing IndicTransToolkit import..."
-    python -c "from IndicTransToolkit import IndicProcessor; print('IndicTransToolkit OK')" 2>&1 || {
-        echo "ERROR: IndicTransToolkit import failed"
-        python -c "import IndicTransToolkit; print(dir(IndicTransToolkit))" 2>&1 || echo "Package not found"
-    }
-    
-    echo "Testing app.main import..."
-    python -c "import app.main; print('Import successful!')" 2>&1 || {
-        echo "ERROR: Failed to import app.main"
-        echo "Detailed error:"
-        python -c "import app.main" 2>&1
-        exit 1
-    }
-    
-    echo "Python imports successful. Starting uvicorn..."
-} | tee -a "$DEBUG_LOG" 2>&1
+# Create cache directories
+mkdir -p /app/.cache/huggingface/transformers || true
+mkdir -p /app/models || true
 
-# Start FastAPI app (also log to file)
+echo "Testing Python..." >&2
+python --version >&2
+
+echo "Testing IndicTransToolkit import..." >&2
+python -c "from IndicTransToolkit import IndicProcessor; print('IndicTransToolkit OK')" 2>&1 || {
+    echo "ERROR: IndicTransToolkit import failed" >&2
+    python -c "import IndicTransToolkit; print(dir(IndicTransToolkit))" 2>&1 || echo "Package not found" >&2
+}
+
+echo "Testing app.main import..." >&2
+python -c "import app.main; print('app.main import OK')" 2>&1 || {
+    echo "ERROR: Failed to import app.main" >&2
+    python -c "import app.main" 2>&1
+    exit 1
+}
+
+echo "Starting uvicorn..." >&2
+
+# Start FastAPI app
 exec uvicorn app.main:app \
     --host 0.0.0.0 \
     --port ${PORT} \
     --workers 1 \
-    --timeout-keep-alive 300 2>&1 | tee -a "$DEBUG_LOG"
+    --timeout-keep-alive 300
