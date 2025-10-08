@@ -55,8 +55,19 @@ jobs:
 
       - name: Deploy to App Service
         run: |
-          az webapp config container set \
+          az webapp config appsettings set \
             --name $APP_SERVICE_NAME \
             --resource-group $RESOURCE_GROUP \
-            --docker-custom-image-name $ACR_NAME.azurecr.io/$IMAGE_NAME \
-            --docker-registry-server-url https://$ACR_NAME.azurecr.io
+            --settings \
+            ELEVENLABS_API_KEY=$ELEVENLABS_API_KEY \
+            ELEVENLABS_VOICE_ID=$ELEVENLABS_VOICE_ID \
+            MONGO_URI=$MONGO_URI \
+            DATABASE_NAME=$DATABASE_NAME \
+            FIREBASE_SERVICE_ACCOUNT_BASE64=$FIREBASE_SERVICE_ACCOUNT_BASE64 \
+            FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET \
+            CORS_ORIGIN=$CORS_ORIGIN \
+            HF_HOME=/app/.cache/huggingface \
+            HF_HUB_CACHE=/app/.cache/huggingface/hub \
+            TRANSFORMERS_CACHE=/app/.cache/huggingface/transformers \
+            LOG_LEVEL=INFO
+          ```
