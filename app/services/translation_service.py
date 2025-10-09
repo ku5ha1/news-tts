@@ -314,6 +314,8 @@ class TranslationService:
 
             # Postprocess
             translations = self.ip.postprocess_batch(decoded, lang=tgt_tag)
+            if isinstance(translations, tuple):
+                translations = translations[0]
             return translations[0] if translations else text
             
         except Exception as e:
