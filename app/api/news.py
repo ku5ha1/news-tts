@@ -1,5 +1,4 @@
 from fastapi import APIRouter, HTTPException, BackgroundTasks
-import os
 from datetime import datetime
 from bson import ObjectId
 import asyncio
@@ -153,24 +152,21 @@ async def create_news(payload: NewsCreateRequest, background_tasks: BackgroundTa
         source_lang = detect_language(payload.title + " " + payload.description)
         logger.info(f"[CREATE] detected_language={source_lang} doc={document_id}")
 
-        # Translation with timeout (no fallback)
-        try:
-            timeout_sec = float(os.getenv("TRANSLATION_PER_CALL_TIMEOUT", "120"))
-        except Exception:
-            timeout_sec = 120.0
-
+        # Translation with timeout
         try:
             translations = await asyncio.wait_for(
                 translation_service.translate_to_all_async(payload.title, payload.description, source_lang),
-                timeout=timeout_sec
+                timeout=60.0
             )
             logger.info(f"[CREATE] translation.done langs={list(translations.keys())} doc={document_id}")
-        except asyncio.TimeoutError:
-            logger.error(f"[CREATE] translation timed out after {timeout_sec}s for doc={document_id}")
-            raise HTTPException(status_code=504, detail="Translation timed out")
-        except Exception as e:
-            logger.error(f"[CREATE] translation failed for doc={document_id}: {e}")
-            raise
+        except Exception:
+            # fallback to original text
+            logger.warning(f"[CREATE] translation failed or timed out for doc={document_id}")
+            translations = {
+                "hi": {"title": payload.title, "description": payload.description},
+                "kn": {"title": payload.title, "description": payload.description},
+                "en": {"title": payload.title, "description": payload.description}
+            }
 
         # Create news document
         news_document = {
@@ -304,7 +300,7 @@ async def generate_tts(payload: TTSRequest):
     """Generate TTS audio"""
     try:
         audio_file = await asyncio.to_thread(tts_service.generate_audio, payload.text, payload.language)
-        audio_url = await asyncio.to_thread(firebase_service.upload_audio, audio_file, payload.language)  # ADD await asyncio.to_thread
+        audio_url = await asyncio.to_thread(firebase_service.upload_audio, audio_file, payload.language) 
         duration = tts_service.get_audio_duration(audio_file)
         file_size = tts_service.get_file_size(audio_file)
 
