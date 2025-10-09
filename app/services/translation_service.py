@@ -471,8 +471,10 @@ class TranslationService:
         # Define target languages based on source
         if source_lang == "en":
             target_langs = ["hi", "kn"]
-        elif source_lang in ["hi", "kn"]:
-            target_langs = ["en"]
+        elif source_lang == "hi":
+            target_langs = ["en", "kn"]  
+        elif source_lang == "kn":
+            target_langs = ["en", "hi"]  
         else:
             logger.warning(f"Unsupported source language: {source_lang}, using original text")
             return {
