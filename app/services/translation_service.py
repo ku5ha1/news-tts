@@ -389,6 +389,8 @@ class TranslationService:
                 clean_up_tokenization_spaces=True,
             )
             translations = self.ip.postprocess_batch(decoded, lang=tgt_tag)
+            if isinstance(translations, tuple):
+                translations = translations[0]
 
             # Safety: ensure same length
             if not isinstance(translations, list) or len(translations) != len(safe_texts):
