@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, BackgroundTasks
+import os
 from datetime import datetime
 from bson import ObjectId
 import asyncio
@@ -152,21 +153,24 @@ async def create_news(payload: NewsCreateRequest, background_tasks: BackgroundTa
         source_lang = detect_language(payload.title + " " + payload.description)
         logger.info(f"[CREATE] detected_language={source_lang} doc={document_id}")
 
-        # Translation with timeout
+        # Translation with timeout (no fallback)
+        try:
+            timeout_sec = float(os.getenv("TRANSLATION_PER_CALL_TIMEOUT", "120"))
+        except Exception:
+            timeout_sec = 120.0
+
         try:
             translations = await asyncio.wait_for(
                 translation_service.translate_to_all_async(payload.title, payload.description, source_lang),
-                timeout=60.0
+                timeout=timeout_sec
             )
             logger.info(f"[CREATE] translation.done langs={list(translations.keys())} doc={document_id}")
-        except Exception:
-            # fallback to original text
-            logger.warning(f"[CREATE] translation failed or timed out for doc={document_id}")
-            translations = {
-                "hi": {"title": payload.title, "description": payload.description},
-                "kn": {"title": payload.title, "description": payload.description},
-                "en": {"title": payload.title, "description": payload.description}
-            }
+        except asyncio.TimeoutError:
+            logger.error(f"[CREATE] translation timed out after {timeout_sec}s for doc={document_id}")
+            raise HTTPException(status_code=504, detail="Translation timed out")
+        except Exception as e:
+            logger.error(f"[CREATE] translation failed for doc={document_id}: {e}")
+            raise
 
         # Create news document
         news_document = {
