@@ -400,6 +400,29 @@ class TranslationService:
             logger.error(f"Batch translation error {source}→{target}: {e}")
             return texts
 
+    def _translate_batch_via_en(self, texts: list[str], source: str, target: str) -> list[str]:
+        """Translate between Indic languages by pivoting through English (source→en→target)."""
+        try:
+            if source == "en" or target == "en":
+                return self._translate_batch(texts, source, target)
+
+            # Step 1: source → en
+            to_en = self._translate_batch(texts, source, "en")
+            if not isinstance(to_en, list) or len(to_en) != len(texts):
+                logger.warning("Pivot step source→en failed; returning originals")
+                return texts
+
+            # Step 2: en → target
+            to_target = self._translate_batch(to_en, "en", target)
+            if not isinstance(to_target, list) or len(to_target) != len(texts):
+                logger.warning("Pivot step en→target failed; returning originals")
+                return texts
+
+            return to_target
+        except Exception as e:
+            logger.error(f"Pivot batch translation error {source}→{target}: {e}")
+            return texts
+
     @property
     def is_models_loaded(self) -> bool:
         return (self.model_en_indic is not None) or (self.model_indic_en is not None)
@@ -492,7 +515,11 @@ class TranslationService:
         async def translate_one_language(tgt: str):
             try:
                 logger.info(f"Translating to {tgt} (batched)...")
-                batch = await asyncio.to_thread(self._translate_batch, [title, description], source_lang, tgt)
+                # If both source and target are Indic (non-EN), pivot via EN
+                if source_lang in ["hi", "kn"] and tgt in ["hi", "kn"]:
+                    batch = await asyncio.to_thread(self._translate_batch_via_en, [title, description], source_lang, tgt)
+                else:
+                    batch = await asyncio.to_thread(self._translate_batch, [title, description], source_lang, tgt)
                 if not isinstance(batch, list) or len(batch) != 2:
                     raise ValueError("Unexpected batch output shape")
                 return tgt, {"title": batch[0], "description": batch[1]}
