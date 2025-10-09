@@ -314,118 +314,11 @@ class TranslationService:
 
             # Postprocess
             translations = self.ip.postprocess_batch(decoded, lang=tgt_tag)
-            if isinstance(translations, tuple):
-                translations = translations[0]
             return translations[0] if translations else text
             
         except Exception as e:
             logger.error(f"Translation error {source}→{target}: {e}")
             return text  # Return original text on error
-
-    def _translate_batch(self, texts: list[str], source: str, target: str) -> list[str]:
-        """Translate a list of texts in a single model call for efficiency.
-        Preserves ordering; on error returns original texts.
-        """
-        try:
-            # Short-circuit empty batch
-            if not texts:
-                return []
-
-            # If all strings are empty/whitespace, return as-is
-            if all((t is None) or (isinstance(t, str) and not t.strip()) for t in texts):
-                return texts
-
-            # Normalize inputs to strings
-            safe_texts = [(t if isinstance(t, str) else "") for t in texts]
-
-            mapping = {"en": "eng_Latn", "hi": "hin_Deva", "kn": "kan_Knda"}
-            src_tag = mapping[source]
-            tgt_tag = mapping[target]
-
-            if source == "en":
-                self._ensure_en_indic_model()
-                tokenizer, model = self.tokenizer_en_indic, self.model_en_indic
-            else:
-                self._ensure_indic_en_model()
-                tokenizer, model = self.tokenizer_indic_en, self.model_indic_en
-
-            if model is None or tokenizer is None:
-                logger.error(f"{source}→{target} model not loaded properly (batch)")
-                return texts
-
-            # Preprocess batch
-            batch = self.ip.preprocess_batch(safe_texts, src_lang=src_tag, tgt_lang=tgt_tag)
-            if isinstance(batch, tuple):
-                batch = batch[0]
-            if not isinstance(batch, list):
-                raise ValueError(f"Unexpected batch type from preprocess: {type(batch)}")
-
-            # Tokenize once
-            inputs = tokenizer(
-                batch,
-                truncation=True,
-                padding="longest",
-                return_tensors="pt",
-                return_attention_mask=True,
-                max_length=512,
-            )
-            inputs = {k: v.to(self.device) for k, v in inputs.items()}
-
-            # Generate once
-            with torch.no_grad():
-                outputs = model.generate(
-                    **inputs,
-                    use_cache=False,
-                    min_length=0,
-                    max_length=256,
-                    num_beams=3,
-                    num_return_sequences=1,
-                    pad_token_id=tokenizer.pad_token_id,
-                    eos_token_id=tokenizer.eos_token_id,
-                )
-
-            # Decode and postprocess
-            decoded = tokenizer.batch_decode(
-                outputs.detach().cpu(),
-                skip_special_tokens=True,
-                clean_up_tokenization_spaces=True,
-            )
-            translations = self.ip.postprocess_batch(decoded, lang=tgt_tag)
-            if isinstance(translations, tuple):
-                translations = translations[0]
-
-            # Safety: ensure same length
-            if not isinstance(translations, list) or len(translations) != len(safe_texts):
-                logger.warning("Batch translation length mismatch; falling back to originals")
-                return texts
-
-            return translations
-        except Exception as e:
-            logger.error(f"Batch translation error {source}→{target}: {e}")
-            return texts
-
-    def _translate_batch_via_en(self, texts: list[str], source: str, target: str) -> list[str]:
-        """Translate between Indic languages by pivoting through English (source→en→target)."""
-        try:
-            if source == "en" or target == "en":
-                return self._translate_batch(texts, source, target)
-
-            # Step 1: source → en
-            to_en = self._translate_batch(texts, source, "en")
-            if not isinstance(to_en, list) or len(to_en) != len(texts):
-                logger.warning("Pivot step source→en failed; returning originals")
-                return texts
-
-            # Step 2: en → target
-            to_target = self._translate_batch(to_en, "en", target)
-            if not isinstance(to_target, list) or len(to_target) != len(texts):
-                logger.warning("Pivot step en→target failed; returning originals")
-                return texts
-
-            return to_target
-        except Exception as e:
-            logger.error(f"Pivot batch translation error {source}→{target}: {e}")
-            return texts
 
     @property
     def is_models_loaded(self) -> bool:
@@ -498,10 +391,8 @@ class TranslationService:
         # Define target languages based on source
         if source_lang == "en":
             target_langs = ["hi", "kn"]
-        elif source_lang == "hi":
-            target_langs = ["en", "kn"]  
-        elif source_lang == "kn":
-            target_langs = ["en", "hi"]  
+        elif source_lang in ["hi", "kn"]:
+            target_langs = ["en"]
         else:
             logger.warning(f"Unsupported source language: {source_lang}, using original text")
             return {
@@ -515,27 +406,21 @@ class TranslationService:
         # Add source language as-is
         result[source_lang] = {"title": title, "description": description}
         
-        # Translate to target languages in parallel, batching title+description per language
-        async def translate_one_language(tgt: str):
+        # Translate to target languages
+        for target_lang in target_langs:
             try:
-                logger.info(f"Translating to {tgt} (batched)...")
-                # If both source and target are Indic (non-EN), pivot via EN
-                if source_lang in ["hi", "kn"] and tgt in ["hi", "kn"]:
-                    batch = await asyncio.to_thread(self._translate_batch_via_en, [title, description], source_lang, tgt)
-                else:
-                    batch = await asyncio.to_thread(self._translate_batch, [title, description], source_lang, tgt)
-                if not isinstance(batch, list) or len(batch) != 2:
-                    raise ValueError("Unexpected batch output shape")
-                return tgt, {"title": batch[0], "description": batch[1]}
+                logger.info(f"Translating to {target_lang}...")
+                translated_title = self.translate(title, source_lang, target_lang)
+                translated_description = self.translate(description, source_lang, target_lang)
+                result[target_lang] = {
+                    "title": translated_title,
+                    "description": translated_description
+                }
+                logger.info(f"Successfully translated to {target_lang}")
             except Exception as e:
-                logger.error(f"Failed to translate to {tgt}: {e}")
-                return tgt, {"title": title, "description": description}
-
-        tasks = [translate_one_language(t) for t in target_langs]
-        if tasks:
-            results = await asyncio.gather(*tasks)
-            for lang_key, payload in results:
-                result[lang_key] = payload
+                logger.error(f"Failed to translate to {target_lang}: {e}")
+                # Use original text as fallback
+                result[target_lang] = {"title": title, "description": description}
         
         # Ensure all languages are present
         for lang in ["hi", "kn", "en"]:
