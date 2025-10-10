@@ -172,7 +172,7 @@ class TranslationService:
             logger.info(f"Translation result: {result[:50]}...")
             return result
                 
-            except Exception as e:
+        except Exception as e:
             logger.error(f"Translation error EN->{target_lang}: {e}")
             raise
 
@@ -203,7 +203,7 @@ class TranslationService:
             ).to(self.device)
 
             # Generate translation
-                with torch.no_grad():
+            with torch.no_grad():
                 generated_tokens = self.indic_en_model.generate(
                         **inputs,
                         use_cache=True,
@@ -230,7 +230,7 @@ class TranslationService:
             result = translations[0] if translations else text
             logger.info(f"Translation result: {result[:50]}...")
             return result
-            
+                
         except Exception as e:
             logger.error(f"Translation error {source_lang}->EN: {e}")
             raise
