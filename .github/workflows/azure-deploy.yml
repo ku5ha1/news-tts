@@ -50,7 +50,7 @@ jobs:
       - name: Build and push Docker image
         run: |
           IMAGE=$ACR_NAME.azurecr.io/$IMAGE_NAME
-          docker build -t $IMAGE .
+          docker build --no-cache -t $IMAGE .
           docker push $IMAGE
 
       - name: Configure Web App container
