@@ -278,6 +278,11 @@ class TranslationService:
             if model is None or tokenizer is None:
                 logger.error(f"{source}→{target} model not loaded properly")
                 raise RuntimeError(f"{source}→{target} model not loaded properly")
+            
+            # Validate device consistency
+            if hasattr(model, 'device') and str(model.device) != str(self.device):
+                logger.error(f"Model device mismatch: model on {model.device}, expected {self.device}")
+                raise RuntimeError(f"Model device mismatch: model on {model.device}, expected {self.device}")
 
             # Preprocess
             batch = self.ip.preprocess_batch([text], src_lang=src_tag, tgt_lang=tgt_tag)
@@ -287,15 +292,19 @@ class TranslationService:
                 raise ValueError(f"Unexpected batch type from preprocess: {type(batch)}")
 
             # Tokenize
-            inputs = tokenizer(
-                batch,
-                truncation=True,
-                padding="longest",
-                return_tensors="pt",
-                return_attention_mask=True,
-                max_length=256,
-            )
-            inputs = {k: v.to(self.device) for k, v in inputs.items()}
+            try:
+                inputs = tokenizer(
+                    batch,
+                    truncation=True,
+                    padding="longest",
+                    return_tensors="pt",
+                    return_attention_mask=True,
+                    max_length=256,
+                )
+                inputs = {k: v.to(self.device) for k, v in inputs.items()}
+            except Exception as e:
+                logger.error(f"Tokenization error for {source}→{target}: {e}")
+                raise RuntimeError(f"Tokenization failed for {source}→{target}: {e}")
 
             # Generate
             with torch.no_grad():
