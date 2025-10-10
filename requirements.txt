@@ -64,5 +64,5 @@ pytest-asyncio==0.21.1
 structlog==23.2.0
 colorama==0.4.6
 
-# IndicTrans2 official toolkit (from official repository)
-git+https://github.com/AI4Bharat/IndicTrans2.git
+# IndicTrans2 will be cloned manually in Dockerfile
+# git+https://github.com/AI4Bharat/IndicTrans2.git
