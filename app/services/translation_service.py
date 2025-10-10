@@ -154,6 +154,7 @@ class TranslationService:
                 # Check for cached model first
                 if self._load_cached_model("en_indic"):
                     logger.info("Loaded EN→Indic model from cache")
+                    self.loading_en_indic = False
                     return
                 
                 # Load from HuggingFace if no cache
@@ -203,6 +204,7 @@ class TranslationService:
                 # Check for cached model first
                 if self._load_cached_model("indic_en"):
                     logger.info("Loaded Indic→EN model from cache")
+                    self.loading_indic_en = False
                     return
                 
                 # Load from HuggingFace if no cache
@@ -250,6 +252,9 @@ class TranslationService:
             return self._translate(text, source_lang, target_lang)
         elif source_lang in ["hi", "kn"] and target_lang == "en":
             return self._translate(text, source_lang, target_lang)
+        elif source_lang in ["hi", "kn"] and target_lang in ["hi", "kn"] and source_lang != target_lang:
+            # Pivot through English for HI↔KN
+            return self._translate_via_en(text, source_lang, target_lang)
         else:
             raise ValueError(f"Unsupported translation: {source_lang} → {target_lang}")
 
@@ -296,10 +301,10 @@ class TranslationService:
             with torch.no_grad():
                 outputs = model.generate(
                     **inputs,
-                    use_cache=False,
+                    use_cache=True,
                     min_length=0,
-                    max_length=256,
-                    num_beams=3,
+                    max_length=128,
+                    num_beams=1,
                     num_return_sequences=1,
                     pad_token_id=tokenizer.pad_token_id,
                     eos_token_id=tokenizer.eos_token_id,
@@ -319,6 +324,31 @@ class TranslationService:
         except Exception as e:
             logger.error(f"Translation error {source}→{target}: {e}")
             return text  # Return original text on error
+
+    def _translate_via_en(self, text: str, source: str, target: str) -> str:
+        """Translate between Indic languages by pivoting through English."""
+        try:
+            if not text.strip():
+                return text
+            
+            logger.info(f"Pivoting {source}→{target} through English")
+            
+            # Step 1: source → en
+            to_en = self._translate(text, source, "en")
+            if not to_en or to_en == text:
+                logger.warning(f"Pivot step {source}→en failed; returning original")
+                return text
+            
+            # Step 2: en → target
+            to_target = self._translate(to_en, "en", target)
+            if not to_target or to_target == to_en:
+                logger.warning(f"Pivot step en→{target} failed; returning original")
+                return text
+            
+            return to_target
+        except Exception as e:
+            logger.error(f"Pivot translation error {source}→{target}: {e}")
+            return text
 
     @property
     def is_models_loaded(self) -> bool:
@@ -391,8 +421,10 @@ class TranslationService:
         # Define target languages based on source
         if source_lang == "en":
             target_langs = ["hi", "kn"]
-        elif source_lang in ["hi", "kn"]:
-            target_langs = ["en"]
+        elif source_lang == "kn":
+            target_langs = ["en", "hi"]
+        elif source_lang == "hi":
+            target_langs = ["en", "kn"]
         else:
             logger.warning(f"Unsupported source language: {source_lang}, using original text")
             return {
