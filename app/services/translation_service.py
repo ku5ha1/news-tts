@@ -310,13 +310,19 @@ class TranslationService:
         return translations
 
     async def _translate_combined_async(self, combined_text: str, source_lang: str, target_lang: str) -> dict:
-        """Async wrapper for combined text translation."""
+        """Async wrapper for combined text translation - bypasses model loading since models are pre-loaded."""
         loop = asyncio.get_event_loop()
         
         # Run translation in thread pool to avoid blocking
-        translated_text = await loop.run_in_executor(
-            None, self.translate, combined_text, source_lang, target_lang
-        )
+        # Use direct translation methods to bypass model loading checks
+        if source_lang == "english":
+            translated_text = await loop.run_in_executor(
+                None, self._translate_en_to_indic, combined_text, target_lang
+            )
+        else:
+            translated_text = await loop.run_in_executor(
+                None, self._translate_indic_to_en, combined_text, source_lang
+            )
         
         # Split back into title and description (simple approach)
         parts = translated_text.split('. ', 1)
