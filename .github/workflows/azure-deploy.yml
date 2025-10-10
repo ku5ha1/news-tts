@@ -91,3 +91,9 @@ jobs:
             HF_HUB_CACHE="/app/.cache/huggingface/hub" \
             TRANSFORMERS_CACHE="/app/.cache/huggingface/transformers" \
             LOG_LEVEL="INFO"
+
+      - name: Restart App Service
+        run: |
+          az webapp restart \
+            --name "$APP_SERVICE_NAME" \
+            --resource-group "$RESOURCE_GROUP"
