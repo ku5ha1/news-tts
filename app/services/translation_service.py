@@ -406,21 +406,22 @@ class TranslationService:
         # Add source language as-is
         result[source_lang] = {"title": title, "description": description}
         
-        # Translate to target languages
-        for target_lang in target_langs:
+        # Translate to target languages in parallel
+        async def translate_one_language(tgt: str):
             try:
-                logger.info(f"Translating to {target_lang}...")
-                translated_title = self.translate(title, source_lang, target_lang)
-                translated_description = self.translate(description, source_lang, target_lang)
-                result[target_lang] = {
-                    "title": translated_title,
-                    "description": translated_description
-                }
-                logger.info(f"Successfully translated to {target_lang}")
+                logger.info(f"Translating to {tgt}...")
+                translated_title = await asyncio.to_thread(self.translate, title, source_lang, tgt)
+                translated_description = await asyncio.to_thread(self.translate, description, source_lang, tgt)
+                return tgt, {"title": translated_title, "description": translated_description}
             except Exception as e:
-                logger.error(f"Failed to translate to {target_lang}: {e}")
-                # Use original text as fallback
-                result[target_lang] = {"title": title, "description": description}
+                logger.error(f"Failed to translate to {tgt}: {e}")
+                return tgt, {"title": title, "description": description}
+
+        tasks = [translate_one_language(t) for t in target_langs]
+        if tasks:
+            results = await asyncio.gather(*tasks)
+            for lang_key, payload in results:
+                result[lang_key] = payload
         
         # Ensure all languages are present
         for lang in ["hi", "kn", "en"]:
