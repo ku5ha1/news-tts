@@ -66,15 +66,15 @@ def test_preprocessing():
         logger.error(f"Preprocessing test failed: {e}")
         return False
 
-def install_indictrans2():
-    """Install IndicTrans2 toolkit"""
+def install_indictrans_toolkit():
+    """Install IndicTransToolkit"""
     try:
-        logger.info("Installing IndicTrans2...")
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "indictrans2>=2.0.0"])
-        logger.info("IndicTrans2 installed successfully")
+        logger.info("Installing IndicTransToolkit...")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "IndicTransToolkit>=1.0.0"])
+        logger.info("IndicTransToolkit installed successfully")
         return True
     except subprocess.CalledProcessError as e:
-        logger.error(f"Failed to install IndicTrans2: {e}")
+        logger.error(f"Failed to install IndicTransToolkit: {e}")
         return False
 
 def main():
@@ -94,19 +94,19 @@ def main():
         logger.warning("Preprocessing test failed. This is likely the source of your error.")
         
         if not has_indictrans2:
-            logger.info("3. Installing IndicTrans2 toolkit...")
-            if install_indictrans2():
+            logger.info("3. Installing IndicTransToolkit...")
+            if install_indictrans_toolkit():
                 logger.info("4. Re-testing preprocessing...")
                 preprocessing_works = test_preprocessing()
                 
                 if preprocessing_works:
-                    logger.info("✅ SUCCESS: IndicTrans2 installation fixed the issue!")
+                    logger.info("✅ SUCCESS: IndicTransToolkit installation fixed the issue!")
                 else:
-                    logger.error("❌ FAILED: Issue persists after IndicTrans2 installation")
+                    logger.error("❌ FAILED: Issue persists after IndicTransToolkit installation")
             else:
-                logger.error("❌ FAILED: Could not install IndicTrans2")
+                logger.error("❌ FAILED: Could not install IndicTransToolkit")
         else:
-            logger.error("❌ FAILED: IndicTrans2 is installed but preprocessing still fails")
+            logger.error("❌ FAILED: IndicTransToolkit is installed but preprocessing still fails")
     else:
         logger.info("✅ SUCCESS: Preprocessing is working correctly!")
     
