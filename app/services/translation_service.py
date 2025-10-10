@@ -279,12 +279,14 @@ class TranslationService:
         
         translations = {}
         
-        # Run translations in parallel
+        # Run translations in parallel - translate combined text for speed
         tasks = []
         for lang in target_languages:
             if lang.lower() != source_lang.lower():
+                # Combine title and description for faster translation
+                combined_text = f"{title}. {description}"
                 task = asyncio.create_task(
-                    self._translate_async(title, description, source_lang, lang)
+                    self._translate_combined_async(combined_text, source_lang, lang)
                 )
                 tasks.append((lang, task))
         
@@ -298,6 +300,25 @@ class TranslationService:
                 translations[lang] = {"title": title, "description": description}
         
         return translations
+
+    async def _translate_combined_async(self, combined_text: str, source_lang: str, target_lang: str) -> dict:
+        """Async wrapper for combined text translation."""
+        loop = asyncio.get_event_loop()
+        
+        # Run translation in thread pool to avoid blocking
+        translated_text = await loop.run_in_executor(
+            None, self.translate, combined_text, source_lang, target_lang
+        )
+        
+        # Split back into title and description (simple approach)
+        parts = translated_text.split('. ', 1)
+        translated_title = parts[0] if parts else translated_text
+        translated_description = parts[1] if len(parts) > 1 else translated_text
+        
+        return {
+            "title": translated_title,
+            "description": translated_description
+        }
 
     async def _translate_async(self, title: str, description: str, source_lang: str, target_lang: str) -> dict:
         """Async wrapper for translation."""
