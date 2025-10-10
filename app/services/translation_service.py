@@ -38,6 +38,9 @@ class TranslationService:
             # Initialize IndicTrans2 components
             try:
                 logger.info("Initializing IndicTrans2 components...")
+                # Import IndicTrans2 components
+                import sys
+                sys.path.append('/app/IndicTrans2')
                 from IndicTrans2.inference.engine import Model
                 from IndicTrans2.inference.engine import InferenceEngine
                 self.Model = Model
@@ -86,15 +89,13 @@ class TranslationService:
                 logger.info(f"Loading EN→Indic model from {model_path}")
                 self.en_indic_model = self.Model(
                     model_path,
-                    device=self.device,
-                    cache_dir=cache_dir
+                    device=self.device
                 )
                 
                 # Initialize inference engine
                 logger.info("Initializing EN→Indic inference engine...")
                 self.en_indic_engine = self.InferenceEngine(
-                    self.en_indic_model,
-                    device=self.device
+                    self.en_indic_model
                 )
                 
                 logger.info("EN→Indic model loaded successfully with IndicTrans2")
@@ -121,15 +122,13 @@ class TranslationService:
                 logger.info(f"Loading Indic→EN model from {model_path}")
                 self.indic_en_model = self.Model(
                     model_path,
-                    device=self.device,
-                    cache_dir=cache_dir
+                    device=self.device
                 )
                 
                 # Initialize inference engine
                 logger.info("Initializing Indic→EN inference engine...")
                 self.indic_en_engine = self.InferenceEngine(
-                    self.indic_en_model,
-                    device=self.device
+                    self.indic_en_model
                 )
                 
                 logger.info("Indic→EN model loaded successfully with IndicTrans2")
@@ -165,7 +164,7 @@ class TranslationService:
             logger.info(f"Translating EN→{target_lang} with IndicTrans2")
 
             # Load model if not already loaded
-                self._ensure_en_indic_model()
+            self._ensure_en_indic_model()
             
             if self.en_indic_engine is None:
                 raise RuntimeError("EN→Indic engine not loaded")
