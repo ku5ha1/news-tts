@@ -2,7 +2,7 @@
 # Stage 1: Builder
 # =========================
 # Fix to force new build
-FROM python:3.11 as builder
+FROM python:3.11 AS builder
 
 WORKDIR /app
 
@@ -38,7 +38,6 @@ WORKDIR /app
 # Copy installed packages and cached models from builder
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
-COPY --from=builder /app/.cache/huggingface /app/.cache/huggingface
 COPY --from=builder /app/IndicTrans2 /app/IndicTrans2
 
 # Install runtime deps
