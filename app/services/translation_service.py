@@ -277,6 +277,14 @@ class TranslationService:
             # For other languages, translate to English and Hindi
             target_languages = ["english", "hindi"]
         
+        # PRE-LOAD MODELS to avoid contention during parallel execution
+        logger.info("Pre-loading models to avoid parallel contention...")
+        if source_lang == "english":
+            self._ensure_en_indic_model()
+        else:
+            self._ensure_indic_en_model()
+        logger.info("Models pre-loaded successfully")
+        
         translations = {}
         
         # Run translations in parallel - translate combined text for speed
