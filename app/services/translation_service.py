@@ -318,6 +318,11 @@ class TranslationService:
                 batch = batch[0]
             if not isinstance(batch, list):
                 raise ValueError(f"Unexpected batch type from preprocess: {type(batch)}")
+            
+            # Validate batch is not empty
+            if not batch or len(batch) == 0:
+                logger.error(f"Preprocessing returned empty batch for {source}→{target}")
+                raise RuntimeError(f"Preprocessing returned empty batch for {source}→{target}")
 
             # Tokenize
             try:
@@ -329,6 +334,18 @@ class TranslationService:
                     return_attention_mask=True,
                     max_length=256,
                 )
+                
+                # Validate tokenizer output
+                if inputs is None:
+                    logger.error(f"Tokenizer returned None for {source}→{target}")
+                    raise RuntimeError(f"Tokenizer returned None for {source}→{target}")
+                
+                # Validate all tensor values are not None before moving to device
+                for k, v in inputs.items():
+                    if v is None:
+                        logger.error(f"Tokenizer returned None for key '{k}' in {source}→{target}")
+                        raise RuntimeError(f"Tokenizer returned None for key '{k}'")
+                
                 inputs = {k: v.to(self.device) for k, v in inputs.items()}
             except Exception as e:
                 logger.error(f"Tokenization error for {source}→{target}: {e}")
@@ -459,18 +476,28 @@ class TranslationService:
         load_time = time.time() - start_time
         logger.info(f"Model loading completed in {load_time:.2f} seconds")
         
+        # Verify models loaded
+        if self.model_en_indic is None and self.model_indic_en is None:
+            logger.error("CRITICAL: No models loaded during warmup!")
+            raise RuntimeError("Model loading failed - no models available")
+        
         # Test both directions if models loaded successfully
         try:
             if self.model_en_indic is not None:
                 test_en_hi = self._translate("Hello", "en", "hi")
                 logger.info(f"Warmup test EN→HI: {test_en_hi}")
+            else:
+                logger.warning("EN→Indic model not loaded, skipping warmup test")
             
             if self.model_indic_en is not None:
                 test_hi_en = self._translate("नमस्ते", "hi", "en")
                 logger.info(f"Warmup test HI→EN: {test_hi_en}")
+            else:
+                logger.warning("Indic→EN model not loaded, skipping warmup test")
                 
         except Exception as e:
-            logger.warning(f"Warmup test failed (non-critical): {e}")
+            logger.error(f"Warmup test failed: {e}")
+            raise RuntimeError(f"Warmup test failed: {e}")
 
     async def translate_to_all_async(self, title: str, description: str, source_lang: str) -> dict:
         """
