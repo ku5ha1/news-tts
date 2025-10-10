@@ -121,6 +121,11 @@ class TranslationService:
                     low_cpu_mem_usage=False,
                 )
                 self.model_en_indic = self.model_en_indic.to(self.device).eval()
+                
+                # Force initialization with dummy forward pass
+                with torch.no_grad():
+                    dummy_input = self.tokenizer_en_indic("test", return_tensors="pt", padding=True, truncation=True).to(self.device)
+                    _ = self.model_en_indic(**dummy_input)
             else:
                 self.tokenizer_indic_en = AutoTokenizer.from_pretrained(
                     load_path,
@@ -139,6 +144,11 @@ class TranslationService:
                     low_cpu_mem_usage=False,
                 )
                 self.model_indic_en = self.model_indic_en.to(self.device).eval()
+                
+                # Force initialization with dummy forward pass
+                with torch.no_grad():
+                    dummy_input = self.tokenizer_indic_en("test", return_tensors="pt", padding=True, truncation=True).to(self.device)
+                    _ = self.model_indic_en(**dummy_input)
 
             logger.info(f"Successfully loaded {model_type} model from local cache")
             return True
@@ -180,14 +190,23 @@ class TranslationService:
                     low_cpu_mem_usage=False,
                 )
                 
-                # Force model initialization by moving to device
+                # Force model initialization by moving to device and loading weights
                 self.model_en_indic = self.model_en_indic.to(self.device)
                 self.model_en_indic.eval()
                 
-                # Force data loading with a dummy forward pass
+                # Force data loading with a dummy forward pass to ensure weights are loaded
                 with torch.no_grad():
                     dummy_input = self.tokenizer_en_indic("test", return_tensors="pt", padding=True, truncation=True).to(self.device)
-                    _ = self.model_en_indic(**dummy_input)
+                    try:
+                        _ = self.model_en_indic(**dummy_input)
+                    except Exception as e:
+                        logger.error(f"Dummy forward pass failed: {e}")
+                        raise RuntimeError(f"Model initialization failed: {e}")
+                
+                # Verify model is properly on device
+                if hasattr(self.model_en_indic, 'device') and str(self.model_en_indic.device) != str(self.device):
+                    logger.error(f"Model not on expected device: {self.model_en_indic.device} vs {self.device}")
+                    raise RuntimeError(f"Model device mismatch after loading")
 
                 logger.info("EN→Indic dist-200M model loaded successfully")
             except Exception as e:
@@ -230,14 +249,23 @@ class TranslationService:
                     low_cpu_mem_usage=False,
                 )
                 
-                # Force model initialization by moving to device
+                # Force model initialization by moving to device and loading weights
                 self.model_indic_en = self.model_indic_en.to(self.device)
                 self.model_indic_en.eval()
                 
-                # Force data loading with a dummy forward pass
+                # Force data loading with a dummy forward pass to ensure weights are loaded
                 with torch.no_grad():
                     dummy_input = self.tokenizer_indic_en("test", return_tensors="pt", padding=True, truncation=True).to(self.device)
-                    _ = self.model_indic_en(**dummy_input)
+                    try:
+                        _ = self.model_indic_en(**dummy_input)
+                    except Exception as e:
+                        logger.error(f"Dummy forward pass failed: {e}")
+                        raise RuntimeError(f"Model initialization failed: {e}")
+                
+                # Verify model is properly on device
+                if hasattr(self.model_indic_en, 'device') and str(self.model_indic_en.device) != str(self.device):
+                    logger.error(f"Model not on expected device: {self.model_indic_en.device} vs {self.device}")
+                    raise RuntimeError(f"Model device mismatch after loading")
 
                 logger.info("Indic→EN dist-200M model loaded successfully")
             except Exception as e:
