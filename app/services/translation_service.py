@@ -179,7 +179,7 @@ class TranslationService:
             logger.info(f"Translation successful: '{result[:50]}...'")
             return result
                 
-            except Exception as e:
+        except Exception as e:
             logger.error(f"Translation error EN→{target_lang}: {e}")
             raise
 
