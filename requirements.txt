@@ -53,5 +53,5 @@ pytest-asyncio==0.21.1
 structlog==23.2.0
 colorama==0.4.6
 
-# IndicTransToolkit (official version compatible with IndicTrans2 models)
-IndicTransToolkit>=1.0.0
+# IndicTransToolkit (official fork for IndicTrans2 compatibility)
+git+https://github.com/VarunGumma/IndicTransToolkit.git
