@@ -8,6 +8,7 @@ import os
 from contextlib import asynccontextmanager
 from fastapi.responses import JSONResponse
 from time import perf_counter
+from pathlib import Path
 
 settings = Settings()
 
@@ -30,6 +31,8 @@ async def preload_models() -> None:
 
         # Use the same cache populated during build (hub cache)
         cache_dir = os.getenv("HF_HUB_CACHE", "/app/.cache/huggingface/hub")
+        # Ensure cache directory exists
+        Path(cache_dir).mkdir(parents=True, exist_ok=True)
 
         en_indic_model = "ai4bharat/indictrans2-en-indic-dist-200M"
         indic_en_model = "ai4bharat/indictrans2-indic-en-dist-200M"
