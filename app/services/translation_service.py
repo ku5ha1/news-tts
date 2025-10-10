@@ -42,9 +42,7 @@ class TranslationService:
                 import sys
                 sys.path.append('/app/IndicTrans2')
                 from IndicTrans2.inference.engine import Model
-                from IndicTrans2.inference.engine import InferenceEngine
                 self.Model = Model
-                self.InferenceEngine = InferenceEngine
                 logger.info("IndicTrans2 components initialized successfully")
             except Exception as e:
                 logger.error(f"Failed to initialize IndicTrans2 components: {e}")
@@ -53,8 +51,6 @@ class TranslationService:
             # Placeholders for lazy model load
             self.en_indic_model = None
             self.indic_en_model = None
-            self.en_indic_engine = None
-            self.indic_en_engine = None
 
             # Track loading status
             self.loading_en_indic = False
@@ -97,11 +93,8 @@ class TranslationService:
                     # Try alternative approach or fallback
                     raise RuntimeError(f"Model loading failed: {model_error}")
                 
-                # Initialize inference engine
-                logger.info("Initializing EN->Indic inference engine...")
-                self.en_indic_engine = self.InferenceEngine(
-                    self.en_indic_model
-                )
+                # Model is ready for inference
+                logger.info("EN->Indic model loaded successfully")
                 
                 logger.info("EN->Indic model loaded successfully with IndicTrans2")
                 
@@ -135,11 +128,8 @@ class TranslationService:
                     # Try alternative approach or fallback
                     raise RuntimeError(f"Model loading failed: {model_error}")
                 
-                # Initialize inference engine
-                logger.info("Initializing Indic->EN inference engine...")
-                self.indic_en_engine = self.InferenceEngine(
-                    self.indic_en_model
-                )
+                # Model is ready for inference
+                logger.info("Indic->EN model loaded successfully")
                 
                 logger.info("Indic->EN model loaded successfully with IndicTrans2")
                 
@@ -176,11 +166,11 @@ class TranslationService:
             # Load model if not already loaded
             self._ensure_en_indic_model()
             
-            if self.en_indic_engine is None:
-                raise RuntimeError("EN->Indic engine not loaded")
+            if self.en_indic_model is None:
+                raise RuntimeError("EN->Indic model not loaded")
             
-            # Use IndicTrans2 native translation
-            result = self.en_indic_engine.translate(
+            # Use IndicTrans2 Model class directly for translation
+            result = self.en_indic_model.translate(
                 text,
                 src_lang="eng_Latn",
                 tgt_lang=self._get_lang_code(target_lang)
@@ -204,11 +194,11 @@ class TranslationService:
             # Load model if not already loaded
             self._ensure_indic_en_model()
             
-            if self.indic_en_engine is None:
-                raise RuntimeError("Indic->EN engine not loaded")
+            if self.indic_en_model is None:
+                raise RuntimeError("Indic->EN model not loaded")
             
-            # Use IndicTrans2 native translation
-            result = self.indic_en_engine.translate(
+            # Use IndicTrans2 Model class directly for translation
+            result = self.indic_en_model.translate(
                 text,
                 src_lang=self._get_lang_code(source_lang),
                 tgt_lang="eng_Latn"
