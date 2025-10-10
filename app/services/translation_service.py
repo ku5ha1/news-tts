@@ -3,7 +3,7 @@ import os
 import asyncio
 import logging
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
-from IndicTransToolkit import IndicProcessor
+from indictranstoolkit import IndicProcessor
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)

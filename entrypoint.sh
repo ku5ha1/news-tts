@@ -15,9 +15,9 @@ echo "Testing Python..." >&2
 python --version >&2
 
 echo "Testing IndicTransToolkit import..." >&2
-python -c "from IndicTransToolkit import IndicProcessor; print('IndicTransToolkit OK')" 2>&1 || {
+python -c "from indictranstoolkit import IndicProcessor; print('IndicTransToolkit OK')" 2>&1 || {
     echo "ERROR: IndicTransToolkit import failed" >&2
-    python -c "import IndicTransToolkit; print(dir(IndicTransToolkit))" 2>&1 || echo "Package not found" >&2
+    python -c "import indictranstoolkit; print(dir(indictranstoolkit))" 2>&1 || echo "Package not found" >&2
 }
 
 echo "Testing app.main import..." >&2
