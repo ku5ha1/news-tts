@@ -98,21 +98,26 @@ class TranslationService:
             finally:
                 self.loading_indic_en = False
 
+    def _normalize_lang_code(self, lang: str) -> str:
+        """Normalize language codes from detection to internal format."""
+        lang = lang.lower().strip()
+        
+        # Map detection codes to internal codes (only 3 languages supported)
+        if lang in ["en", "english"]:
+            return "english"
+        elif lang in ["hi", "hindi"]:
+            return "hindi"
+        elif lang in ["kn", "kannada"]:
+            return "kannada"
+        else:
+            # Default to English if unknown
+            return "english"
+
     def _get_lang_code(self, lang: str) -> str:
         """Convert language name to IndicTrans2 language code."""
         lang_map = {
             "hindi": "hin_Deva",
-            "bengali": "ben_Beng", 
-            "telugu": "tel_Telu",
-            "marathi": "mar_Deva",
-            "tamil": "tam_Taml",
-            "gujarati": "guj_Gujr",
-            "urdu": "urd_Arab",
             "kannada": "kan_Knda",
-            "odia": "ory_Orya",
-            "punjabi": "pan_Guru",
-            "malayalam": "mal_Mlym",
-            "assamese": "asm_Beng",
             "english": "eng_Latn"
         }
         return lang_map.get(lang.lower(), "hin_Deva")
@@ -207,12 +212,12 @@ class TranslationService:
             # Generate translation
             with torch.no_grad():
                 generated_tokens = self.indic_en_model.generate(
-                    **inputs,
+                        **inputs,
                     use_cache=False,  # Disable cache to avoid past_key_values issue
-                    min_length=0,
+                        min_length=0,
                     max_length=256,
                     num_beams=5,
-                    num_return_sequences=1,
+                        num_return_sequences=1,
                     do_sample=False,  # Use deterministic generation
                     pad_token_id=self.indic_en_tokenizer.pad_token_id,
                 )
@@ -242,9 +247,13 @@ class TranslationService:
     def translate(self, text: str, source_lang: str, target_lang: str) -> str:
         """Main translation method."""
         try:
-            if source_lang.lower() == "english":
+            # Normalize language codes
+            source_lang = self._normalize_lang_code(source_lang)
+            target_lang = self._normalize_lang_code(target_lang)
+            
+            if source_lang == "english":
                 return self._translate_en_to_indic(text, target_lang)
-            elif target_lang.lower() == "english":
+            elif target_lang == "english":
                 return self._translate_indic_to_en(text, source_lang)
             else:
                 # Translate through English
@@ -255,15 +264,24 @@ class TranslationService:
             raise
 
     async def translate_to_all_async(self, title: str, description: str, source_lang: str) -> dict:
-        """Translate title and description to all supported languages."""
-        languages = ["hindi", "bengali", "telugu", "marathi", "tamil", "gujarati", 
-                    "urdu", "kannada", "odia", "punjabi", "malayalam", "assamese"]
+        """Translate title and description to specific languages based on source."""
+        # Normalize source language
+        source_lang = self._normalize_lang_code(source_lang)
+        
+        # Define target languages based on source
+        if source_lang == "english":
+            target_languages = ["hindi", "kannada"]
+        elif source_lang == "kannada":
+            target_languages = ["english", "hindi"]
+        else:
+            # For other languages, translate to English and Hindi
+            target_languages = ["english", "hindi"]
         
         translations = {}
         
         # Run translations in parallel
         tasks = []
-        for lang in languages:
+        for lang in target_languages:
             if lang.lower() != source_lang.lower():
                 task = asyncio.create_task(
                     self._translate_async(title, description, source_lang, lang)
@@ -313,6 +331,6 @@ class TranslationService:
         except Exception as e:
             logger.error(f"Warmup failed: {e}")
             raise
-
+        
 # Create singleton instance
 translation_service = TranslationService()
