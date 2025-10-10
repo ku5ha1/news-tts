@@ -15,14 +15,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Clone IndicTrans2 repository manually
-RUN git clone https://github.com/AI4Bharat/IndicTrans2.git /app/IndicTrans2
-
-# Copy scripts
-COPY app/scripts/download_snapshots.py app/scripts/preload_models.py /app/scripts/
-
-# Download translation models using existing script
-RUN python /app/scripts/download_snapshots.py
+# Clone IndicTransToolkit repository and install
+RUN git clone https://github.com/VarunGumma/IndicTransToolkit.git /app/IndicTransToolkit
+WORKDIR /app/IndicTransToolkit
+RUN pip install --editable ./
+WORKDIR /app
 
 
 # =========================
@@ -32,11 +29,10 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Copy installed packages and cached models from builder
+# Copy installed packages from builder
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
-COPY --from=builder /app/.cache/huggingface /app/.cache/huggingface
-COPY --from=builder /app/IndicTrans2 /app/IndicTrans2
+COPY --from=builder /app/IndicTransToolkit /app/IndicTransToolkit
 
 # Install runtime deps
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -47,11 +43,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY app/ ./app/
 COPY entrypoint.sh .
 
-# Copy verification script
-COPY app/scripts/verify_cache.py /app/scripts/
-
-# Optional: quick cache verification (non-blocking)
-RUN python /app/scripts/verify_cache.py || true
+# IndicTransToolkit handles model loading automatically
 
 # Setup user + permissions
 RUN addgroup --system app && \
@@ -64,10 +56,6 @@ USER app
 # Env vars
 ENV PORT=8080 \
     PYTHONUNBUFFERED=1 \
-    HF_HOME=/app/.cache/huggingface \
-    HF_HUB_CACHE=/app/.cache/huggingface/hub \
-    TRANSFORMERS_CACHE=/app/.cache/huggingface/transformers \
-    HF_HUB_OFFLINE=1 \
     TRUST_REMOTE_CODE=1
 
 # Healthcheck

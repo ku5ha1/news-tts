@@ -8,17 +8,16 @@ echo "=== ENTRYPOINT STARTING ===" >&2
 echo "PORT: ${PORT}" >&2
 echo "USER: $(whoami)" >&2
 
-# Create cache directories
-mkdir -p /app/.cache/huggingface/transformers || true
-mkdir -p /app/models || true
+# Create cache directories (IndicTransToolkit handles this automatically)
+mkdir -p /app/.cache/huggingface || true
 
 echo "Testing Python..." >&2
 python --version >&2
 
-echo "Testing IndicTrans2 import..." >&2
-python -c "import sys; sys.path.append('/app/IndicTrans2'); from IndicTrans2.inference.engine import Model; print('IndicTrans2 OK')" 2>&1 || {
-    echo "ERROR: IndicTrans2 import failed" >&2
-    python -c "import sys; sys.path.append('/app/IndicTrans2'); import IndicTrans2; print(dir(IndicTrans2))" 2>&1 || echo "Package not found" >&2
+echo "Testing IndicTransToolkit import..." >&2
+python -c "from IndicTransToolkit import IndicProcessor; print('IndicTransToolkit OK')" 2>&1 || {
+    echo "ERROR: IndicTransToolkit import failed" >&2
+    python -c "import IndicTransToolkit; print(dir(IndicTransToolkit))" 2>&1 || echo "Package not found" >&2
 }
 
 echo "Testing app.main import..." >&2
