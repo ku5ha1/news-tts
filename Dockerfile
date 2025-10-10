@@ -21,6 +21,9 @@ WORKDIR /app/IndicTransToolkit
 RUN pip install --editable ./
 WORKDIR /app
 
+# Add IndicTransToolkit to Python path
+ENV PYTHONPATH="/app/IndicTransToolkit:${PYTHONPATH}"
+
 
 # =========================
 # Stage 2: Production
@@ -56,7 +59,8 @@ USER app
 # Env vars
 ENV PORT=8080 \
     PYTHONUNBUFFERED=1 \
-    TRUST_REMOTE_CODE=1
+    TRUST_REMOTE_CODE=1 \
+    PYTHONPATH="/app/IndicTransToolkit:${PYTHONPATH}"
 
 # Healthcheck
 HEALTHCHECK --interval=30s --timeout=60s --start-period=300s --retries=3 \
