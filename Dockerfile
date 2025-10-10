@@ -22,16 +22,15 @@ RUN git clone https://github.com/AI4Bharat/IndicTrans2.git /app/IndicTrans2
 COPY app/scripts/download_snapshots.py app/scripts/preload_models.py /app/scripts/
 
 # Download translation models using huggingface_hub
-RUN python -c "
-from huggingface_hub import snapshot_download
-import os
-cache_dir = '/app/.cache/huggingface/hub'
-os.makedirs(cache_dir, exist_ok=True)
-print('Downloading IndicTrans2 models...')
-snapshot_download('ai4bharat/indictrans2-en-indic-dist-200M', cache_dir=cache_dir)
-snapshot_download('ai4bharat/indictrans2-indic-en-dist-200M', cache_dir=cache_dir)
-print('Models downloaded successfully')
-"
+RUN python -c "\
+import os; \
+from huggingface_hub import snapshot_download; \
+cache_dir = '/app/.cache/huggingface/hub'; \
+os.makedirs(cache_dir, exist_ok=True); \
+print('Downloading IndicTrans2 models...'); \
+snapshot_download('ai4bharat/indictrans2-en-indic-dist-200M', cache_dir=cache_dir); \
+snapshot_download('ai4bharat/indictrans2-indic-en-dist-200M', cache_dir=cache_dir); \
+print('Models downloaded successfully')"
 
 
 # =========================
