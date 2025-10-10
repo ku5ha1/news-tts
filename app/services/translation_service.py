@@ -87,10 +87,15 @@ class TranslationService:
 
                 # Load model using IndicTrans2 native approach
                 logger.info(f"Loading EN->Indic model from {model_path}")
-                self.en_indic_model = self.Model(
+                try:
+                    self.en_indic_model = self.Model(
                     model_path,
-                    device=self.device
-                )
+                        device=self.device
+                    )
+                except Exception as model_error:
+                    logger.error(f"Failed to load model {model_path}: {model_error}")
+                    # Try alternative approach or fallback
+                    raise RuntimeError(f"Model loading failed: {model_error}")
                 
                 # Initialize inference engine
                 logger.info("Initializing EN->Indic inference engine...")
@@ -120,10 +125,15 @@ class TranslationService:
 
                 # Load model using IndicTrans2 native approach
                 logger.info(f"Loading Indic->EN model from {model_path}")
-                self.indic_en_model = self.Model(
+                try:
+                    self.indic_en_model = self.Model(
                     model_path,
-                    device=self.device
-                )
+                        device=self.device
+                    )
+                except Exception as model_error:
+                    logger.error(f"Failed to load model {model_path}: {model_error}")
+                    # Try alternative approach or fallback
+                    raise RuntimeError(f"Model loading failed: {model_error}")
                 
                 # Initialize inference engine
                 logger.info("Initializing Indic->EN inference engine...")
@@ -178,7 +188,7 @@ class TranslationService:
             
             logger.info(f"Translation successful: '{result[:50]}...'")
             return result
-            
+                
         except Exception as e:
             logger.error(f"Translation error EN->{target_lang}: {e}")
             raise

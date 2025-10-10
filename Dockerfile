@@ -21,11 +21,11 @@ RUN git clone https://github.com/AI4Bharat/IndicTrans2.git /app/IndicTrans2
 # Copy scripts
 COPY app/scripts/download_snapshots.py app/scripts/preload_models.py /app/scripts/
 
-# Download translation models
-RUN python /app/scripts/download_snapshots.py
+# Skip model download - IndicTrans2 will handle model loading directly
+# RUN python /app/scripts/download_snapshots.py
 
-# Preload models into cache (ensures they can be loaded)
-RUN python /app/scripts/preload_models.py
+# Skip model preloading - IndicTrans2 handles this natively
+# RUN python /app/scripts/preload_models.py
 
 
 # =========================

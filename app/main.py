@@ -25,51 +25,28 @@ async def preload_models() -> None:
     global _is_ready, _model_err
     try:
         t0 = perf_counter()
-        log.info("🔁 Preloading dist-200M translation models...")
+        log.info("🔁 Skipping model preload - IndicTrans2 handles model loading natively...")
         
-        from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
-
-        # Use the same cache populated during build (hub cache)
-        cache_dir = os.getenv("HF_HUB_CACHE", "/app/.cache/huggingface/hub")
         # Ensure cache directory exists
+        cache_dir = os.getenv("HF_HUB_CACHE", "/app/.cache/huggingface/hub")
         Path(cache_dir).mkdir(parents=True, exist_ok=True)
-
-        en_indic_model = "ai4bharat/indictrans2-en-indic-dist-200M"
-        indic_en_model = "ai4bharat/indictrans2-indic-en-dist-200M"
-        
-        log.info(f"Loading translation models: {en_indic_model}, {indic_en_model}")
-
-        AutoTokenizer.from_pretrained(
-            en_indic_model, trust_remote_code=True, cache_dir=cache_dir, local_files_only=True
-        )
-        AutoModelForSeq2SeqLM.from_pretrained(
-            en_indic_model, trust_remote_code=True, cache_dir=cache_dir, local_files_only=True,
-            torch_dtype=None, low_cpu_mem_usage=False
-        )
- 
-        AutoTokenizer.from_pretrained(
-            indic_en_model, trust_remote_code=True, cache_dir=cache_dir, local_files_only=True
-        )
-        AutoModelForSeq2SeqLM.from_pretrained(
-            indic_en_model, trust_remote_code=True, cache_dir=cache_dir, local_files_only=True,
-            torch_dtype=None, low_cpu_mem_usage=False
-        )
 
         dt = perf_counter() - t0
         _is_ready = True
-        log.info(f"Translation models ready in {dt:.2f}s")
+        log.info(f"IndicTrans2 setup ready in {dt:.2f}s")
+        log.info("Models will be loaded on-demand by IndicTrans2")
         log.info("TTS will use ElevenLabs API - no local model preloading needed")
         
     except Exception as e:
         _model_err = repr(e)
         _is_ready = False
-        log.exception("Model preload failed")
+        log.exception("IndicTrans2 setup failed")
         
         # Add specific guidance for IndicTrans2 errors
         if "IndicTrans2" in str(e) or "Model" in str(e):
-            log.error("CRITICAL: IndicTrans2 model loading issue detected!")
-            log.error("This error suggests IndicTrans2 models failed to load properly.")
-            log.error("Please check IndicTrans2 installation and model cache.")
+            log.error("CRITICAL: IndicTrans2 setup issue detected!")
+            log.error("This error suggests IndicTrans2 failed to initialize properly.")
+            log.error("Please check IndicTrans2 installation and repository clone.")
             log.error("Or run the diagnostic script: python app/scripts/fix_indictrans.py")
 
 @asynccontextmanager
