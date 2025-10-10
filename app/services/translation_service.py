@@ -452,12 +452,12 @@ class TranslationService:
             except Exception as e:
                 logger.error(f"Failed to translate to {target_lang}: {e}")
                 # Use original text as fallback
-                result[target_lang] = {"title": title, "description": description}
+                # result[target_lang] = {"title": title, "description": description}
         
-        # Ensure all languages are present
-        for lang in ["hi", "kn", "en"]:
-            if lang not in result:
-                result[lang] = {"title": title, "description": description}
+        # # Ensure all languages are present
+        # for lang in ["hi", "kn", "en"]:
+        #     if lang not in result:
+        #         result[lang] = {"title": title, "description": description}
         
         logger.info(f"Translation to all languages completed. Available languages: {list(result.keys())}")
         return result
