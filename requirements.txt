@@ -53,5 +53,5 @@ pytest-asyncio==0.21.1
 structlog==23.2.0
 colorama==0.4.6
 
-# IndicTransToolkit (for dist-200M preprocessing)
-git+https://github.com/VarunGumma/IndicTransToolkit.git
+# IndicTrans2 Toolkit (official version for dist-200M preprocessing)
+indictrans2>=2.0.0

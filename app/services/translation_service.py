@@ -383,58 +383,51 @@ class TranslationService:
             # Preprocess
             logger.info(f"Preprocessing text with IndicProcessor...")
             try:
-                # Try different preprocessing approaches based on IndicProcessor version
-                try:
-                    batch = self.ip.preprocess_batch([text], src_lang=src_tag, tgt_lang=tgt_tag)
-                    logger.info(f"Preprocessing completed, batch type: {type(batch)}")
-                    
-                    # Handle different return formats
-                    if isinstance(batch, tuple):
-                        logger.info(f"Batch is tuple with {len(batch)} elements")
-                        if len(batch) >= 1:
-                            batch = batch[0]
-                            logger.info(f"Extracted first tuple element, new batch type: {type(batch)}")
-                        else:
-                            logger.error(f"Empty tuple returned from preprocess")
-                            raise ValueError(f"Empty tuple returned from preprocess")
-                    elif isinstance(batch, list):
-                        logger.info(f"Batch is list with {len(batch)} elements")
+                # IndicTrans2 API - preprocess_batch returns a list directly
+                batch = self.ip.preprocess_batch([text], src_lang=src_tag, tgt_lang=tgt_tag)
+                logger.info(f"Preprocessing completed, batch type: {type(batch)}")
+                
+                # Handle different return formats from different versions
+                if isinstance(batch, tuple):
+                    logger.info(f"Batch is tuple with {len(batch)} elements")
+                    if len(batch) >= 1:
+                        batch = batch[0]
+                        logger.info(f"Extracted first tuple element, new batch type: {type(batch)}")
                     else:
-                        logger.error(f"Unexpected batch type from preprocess: {type(batch)}, value: {batch}")
-                        raise ValueError(f"Unexpected batch type from preprocess: {type(batch)}")
-                    
-                    # Validate batch is not empty
-                    if not batch or len(batch) == 0:
-                        logger.error(f"Preprocessing returned empty batch for {source}→{target}")
-                        raise RuntimeError(f"Preprocessing returned empty batch for {source}→{target}")
-                    
-                    logger.info(f"Preprocessing successful, batch length: {len(batch)}")
-                    
-                except ValueError as ve:
-                    if "not enough values to unpack" in str(ve):
-                        logger.warning(f"IndicProcessor unpacking error, trying alternative approach: {ve}")
-                        # Try alternative preprocessing approach
-                        try:
-                            # Some versions of IndicProcessor might need different parameters
-                            batch = self.ip.preprocess_batch([text], src_lang=src_tag, tgt_lang=tgt_tag, batch_size=1)
-                            logger.info(f"Alternative preprocessing successful, batch type: {type(batch)}")
-                            
-                            if isinstance(batch, tuple):
-                                batch = batch[0]
-                            
-                            if not batch or len(batch) == 0:
-                                logger.error(f"Alternative preprocessing returned empty batch")
-                                raise RuntimeError(f"Alternative preprocessing returned empty batch")
-                                
-                        except Exception as e2:
-                            logger.error(f"Alternative preprocessing also failed: {e2}")
-                            raise RuntimeError(f"All preprocessing approaches failed: {ve}, {e2}")
-                    else:
-                        raise
+                        logger.error(f"Empty tuple returned from preprocess")
+                        raise ValueError(f"Empty tuple returned from preprocess")
+                elif isinstance(batch, list):
+                    logger.info(f"Batch is list with {len(batch)} elements")
+                else:
+                    logger.error(f"Unexpected batch type from preprocess: {type(batch)}, value: {batch}")
+                    raise ValueError(f"Unexpected batch type from preprocess: {type(batch)}")
+                
+                # Validate batch is not empty
+                if not batch or len(batch) == 0:
+                    logger.error(f"Preprocessing returned empty batch for {source}→{target}")
+                    raise RuntimeError(f"Preprocessing returned empty batch for {source}→{target}")
+                
+                logger.info(f"Preprocessing successful, batch length: {len(batch)}")
                 
             except Exception as e:
                 logger.error(f"Preprocessing error for {source}→{target}: {e}")
-                raise RuntimeError(f"Preprocessing failed for {source}→{target}: {e}")
+                # Try fallback approach for older versions
+                try:
+                    logger.warning(f"Trying fallback preprocessing approach: {e}")
+                    # Alternative approach for older IndicProcessor versions
+                    batch = self.ip.preprocess_batch([text], src_lang=src_tag, tgt_lang=tgt_tag, batch_size=1)
+                    logger.info(f"Fallback preprocessing successful, batch type: {type(batch)}")
+                    
+                    if isinstance(batch, tuple):
+                        batch = batch[0]
+                    
+                    if not batch or len(batch) == 0:
+                        logger.error(f"Fallback preprocessing returned empty batch")
+                        raise RuntimeError(f"Fallback preprocessing returned empty batch")
+                        
+                except Exception as e2:
+                    logger.error(f"All preprocessing approaches failed: {e}, {e2}")
+                    raise RuntimeError(f"Preprocessing failed for {source}→{target}: {e}, {e2}")
 
             # Tokenize
             logger.info(f"Tokenizing batch...")
@@ -527,12 +520,17 @@ class TranslationService:
                     logger.error(f"Postprocess returned empty for {source}→{target}")
                     raise RuntimeError(f"Postprocess returned empty for {source}→{target}")
                     
-                # Handle tuple return from postprocess_batch
+                # Handle different return formats from different versions
                 if isinstance(translations, tuple):
                     translations = translations[0]
                     logger.info(f"Extracted tuple element from postprocess")
+                elif isinstance(translations, list):
+                    logger.info(f"Postprocess returned list with {len(translations)} elements")
+                else:
+                    logger.error(f"Unexpected postprocess return type: {type(translations)}")
+                    raise RuntimeError(f"Unexpected postprocess return type: {type(translations)}")
                     
-                if not translations:
+                if not translations or len(translations) == 0:
                     logger.error(f"Final translations is empty for {source}→{target}")
                     raise RuntimeError(f"Final translations is empty for {source}→{target}")
                     
@@ -642,6 +640,11 @@ class TranslationService:
                 error_msg += f" (EN→Indic error: {en_indic_error})"
             if indic_en_error:
                 error_msg += f" (Indic→EN error: {indic_en_error})"
+            
+            # Add specific guidance for common issues
+            if "not enough values to unpack" in str(en_indic_error) or "not enough values to unpack" in str(indic_en_error):
+                error_msg += " - This appears to be an IndicProcessor version compatibility issue. Please ensure you're using IndicTrans2 toolkit."
+            
             logger.error(f"CRITICAL: {error_msg}")
             raise RuntimeError(error_msg)
         

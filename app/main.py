@@ -64,6 +64,13 @@ async def preload_models() -> None:
         _model_err = repr(e)
         _is_ready = False
         log.exception("Model preload failed")
+        
+        # Add specific guidance for IndicProcessor errors
+        if "not enough values to unpack" in str(e):
+            log.error("CRITICAL: IndicProcessor version compatibility issue detected!")
+            log.error("This error suggests you're using an incompatible version of IndicTransToolkit.")
+            log.error("Please run: pip install indictrans2>=2.0.0")
+            log.error("Or run the diagnostic script: python app/scripts/fix_indictrans.py")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
