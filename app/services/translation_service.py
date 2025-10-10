@@ -277,7 +277,7 @@ class TranslationService:
             # Add validation that models are properly loaded
             if model is None or tokenizer is None:
                 logger.error(f"{source}→{target} model not loaded properly")
-                return text  # Return original text as fallback
+                raise RuntimeError(f"{source}→{target} model not loaded properly")
 
             # Preprocess
             batch = self.ip.preprocess_batch([text], src_lang=src_tag, tgt_lang=tgt_tag)
@@ -310,6 +310,11 @@ class TranslationService:
                     eos_token_id=tokenizer.eos_token_id,
                 )
 
+            # Validate outputs
+            if outputs is None:
+                logger.error(f"Model generate returned None for {source}→{target}")
+                raise RuntimeError(f"Model generate returned None for {source}→{target}")
+
             # Decode
             decoded = tokenizer.batch_decode(
                 outputs.detach().cpu(),
@@ -317,13 +322,32 @@ class TranslationService:
                 clean_up_tokenization_spaces=True,
             )
 
+            # Validate decoded output
+            if not decoded or len(decoded) == 0:
+                logger.error(f"Tokenizer decode returned empty for {source}→{target}")
+                raise RuntimeError(f"Tokenizer decode returned empty for {source}→{target}")
+
             # Postprocess
             translations = self.ip.postprocess_batch(decoded, lang=tgt_tag)
-            return translations[0] if translations else text
+            
+            # Validate postprocessed output
+            if not translations or len(translations) == 0:
+                logger.error(f"Postprocess returned empty for {source}→{target}")
+                raise RuntimeError(f"Postprocess returned empty for {source}→{target}")
+                
+            # Handle tuple return from postprocess_batch
+            if isinstance(translations, tuple):
+                translations = translations[0]
+                
+            if not translations:
+                logger.error(f"Final translations is empty for {source}→{target}")
+                raise RuntimeError(f"Final translations is empty for {source}→{target}")
+                
+            return translations[0]
             
         except Exception as e:
             logger.error(f"Translation error {source}→{target}: {e}")
-            return text  # Return original text on error
+            raise
 
     def _translate_via_en(self, text: str, source: str, target: str) -> str:
         """Translate between Indic languages by pivoting through English."""
@@ -336,19 +360,19 @@ class TranslationService:
             # Step 1: source → en
             to_en = self._translate(text, source, "en")
             if not to_en or to_en == text:
-                logger.warning(f"Pivot step {source}→en failed; returning original")
-                return text
+                logger.error(f"Pivot step {source}→en failed")
+                raise RuntimeError(f"Pivot step {source}→en failed")
             
             # Step 2: en → target
             to_target = self._translate(to_en, "en", target)
             if not to_target or to_target == to_en:
-                logger.warning(f"Pivot step en→{target} failed; returning original")
-                return text
+                logger.error(f"Pivot step en→{target} failed")
+                raise RuntimeError(f"Pivot step en→{target} failed")
             
             return to_target
         except Exception as e:
             logger.error(f"Pivot translation error {source}→{target}: {e}")
-            return text
+            raise
 
     @property
     def is_models_loaded(self) -> bool:
@@ -401,15 +425,15 @@ class TranslationService:
         # Test both directions if models loaded successfully
         try:
             if self.model_en_indic is not None:
-                test_en_hi = self.translate("Hello", "en", "hi")
+                test_en_hi = self._translate("Hello", "en", "hi")
                 logger.info(f"Warmup test EN→HI: {test_en_hi}")
             
             if self.model_indic_en is not None:
-                test_hi_en = self.translate("नमस्ते", "hi", "en")
+                test_hi_en = self._translate("नमस्ते", "hi", "en")
                 logger.info(f"Warmup test HI→EN: {test_hi_en}")
                 
         except Exception as e:
-            logger.warning(f"Warmup test failed: {e}")
+            logger.warning(f"Warmup test failed (non-critical): {e}")
 
     async def translate_to_all_async(self, title: str, description: str, source_lang: str) -> dict:
         """
@@ -426,12 +450,8 @@ class TranslationService:
         elif source_lang == "hi":
             target_langs = ["en", "kn"]
         else:
-            logger.warning(f"Unsupported source language: {source_lang}, using original text")
-            return {
-                "hi": {"title": title, "description": description},
-                "kn": {"title": title, "description": description},
-                "en": {"title": title, "description": description}
-            }
+            logger.error(f"Unsupported source language: {source_lang}")
+            raise ValueError(f"Unsupported source language: {source_lang}")
         
         result = {}
         
@@ -451,8 +471,7 @@ class TranslationService:
                 logger.info(f"Successfully translated to {target_lang}")
             except Exception as e:
                 logger.error(f"Failed to translate to {target_lang}: {e}")
-                # Use original text as fallback
-                # result[target_lang] = {"title": title, "description": description}
+                raise
         
         # # Ensure all languages are present
         # for lang in ["hi", "kn", "en"]:
