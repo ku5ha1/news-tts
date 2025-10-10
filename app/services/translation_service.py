@@ -147,11 +147,13 @@ class TranslationService:
             with torch.no_grad():
                 generated_tokens = self.en_indic_model.generate(
                     **inputs,
-                    use_cache=True,
+                    use_cache=False,  # Disable cache to avoid past_key_values issue
                     min_length=0,
                     max_length=256,
                     num_beams=5,
                     num_return_sequences=1,
+                    do_sample=False,  # Use deterministic generation
+                    pad_token_id=self.en_indic_tokenizer.pad_token_id,
                 )
 
             # Decode tokens
@@ -205,12 +207,14 @@ class TranslationService:
             # Generate translation
             with torch.no_grad():
                 generated_tokens = self.indic_en_model.generate(
-                        **inputs,
-                        use_cache=True,
-                        min_length=0,
+                    **inputs,
+                    use_cache=False,  # Disable cache to avoid past_key_values issue
+                    min_length=0,
                     max_length=256,
                     num_beams=5,
-                        num_return_sequences=1,
+                    num_return_sequences=1,
+                    do_sample=False,  # Use deterministic generation
+                    pad_token_id=self.indic_en_tokenizer.pad_token_id,
                 )
 
             # Decode tokens
