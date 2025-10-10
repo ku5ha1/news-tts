@@ -3,7 +3,7 @@ import os
 import asyncio
 import logging
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
-from indictranstoolkit import IndicProcessor
+from IndicTransToolkit import IndicProcessor
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -136,11 +136,11 @@ class TranslationService:
 
             # Tokenize
             inputs = self.en_indic_tokenizer(
-                batch,
-                truncation=True,
-                padding="longest",
-                return_tensors="pt",
-                return_attention_mask=True,
+                    batch,
+                    truncation=True,
+                    padding="longest",
+                    return_tensors="pt",
+                    return_attention_mask=True,
             ).to(self.device)
 
             # Generate translation
@@ -171,8 +171,8 @@ class TranslationService:
             result = translations[0] if translations else text
             logger.info(f"Translation result: {result[:50]}...")
             return result
-
-        except Exception as e:
+                
+            except Exception as e:
             logger.error(f"Translation error EN->{target_lang}: {e}")
             raise
 
@@ -203,14 +203,14 @@ class TranslationService:
             ).to(self.device)
 
             # Generate translation
-            with torch.no_grad():
+                with torch.no_grad():
                 generated_tokens = self.indic_en_model.generate(
-                    **inputs,
-                    use_cache=True,
-                    min_length=0,
+                        **inputs,
+                        use_cache=True,
+                        min_length=0,
                     max_length=256,
                     num_beams=5,
-                    num_return_sequences=1,
+                        num_return_sequences=1,
                 )
 
             # Decode tokens
@@ -230,7 +230,7 @@ class TranslationService:
             result = translations[0] if translations else text
             logger.info(f"Translation result: {result[:50]}...")
             return result
-
+            
         except Exception as e:
             logger.error(f"Translation error {source_lang}->EN: {e}")
             raise
@@ -290,9 +290,9 @@ class TranslationService:
         )
         
         return {
-            "title": translated_title,
-            "description": translated_description
-        }
+                    "title": translated_title,
+                    "description": translated_description
+                }
 
 # Create singleton instance
 translation_service = TranslationService()
