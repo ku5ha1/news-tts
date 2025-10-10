@@ -294,5 +294,21 @@ class TranslationService:
                     "description": translated_description
                 }
 
+    def warmup(self):
+        """Warmup method for service initialization."""
+        try:
+            logger.info("Starting translation service warmup...")
+            
+            # Test translation to ensure models work
+            test_text = "Hello world"
+            test_result = self.translate(test_text, "english", "hindi")
+            
+            logger.info(f"Warmup successful: '{test_text}' -> '{test_result}'")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Warmup failed: {e}")
+            raise
+
 # Create singleton instance
 translation_service = TranslationService()
