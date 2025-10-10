@@ -76,32 +76,32 @@ class TranslationService:
         return cache_dir
 
     def _ensure_en_indic_model(self):
-        """Load EN→Indic model using IndicTrans2 native approach."""
+        """Load EN->Indic model using IndicTrans2 native approach."""
         if self.en_indic_model is None and not self.loading_en_indic:
             try:
                 self.loading_en_indic = True
-                logger.info("Starting EN→Indic model loading with IndicTrans2...")
+                logger.info("Starting EN->Indic model loading with IndicTrans2...")
                 
                 cache_dir = self._get_cache_dir()
                 model_path = MODEL_NAMES["en_indic"]
 
                 # Load model using IndicTrans2 native approach
-                logger.info(f"Loading EN→Indic model from {model_path}")
+                logger.info(f"Loading EN->Indic model from {model_path}")
                 self.en_indic_model = self.Model(
                     model_path,
                     device=self.device
                 )
                 
                 # Initialize inference engine
-                logger.info("Initializing EN→Indic inference engine...")
+                logger.info("Initializing EN->Indic inference engine...")
                 self.en_indic_engine = self.InferenceEngine(
                     self.en_indic_model
                 )
                 
-                logger.info("EN→Indic model loaded successfully with IndicTrans2")
+                logger.info("EN->Indic model loaded successfully with IndicTrans2")
                 
             except Exception as e:
-                logger.error(f"Failed to load EN→Indic model: {e}")
+                logger.error(f"Failed to load EN->Indic model: {e}")
                 self.en_indic_model = None
                 self.en_indic_engine = None
                 raise
@@ -109,32 +109,32 @@ class TranslationService:
                 self.loading_en_indic = False
 
     def _ensure_indic_en_model(self):
-        """Load Indic→EN model using IndicTrans2 native approach."""
+        """Load Indic->EN model using IndicTrans2 native approach."""
         if self.indic_en_model is None and not self.loading_indic_en:
             try:
                 self.loading_indic_en = True
-                logger.info("Starting Indic→EN model loading with IndicTrans2...")
+                logger.info("Starting Indic->EN model loading with IndicTrans2...")
                 
                 cache_dir = self._get_cache_dir()
                 model_path = MODEL_NAMES["indic_en"]
 
                 # Load model using IndicTrans2 native approach
-                logger.info(f"Loading Indic→EN model from {model_path}")
+                logger.info(f"Loading Indic->EN model from {model_path}")
                 self.indic_en_model = self.Model(
                     model_path,
                     device=self.device
                 )
                 
                 # Initialize inference engine
-                logger.info("Initializing Indic→EN inference engine...")
+                logger.info("Initializing Indic->EN inference engine...")
                 self.indic_en_engine = self.InferenceEngine(
                     self.indic_en_model
                 )
                 
-                logger.info("Indic→EN model loaded successfully with IndicTrans2")
+                logger.info("Indic->EN model loaded successfully with IndicTrans2")
                 
             except Exception as e:
-                logger.error(f"Failed to load Indic→EN model: {e}")
+                logger.error(f"Failed to load Indic->EN model: {e}")
                 self.indic_en_model = None
                 self.indic_en_engine = None
                 raise
@@ -153,7 +153,7 @@ class TranslationService:
             # Pivot through English for HI↔KN
             return self._translate_via_en(text, source_lang, target_lang)
         else:
-            raise ValueError(f"Unsupported translation: {source_lang} → {target_lang}")
+            raise ValueError(f"Unsupported translation: {source_lang} -> {target_lang}")
 
     def _translate_en_to_indic(self, text: str, target_lang: str) -> str:
         """Translate from English to Indic language using IndicTrans2."""
@@ -161,13 +161,13 @@ class TranslationService:
             if not text.strip():
                 return text
 
-            logger.info(f"Translating EN→{target_lang} with IndicTrans2")
+            logger.info(f"Translating EN->{target_lang} with IndicTrans2")
 
             # Load model if not already loaded
             self._ensure_en_indic_model()
             
             if self.en_indic_engine is None:
-                raise RuntimeError("EN→Indic engine not loaded")
+                raise RuntimeError("EN->Indic engine not loaded")
             
             # Use IndicTrans2 native translation
             result = self.en_indic_engine.translate(
@@ -178,9 +178,9 @@ class TranslationService:
             
             logger.info(f"Translation successful: '{result[:50]}...'")
             return result
-                
+            
         except Exception as e:
-            logger.error(f"Translation error EN→{target_lang}: {e}")
+            logger.error(f"Translation error EN->{target_lang}: {e}")
             raise
 
     def _translate_indic_to_en(self, text: str, source_lang: str) -> str:
@@ -189,13 +189,13 @@ class TranslationService:
             if not text.strip():
                 return text
 
-            logger.info(f"Translating {source_lang}→EN with IndicTrans2")
+            logger.info(f"Translating {source_lang}->EN with IndicTrans2")
             
             # Load model if not already loaded
             self._ensure_indic_en_model()
             
             if self.indic_en_engine is None:
-                raise RuntimeError("Indic→EN engine not loaded")
+                raise RuntimeError("Indic->EN engine not loaded")
             
             # Use IndicTrans2 native translation
             result = self.indic_en_engine.translate(
@@ -208,7 +208,7 @@ class TranslationService:
             return result
             
         except Exception as e:
-            logger.error(f"Translation error {source_lang}→EN: {e}")
+            logger.error(f"Translation error {source_lang}->EN: {e}")
             raise
 
     def _translate_via_en(self, text: str, source: str, target: str) -> str:
@@ -217,23 +217,23 @@ class TranslationService:
             if not text.strip():
                 return text
             
-            logger.info(f"Pivoting {source}→{target} through English")
+            logger.info(f"Pivoting {source}->{target} through English")
             
-            # Step 1: source → en
+            # Step 1: source -> en
             to_en = self._translate_indic_to_en(text, source)
             if not to_en or to_en == text:
-                logger.error(f"Pivot step {source}→en failed")
-                raise RuntimeError(f"Pivot step {source}→en failed")
+                logger.error(f"Pivot step {source}->en failed")
+                raise RuntimeError(f"Pivot step {source}->en failed")
             
-            # Step 2: en → target
+            # Step 2: en -> target
             to_target = self._translate_en_to_indic(to_en, target)
             if not to_target or to_target == to_en:
-                logger.error(f"Pivot step en→{target} failed")
-                raise RuntimeError(f"Pivot step en→{target} failed")
+                logger.error(f"Pivot step en->{target} failed")
+                raise RuntimeError(f"Pivot step en->{target} failed")
             
             return to_target
         except Exception as e:
-            logger.error(f"Pivot translation error {source}→{target}: {e}")
+            logger.error(f"Pivot translation error {source}->{target}: {e}")
             raise
 
     def _get_lang_code(self, lang: str) -> str:
@@ -277,24 +277,24 @@ class TranslationService:
         def load_en_indic():
             nonlocal en_indic_loaded, en_indic_error
             try:
-                logger.info("Starting EN→Indic model loading...")
+                logger.info("Starting EN->Indic model loading...")
                 self._ensure_en_indic_model()
                 en_indic_loaded = True
-                logger.info("EN→Indic model ready")
+                logger.info("EN->Indic model ready")
             except Exception as e:
                 en_indic_error = e
-                logger.error(f"Failed to load EN→Indic model: {e}")
+                logger.error(f"Failed to load EN->Indic model: {e}")
         
         def load_indic_en():
             nonlocal indic_en_loaded, indic_en_error
             try:
-                logger.info("Starting Indic→EN model loading...")
+                logger.info("Starting Indic->EN model loading...")
                 self._ensure_indic_en_model()
                 indic_en_loaded = True
-                logger.info("Indic→EN model ready")
+                logger.info("Indic->EN model ready")
             except Exception as e:
                 indic_en_error = e
-                logger.error(f"Failed to load Indic→EN model: {e}")
+                logger.error(f"Failed to load Indic->EN model: {e}")
         
         # Start both model loading in parallel
         thread1 = threading.Thread(target=load_en_indic)
@@ -309,15 +309,15 @@ class TranslationService:
         
         load_time = time.time() - start_time
         logger.info(f"Model loading completed in {load_time:.2f} seconds")
-        logger.info(f"EN→Indic loaded: {en_indic_loaded}, Indic→EN loaded: {indic_en_loaded}")
+        logger.info(f"EN->Indic loaded: {en_indic_loaded}, Indic->EN loaded: {indic_en_loaded}")
         
         # Verify models loaded
         if not en_indic_loaded and not indic_en_loaded:
             error_msg = "Model loading failed - no models available"
             if en_indic_error:
-                error_msg += f" (EN→Indic error: {en_indic_error})"
+                error_msg += f" (EN->Indic error: {en_indic_error})"
             if indic_en_error:
-                error_msg += f" (Indic→EN error: {indic_en_error})"
+                error_msg += f" (Indic->EN error: {indic_en_error})"
             
             logger.error(f"CRITICAL: {error_msg}")
             raise RuntimeError(error_msg)
@@ -325,18 +325,18 @@ class TranslationService:
         # Test translations if models loaded successfully
         try:
             if en_indic_loaded and self.en_indic_engine is not None:
-                logger.info("Testing EN→HI translation...")
+                logger.info("Testing EN->HI translation...")
                 test_en_hi = self._translate_en_to_indic("Hello", "hi")
-                logger.info(f"Warmup test EN→HI: {test_en_hi}")
+                logger.info(f"Warmup test EN->HI: {test_en_hi}")
             else:
-                logger.warning("EN→Indic model not loaded, skipping warmup test")
+                logger.warning("EN->Indic model not loaded, skipping warmup test")
             
             if indic_en_loaded and self.indic_en_engine is not None:
-                logger.info("Testing HI→EN translation...")
+                logger.info("Testing HI->EN translation...")
                 test_hi_en = self._translate_indic_to_en("नमस्ते", "hi")
-                logger.info(f"Warmup test HI→EN: {test_hi_en}")
+                logger.info(f"Warmup test HI->EN: {test_hi_en}")
             else:
-                logger.warning("Indic→EN model not loaded, skipping warmup test")
+                logger.warning("Indic->EN model not loaded, skipping warmup test")
                 
         except Exception as e:
             logger.error(f"Warmup test failed: {e}")
