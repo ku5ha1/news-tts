@@ -84,8 +84,9 @@ class TranslationService:
                 # Load model using IndicTrans2 native approach
                 logger.info(f"Loading EN->Indic model from {model_path}")
                 try:
+                    # Use the model path directly - IndicTrans2 will handle downloading if needed
                     self.en_indic_model = self.Model(
-                    model_path,
+                        model_path,
                         device=self.device
                     )
                 except Exception as model_error:
@@ -119,8 +120,9 @@ class TranslationService:
                 # Load model using IndicTrans2 native approach
                 logger.info(f"Loading Indic->EN model from {model_path}")
                 try:
+                    # Use the model path directly - IndicTrans2 will handle downloading if needed
                     self.indic_en_model = self.Model(
-                    model_path,
+                        model_path,
                         device=self.device
                     )
                 except Exception as model_error:

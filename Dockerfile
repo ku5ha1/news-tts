@@ -21,11 +21,17 @@ RUN git clone https://github.com/AI4Bharat/IndicTrans2.git /app/IndicTrans2
 # Copy scripts
 COPY app/scripts/download_snapshots.py app/scripts/preload_models.py /app/scripts/
 
-# Skip model download - IndicTrans2 will handle model loading directly
-# RUN python /app/scripts/download_snapshots.py
-
-# Skip model preloading - IndicTrans2 handles this natively
-# RUN python /app/scripts/preload_models.py
+# Download translation models using huggingface_hub
+RUN python -c "
+from huggingface_hub import snapshot_download
+import os
+cache_dir = '/app/.cache/huggingface/hub'
+os.makedirs(cache_dir, exist_ok=True)
+print('Downloading IndicTrans2 models...')
+snapshot_download('ai4bharat/indictrans2-en-indic-dist-200M', cache_dir=cache_dir)
+snapshot_download('ai4bharat/indictrans2-indic-en-dist-200M', cache_dir=cache_dir)
+print('Models downloaded successfully')
+"
 
 
 # =========================
@@ -38,6 +44,7 @@ WORKDIR /app
 # Copy installed packages and cached models from builder
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
+COPY --from=builder /app/.cache/huggingface /app/.cache/huggingface
 COPY --from=builder /app/IndicTrans2 /app/IndicTrans2
 
 # Install runtime deps
