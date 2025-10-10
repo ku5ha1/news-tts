@@ -35,7 +35,13 @@ class TranslationService:
             logger.info("[Translation] Using CPU for dist-200M model")
 
             # Processor handles normalization, tagging, and detokenization
-            self.ip = IndicProcessor(inference=True)
+            try:
+                logger.info("Initializing IndicProcessor...")
+                self.ip = IndicProcessor(inference=True)
+                logger.info("IndicProcessor initialized successfully")
+            except Exception as e:
+                logger.error(f"Failed to initialize IndicProcessor: {e}")
+                raise RuntimeError(f"IndicProcessor initialization failed: {e}")
 
             # Placeholders for lazy model load
             self.tokenizer_en_indic = None
@@ -100,18 +106,32 @@ class TranslationService:
             model_name_full = MODEL_NAMES["en_indic"] if model_type == "en_indic" else MODEL_NAMES["indic_en"]
             local_snapshot = self._resolve_local_snapshot_dir(model_name_full)
             load_path = str(local_snapshot) if local_snapshot else model_name_full
+            logger.info(f"Load path for {model_type}: {load_path}")
+            
             if local_snapshot is None:
                 logger.warning(f"No local snapshot found for {model_name_full}; attempting ID-based local load")
+                # Check if cache directory exists and has any models
+                cache_path = Path(cache_dir)
+                if cache_path.exists():
+                    logger.info(f"Cache directory exists: {cache_path}")
+                    for item in cache_path.iterdir():
+                        logger.info(f"Cache item: {item}")
+                else:
+                    logger.warning(f"Cache directory does not exist: {cache_path}")
 
             if model_type == "en_indic":
+                logger.info(f"Loading EN→Indic tokenizer from {load_path}")
                 self.tokenizer_en_indic = AutoTokenizer.from_pretrained(
                     load_path,
                     trust_remote_code=True,
                     cache_dir=cache_dir,
                     local_files_only=True,
                 )
+                logger.info("EN→Indic tokenizer loaded, fixing special tokens...")
                 self.tokenizer_en_indic = self._fix_tokenizer_specials(self.tokenizer_en_indic)
+                logger.info(f"EN→Indic tokenizer pad_token_id: {self.tokenizer_en_indic.pad_token_id}")
 
+                logger.info(f"Loading EN→Indic model from {load_path}")
                 self.model_en_indic = AutoModelForSeq2SeqLM.from_pretrained(
                     load_path,
                     trust_remote_code=True,
@@ -120,21 +140,31 @@ class TranslationService:
                     torch_dtype=torch.float32,
                     low_cpu_mem_usage=False,
                 )
+                logger.info("EN→Indic model loaded, moving to device...")
                 self.model_en_indic = self.model_en_indic.to(self.device).eval()
                 
                 # Force initialization with dummy forward pass
+                logger.info("Running EN→Indic dummy forward pass...")
                 with torch.no_grad():
                     dummy_input = self.tokenizer_en_indic("test", return_tensors="pt", padding=True, truncation=True).to(self.device)
+                    logger.info(f"EN→Indic dummy input keys: {list(dummy_input.keys())}")
+                    for k, v in dummy_input.items():
+                        logger.info(f"EN→Indic dummy input {k} shape: {v.shape if hasattr(v, 'shape') else 'no shape'}")
                     _ = self.model_en_indic(**dummy_input)
+                    logger.info("EN→Indic dummy forward pass successful")
             else:
+                logger.info(f"Loading Indic→EN tokenizer from {load_path}")
                 self.tokenizer_indic_en = AutoTokenizer.from_pretrained(
                     load_path,
                     trust_remote_code=True,
                     cache_dir=cache_dir,
                     local_files_only=True,
                 )
+                logger.info("Indic→EN tokenizer loaded, fixing special tokens...")
                 self.tokenizer_indic_en = self._fix_tokenizer_specials(self.tokenizer_indic_en)
+                logger.info(f"Indic→EN tokenizer pad_token_id: {self.tokenizer_indic_en.pad_token_id}")
 
+                logger.info(f"Loading Indic→EN model from {load_path}")
                 self.model_indic_en = AutoModelForSeq2SeqLM.from_pretrained(
                     load_path,
                     trust_remote_code=True,
@@ -143,23 +173,31 @@ class TranslationService:
                     torch_dtype=torch.float32,
                     low_cpu_mem_usage=False,
                 )
+                logger.info("Indic→EN model loaded, moving to device...")
                 self.model_indic_en = self.model_indic_en.to(self.device).eval()
                 
                 # Force initialization with dummy forward pass
+                logger.info("Running Indic→EN dummy forward pass...")
                 with torch.no_grad():
                     dummy_input = self.tokenizer_indic_en("test", return_tensors="pt", padding=True, truncation=True).to(self.device)
+                    logger.info(f"Indic→EN dummy input keys: {list(dummy_input.keys())}")
+                    for k, v in dummy_input.items():
+                        logger.info(f"Indic→EN dummy input {k} shape: {v.shape if hasattr(v, 'shape') else 'no shape'}")
                     _ = self.model_indic_en(**dummy_input)
+                    logger.info("Indic→EN dummy forward pass successful")
 
             logger.info(f"Successfully loaded {model_type} model from local cache")
             return True
         except Exception as e:
             logger.warning(f"Failed to load {model_type} model from local cache: {e}")
+            logger.warning(f"Cache loading error details: {type(e).__name__}: {str(e)}")
             return False
 
     def _ensure_en_indic_model(self):
         if self.model_en_indic is None and not self.loading_en_indic:
             try:
                 self.loading_en_indic = True
+                logger.info("Starting EN→Indic model loading...")
                 
                 # Check for cached model first
                 if self._load_cached_model("en_indic"):
@@ -171,15 +209,20 @@ class TranslationService:
                 logger.info("Loading EN→Indic model from local cache (strict)...")
                 cache_dir = self._get_cache_dir()
                 model_path = MODEL_NAMES["en_indic"]
+                logger.info(f"Model path: {model_path}, Cache dir: {cache_dir}")
 
+                logger.info("Loading tokenizer...")
                 self.tokenizer_en_indic = AutoTokenizer.from_pretrained(
                     model_path,
                     trust_remote_code=True,
                     cache_dir=cache_dir,
                     local_files_only=True,
                 )
+                logger.info("Tokenizer loaded, fixing special tokens...")
                 self.tokenizer_en_indic = self._fix_tokenizer_specials(self.tokenizer_en_indic)
+                logger.info(f"Tokenizer pad_token_id: {self.tokenizer_en_indic.pad_token_id}, eos_token_id: {self.tokenizer_en_indic.eos_token_id}")
 
+                logger.info("Loading model...")
                 # Load model with proper initialization
                 self.model_en_indic = AutoModelForSeq2SeqLM.from_pretrained(
                     model_path,
@@ -189,16 +232,24 @@ class TranslationService:
                     torch_dtype=torch.float32,
                     low_cpu_mem_usage=False,
                 )
+                logger.info("Model loaded, moving to device...")
                 
                 # Force model initialization by moving to device and loading weights
                 self.model_en_indic = self.model_en_indic.to(self.device)
                 self.model_en_indic.eval()
+                logger.info(f"Model moved to device: {self.device}")
                 
                 # Force data loading with a dummy forward pass to ensure weights are loaded
+                logger.info("Running dummy forward pass...")
                 with torch.no_grad():
                     dummy_input = self.tokenizer_en_indic("test", return_tensors="pt", padding=True, truncation=True).to(self.device)
+                    logger.info(f"Dummy input keys: {list(dummy_input.keys())}")
+                    for k, v in dummy_input.items():
+                        logger.info(f"Dummy input {k} shape: {v.shape if hasattr(v, 'shape') else 'no shape'}")
+                    
                     try:
                         _ = self.model_en_indic(**dummy_input)
+                        logger.info("Dummy forward pass successful")
                     except Exception as e:
                         logger.error(f"Dummy forward pass failed: {e}")
                         raise RuntimeError(f"Model initialization failed: {e}")
@@ -211,6 +262,9 @@ class TranslationService:
                 logger.info("EN→Indic dist-200M model loaded successfully")
             except Exception as e:
                 logger.error(f"Failed to load EN→Indic model: {e}")
+                # Reset state on failure
+                self.model_en_indic = None
+                self.tokenizer_en_indic = None
                 raise
             finally:
                 self.loading_en_indic = False
@@ -295,16 +349,20 @@ class TranslationService:
             src_tag = mapping[source]
             tgt_tag = mapping[target]
 
+            logger.info(f"Starting translation {source}→{target} with text: '{text[:50]}...'")
+
             if source == "en":
+                logger.info("Loading EN→Indic model...")
                 self._ensure_en_indic_model()
                 tokenizer, model = self.tokenizer_en_indic, self.model_en_indic
             else:
+                logger.info("Loading Indic→EN model...")
                 self._ensure_indic_en_model()
                 tokenizer, model = self.tokenizer_indic_en, self.model_indic_en
 
             # Add validation that models are properly loaded
             if model is None or tokenizer is None:
-                logger.error(f"{source}→{target} model not loaded properly")
+                logger.error(f"{source}→{target} model not loaded properly - model: {model is not None}, tokenizer: {tokenizer is not None}")
                 raise RuntimeError(f"{source}→{target} model not loaded properly")
             
             # Validate device consistency
@@ -312,19 +370,35 @@ class TranslationService:
                 logger.error(f"Model device mismatch: model on {model.device}, expected {self.device}")
                 raise RuntimeError(f"Model device mismatch: model on {model.device}, expected {self.device}")
 
+            logger.info(f"Model and tokenizer loaded successfully for {source}→{target}")
+
             # Preprocess
-            batch = self.ip.preprocess_batch([text], src_lang=src_tag, tgt_lang=tgt_tag)
-            if isinstance(batch, tuple):
-                batch = batch[0]
-            if not isinstance(batch, list):
-                raise ValueError(f"Unexpected batch type from preprocess: {type(batch)}")
-            
-            # Validate batch is not empty
-            if not batch or len(batch) == 0:
-                logger.error(f"Preprocessing returned empty batch for {source}→{target}")
-                raise RuntimeError(f"Preprocessing returned empty batch for {source}→{target}")
+            logger.info(f"Preprocessing text with IndicProcessor...")
+            try:
+                batch = self.ip.preprocess_batch([text], src_lang=src_tag, tgt_lang=tgt_tag)
+                logger.info(f"Preprocessing completed, batch type: {type(batch)}")
+                
+                if isinstance(batch, tuple):
+                    batch = batch[0]
+                    logger.info(f"Extracted tuple element, new batch type: {type(batch)}")
+                    
+                if not isinstance(batch, list):
+                    logger.error(f"Unexpected batch type from preprocess: {type(batch)}, value: {batch}")
+                    raise ValueError(f"Unexpected batch type from preprocess: {type(batch)}")
+                
+                # Validate batch is not empty
+                if not batch or len(batch) == 0:
+                    logger.error(f"Preprocessing returned empty batch for {source}→{target}")
+                    raise RuntimeError(f"Preprocessing returned empty batch for {source}→{target}")
+                
+                logger.info(f"Preprocessing successful, batch length: {len(batch)}")
+                
+            except Exception as e:
+                logger.error(f"Preprocessing error for {source}→{target}: {e}")
+                raise RuntimeError(f"Preprocessing failed for {source}→{target}: {e}")
 
             # Tokenize
+            logger.info(f"Tokenizing batch...")
             try:
                 inputs = tokenizer(
                     batch,
@@ -334,6 +408,8 @@ class TranslationService:
                     return_attention_mask=True,
                     max_length=256,
                 )
+                
+                logger.info(f"Tokenization completed, inputs type: {type(inputs)}")
                 
                 # Validate tokenizer output
                 if inputs is None:
@@ -345,59 +421,88 @@ class TranslationService:
                     if v is None:
                         logger.error(f"Tokenizer returned None for key '{k}' in {source}→{target}")
                         raise RuntimeError(f"Tokenizer returned None for key '{k}'")
+                    logger.info(f"Token {k} shape: {v.shape if hasattr(v, 'shape') else 'no shape'}")
                 
                 inputs = {k: v.to(self.device) for k, v in inputs.items()}
+                logger.info(f"Inputs moved to device {self.device}")
+                
             except Exception as e:
                 logger.error(f"Tokenization error for {source}→{target}: {e}")
                 raise RuntimeError(f"Tokenization failed for {source}→{target}: {e}")
 
             # Generate
-            with torch.no_grad():
-                outputs = model.generate(
-                    **inputs,
-                    use_cache=True,
-                    min_length=0,
-                    max_length=128,
-                    num_beams=1,
-                    num_return_sequences=1,
-                    pad_token_id=tokenizer.pad_token_id,
-                    eos_token_id=tokenizer.eos_token_id,
-                )
+            logger.info(f"Generating translation...")
+            try:
+                with torch.no_grad():
+                    outputs = model.generate(
+                        **inputs,
+                        use_cache=True,
+                        min_length=0,
+                        max_length=128,
+                        num_beams=1,
+                        num_return_sequences=1,
+                        pad_token_id=tokenizer.pad_token_id,
+                        eos_token_id=tokenizer.eos_token_id,
+                    )
+                
+                logger.info(f"Generation completed, outputs shape: {outputs.shape if hasattr(outputs, 'shape') else 'no shape'}")
 
-            # Validate outputs
-            if outputs is None:
-                logger.error(f"Model generate returned None for {source}→{target}")
-                raise RuntimeError(f"Model generate returned None for {source}→{target}")
+                # Validate outputs
+                if outputs is None:
+                    logger.error(f"Model generate returned None for {source}→{target}")
+                    raise RuntimeError(f"Model generate returned None for {source}→{target}")
+                    
+            except Exception as e:
+                logger.error(f"Generation error for {source}→{target}: {e}")
+                raise RuntimeError(f"Generation failed for {source}→{target}: {e}")
 
             # Decode
-            decoded = tokenizer.batch_decode(
-                outputs.detach().cpu(),
-                skip_special_tokens=True,
-                clean_up_tokenization_spaces=True,
-            )
+            logger.info(f"Decoding outputs...")
+            try:
+                decoded = tokenizer.batch_decode(
+                    outputs.detach().cpu(),
+                    skip_special_tokens=True,
+                    clean_up_tokenization_spaces=True,
+                )
+                
+                logger.info(f"Decoding completed, decoded: {decoded}")
 
-            # Validate decoded output
-            if not decoded or len(decoded) == 0:
-                logger.error(f"Tokenizer decode returned empty for {source}→{target}")
-                raise RuntimeError(f"Tokenizer decode returned empty for {source}→{target}")
+                # Validate decoded output
+                if not decoded or len(decoded) == 0:
+                    logger.error(f"Tokenizer decode returned empty for {source}→{target}")
+                    raise RuntimeError(f"Tokenizer decode returned empty for {source}→{target}")
+                    
+            except Exception as e:
+                logger.error(f"Decoding error for {source}→{target}: {e}")
+                raise RuntimeError(f"Decoding failed for {source}→{target}: {e}")
 
             # Postprocess
-            translations = self.ip.postprocess_batch(decoded, lang=tgt_tag)
-            
-            # Validate postprocessed output
-            if not translations or len(translations) == 0:
-                logger.error(f"Postprocess returned empty for {source}→{target}")
-                raise RuntimeError(f"Postprocess returned empty for {source}→{target}")
+            logger.info(f"Postprocessing translations...")
+            try:
+                translations = self.ip.postprocess_batch(decoded, lang=tgt_tag)
                 
-            # Handle tuple return from postprocess_batch
-            if isinstance(translations, tuple):
-                translations = translations[0]
+                logger.info(f"Postprocessing completed, translations type: {type(translations)}")
                 
-            if not translations:
-                logger.error(f"Final translations is empty for {source}→{target}")
-                raise RuntimeError(f"Final translations is empty for {source}→{target}")
+                # Validate postprocessed output
+                if not translations or len(translations) == 0:
+                    logger.error(f"Postprocess returned empty for {source}→{target}")
+                    raise RuntimeError(f"Postprocess returned empty for {source}→{target}")
+                    
+                # Handle tuple return from postprocess_batch
+                if isinstance(translations, tuple):
+                    translations = translations[0]
+                    logger.info(f"Extracted tuple element from postprocess")
+                    
+                if not translations:
+                    logger.error(f"Final translations is empty for {source}→{target}")
+                    raise RuntimeError(f"Final translations is empty for {source}→{target}")
+                    
+                logger.info(f"Translation successful: '{translations[0][:50]}...'")
+                return translations[0]
                 
-            return translations[0]
+            except Exception as e:
+                logger.error(f"Postprocessing error for {source}→{target}: {e}")
+                raise RuntimeError(f"Postprocessing failed for {source}→{target}: {e}")
             
         except Exception as e:
             logger.error(f"Translation error {source}→{target}: {e}")
@@ -448,18 +553,32 @@ class TranslationService:
         
         start_time = time.time()
         
+        # Track loading results
+        en_indic_loaded = False
+        indic_en_loaded = False
+        en_indic_error = None
+        indic_en_error = None
+        
         def load_en_indic():
+            nonlocal en_indic_loaded, en_indic_error
             try:
+                logger.info("Starting EN→Indic model loading in thread...")
                 self._ensure_en_indic_model()
+                en_indic_loaded = True
                 logger.info("EN→Indic model ready")
             except Exception as e:
+                en_indic_error = e
                 logger.error(f"Failed to load EN→Indic model: {e}")
         
         def load_indic_en():
+            nonlocal indic_en_loaded, indic_en_error
             try:
+                logger.info("Starting Indic→EN model loading in thread...")
                 self._ensure_indic_en_model()
+                indic_en_loaded = True
                 logger.info("Indic→EN model ready")
             except Exception as e:
+                indic_en_error = e
                 logger.error(f"Failed to load Indic→EN model: {e}")
         
         # Start both model loading in parallel
@@ -475,21 +594,29 @@ class TranslationService:
         
         load_time = time.time() - start_time
         logger.info(f"Model loading completed in {load_time:.2f} seconds")
+        logger.info(f"EN→Indic loaded: {en_indic_loaded}, Indic→EN loaded: {indic_en_loaded}")
         
         # Verify models loaded
-        if self.model_en_indic is None and self.model_indic_en is None:
-            logger.error("CRITICAL: No models loaded during warmup!")
-            raise RuntimeError("Model loading failed - no models available")
+        if not en_indic_loaded and not indic_en_loaded:
+            error_msg = "Model loading failed - no models available"
+            if en_indic_error:
+                error_msg += f" (EN→Indic error: {en_indic_error})"
+            if indic_en_error:
+                error_msg += f" (Indic→EN error: {indic_en_error})"
+            logger.error(f"CRITICAL: {error_msg}")
+            raise RuntimeError(error_msg)
         
         # Test both directions if models loaded successfully
         try:
-            if self.model_en_indic is not None:
+            if en_indic_loaded and self.model_en_indic is not None:
+                logger.info("Testing EN→HI translation...")
                 test_en_hi = self._translate("Hello", "en", "hi")
                 logger.info(f"Warmup test EN→HI: {test_en_hi}")
             else:
                 logger.warning("EN→Indic model not loaded, skipping warmup test")
             
-            if self.model_indic_en is not None:
+            if indic_en_loaded and self.model_indic_en is not None:
+                logger.info("Testing HI→EN translation...")
                 test_hi_en = self._translate("नमस्ते", "hi", "en")
                 logger.info(f"Warmup test HI→EN: {test_hi_en}")
             else:

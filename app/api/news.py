@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, BackgroundTasks
 from datetime import datetime
 from bson import ObjectId
 import asyncio
+import os
 from app.models.news import (
     NewsCreateRequest, NewsResponse,
     TranslationRequest, TranslationResponse,
