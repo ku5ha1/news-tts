@@ -84,6 +84,13 @@ class TranslationService:
                 # Load model using IndicTrans2 native approach
                 logger.info(f"Loading EN->Indic model from {model_path}")
                 try:
+                    # Check if cache directory exists and has models
+                    import os
+                    import glob
+                    cache_dir = self._get_cache_dir()
+                    model_files = glob.glob(f"{cache_dir}/models--ai4bharat--indictrans2-en-indic-dist-200M/**", recursive=True)
+                    logger.info(f"Found {len(model_files)} files in cache for EN->Indic model")
+                    
                     # Use the model path directly - IndicTrans2 will handle downloading if needed
                     self.en_indic_model = self.Model(
                         model_path,
@@ -91,6 +98,8 @@ class TranslationService:
                     )
                 except Exception as model_error:
                     logger.error(f"Failed to load model {model_path}: {model_error}")
+                    logger.error(f"Cache directory: {cache_dir}")
+                    logger.error(f"Model files found: {len(model_files) if 'model_files' in locals() else 'N/A'}")
                     # Try alternative approach or fallback
                     raise RuntimeError(f"Model loading failed: {model_error}")
                 
@@ -120,6 +129,13 @@ class TranslationService:
                 # Load model using IndicTrans2 native approach
                 logger.info(f"Loading Indic->EN model from {model_path}")
                 try:
+                    # Check if cache directory exists and has models
+                    import os
+                    import glob
+                    cache_dir = self._get_cache_dir()
+                    model_files = glob.glob(f"{cache_dir}/models--ai4bharat--indictrans2-indic-en-dist-200M/**", recursive=True)
+                    logger.info(f"Found {len(model_files)} files in cache for Indic->EN model")
+                    
                     # Use the model path directly - IndicTrans2 will handle downloading if needed
                     self.indic_en_model = self.Model(
                         model_path,
@@ -127,6 +143,8 @@ class TranslationService:
                     )
                 except Exception as model_error:
                     logger.error(f"Failed to load model {model_path}: {model_error}")
+                    logger.error(f"Cache directory: {cache_dir}")
+                    logger.error(f"Model files found: {len(model_files) if 'model_files' in locals() else 'N/A'}")
                     # Try alternative approach or fallback
                     raise RuntimeError(f"Model loading failed: {model_error}")
                 

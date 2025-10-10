@@ -28,9 +28,21 @@ from huggingface_hub import snapshot_download; \
 cache_dir = '/app/.cache/huggingface/hub'; \
 os.makedirs(cache_dir, exist_ok=True); \
 print('Downloading IndicTrans2 models...'); \
-snapshot_download('ai4bharat/indictrans2-en-indic-dist-200M', cache_dir=cache_dir); \
-snapshot_download('ai4bharat/indictrans2-indic-en-dist-200M', cache_dir=cache_dir); \
-print('Models downloaded successfully')"
+try: \
+    en_indic_path = snapshot_download('ai4bharat/indictrans2-en-indic-dist-200M', cache_dir=cache_dir); \
+    print(f'EN->Indic model downloaded to: {en_indic_path}'); \
+    indic_en_path = snapshot_download('ai4bharat/indictrans2-indic-en-dist-200M', cache_dir=cache_dir); \
+    print(f'Indic->EN model downloaded to: {indic_en_path}'); \
+    print('Models downloaded successfully'); \
+except Exception as e: \
+    print(f'Error downloading models: {e}'); \
+    raise; \
+print('Verifying downloaded models...'); \
+import glob; \
+model_files = glob.glob(f'{cache_dir}/models--ai4bharat--indictrans2-*/**', recursive=True); \
+print(f'Found {len(model_files)} model files'); \
+for f in model_files[:10]: print(f'  {f}'); \
+if len(model_files) > 10: print('  ... and more')"
 
 
 # =========================
