@@ -28,15 +28,17 @@ def check_indictrans_version():
 def check_indictrans2():
     """Check if IndicTrans2 is available"""
     try:
-        import indictrans2
-        logger.info(f"IndicTrans2 version: {indictrans2.__version__}")
+        import sys
+        sys.path.append('/app/IndicTrans2')
+        from IndicTrans2.inference.engine import Model
+        logger.info("IndicTrans2 components found")
         return True
     except ImportError:
         logger.error("IndicTrans2 not found")
         return False
-    except AttributeError:
-        logger.info("IndicTrans2 found but no version info")
-        return True
+    except Exception as e:
+        logger.error(f"IndicTrans2 import error: {e}")
+        return False
 
 def test_preprocessing():
     """Test the preprocessing functionality"""

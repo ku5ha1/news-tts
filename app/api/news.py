@@ -170,6 +170,9 @@ async def create_news(payload: NewsCreateRequest, background_tasks: BackgroundTa
             raise HTTPException(status_code=504, detail="Translation timed out")
         except Exception as e:
             logger.error(f"[CREATE] translation failed for doc={document_id}: {e}")
+            # Add specific guidance for IndicTrans2 errors
+            if "IndicTrans2" in str(e) or "Model" in str(e):
+                logger.error("This appears to be an IndicTrans2 model loading issue")
             raise
 
         # Create news document
