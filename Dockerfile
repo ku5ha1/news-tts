@@ -15,6 +15,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Clone IndicTrans2 repository manually
+RUN git clone https://github.com/AI4Bharat/IndicTrans2.git /app/IndicTrans2
+
 # Copy scripts
 COPY app/scripts/download_snapshots.py app/scripts/preload_models.py /app/scripts/
 
@@ -36,6 +39,7 @@ WORKDIR /app
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 COPY --from=builder /app/.cache/huggingface /app/.cache/huggingface
+COPY --from=builder /app/IndicTrans2 /app/IndicTrans2
 
 # Install runtime deps
 RUN apt-get update && apt-get install -y --no-install-recommends \
