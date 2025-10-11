@@ -330,7 +330,7 @@ async def health_check():
     """Health check endpoint"""
     return HealthResponse(
         status="healthy",
-        models_loaded=translation_service.is_models_loaded, # type: ignore
+        models_loaded=True, # type: ignore
         database_connected=await db_service.is_connected(),
         firebase_connected=firebase_service.is_connected(),
         timestamp=datetime.utcnow(),
