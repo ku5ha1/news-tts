@@ -73,6 +73,7 @@ jobs:
             --memory 14 \
             --ports 8080 \
             --os-type Linux \
+            --ip-address Public \
             --registry-username "$ACR_USERNAME" \
             --registry-password "$ACR_PASSWORD" \
             --environment-variables \
