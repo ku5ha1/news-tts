@@ -21,7 +21,6 @@ jobs:
       LOG_LEVEL: INFO
       PORT: 8080
       PYTHONUNBUFFERED: 1
-      STORAGE_ACCOUNT_NAME_DEFAULT: diprstorage # Add this non-secret default
       FILE_SHARE_NAME: hf-cache 
       MOUNT_PATH: /mnt/hf-cache 
 
@@ -38,7 +37,7 @@ jobs:
       ACR_NAME: ${{ secrets.ACR_NAME }} 
       IMAGE_NAME: ${{ secrets.IMAGE_NAME }}
       STORAGE_ACCOUNT_KEY: ${{ secrets.STORAGE_ACCOUNT_KEY }}
-      STORAGE_ACCOUNT_NAME: ${{ secrets.STORAGE_ACCOUNT_NAME }}
+      STORAGE_ACCOUNT_NAME: ${{ secrets.STORAGE_ACCOUNT_NAME }} # Must be set in GitHub secrets!
 
     steps:
       - name: Checkout code
@@ -47,7 +46,7 @@ jobs:
       - name: Login to Azure
         uses: azure/login@v2
         with:
-          creds: ${{ env.AZURE_CREDENTIALS }} # Use env context for all variables
+          creds: ${{ env.AZURE_CREDENTIALS }}
 
       - name: Log in to ACR
         run: az acr login --name ${{ env.ACR_NAME }}
@@ -72,15 +71,16 @@ jobs:
         run: |
           CONTAINER_NAME="news-tts-container"
           IMAGE_TAG="${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:latest"
+          RESOURCE_GROUP="${{ env.RESOURCE_GROUP }}"
           
           echo "Checking for existing container $CONTAINER_NAME..."
-          EXISTS=$(az container show --name $CONTAINER_NAME --resource-group "${{ env.RESOURCE_GROUP }}" --query "name" -o tsv || true)
+          EXISTS=$(az container show --name $CONTAINER_NAME --resource-group "$RESOURCE_GROUP" --query "name" -o tsv || true)
           if [ -n "$EXISTS" ]; then
             echo "Container exists. Deleting..."
-            az container delete --name $CONTAINER_NAME --resource-group "${{ env.RESOURCE_GROUP }}" --yes
+            az container delete --name $CONTAINER_NAME --resource-group "$RESOURCE_GROUP" --yes
             
             for i in {1..30}; do
-              EXISTS=$(az container show --name $CONTAINER_NAME --resource-group "${{ env.RESOURCE_GROUP }}" --query "name" -o tsv || true)
+              EXISTS=$(az container show --name $CONTAINER_NAME --resource-group "$RESOURCE_GROUP" --query "name" -o tsv || true)
               if [ -z "$EXISTS" ]; then
                 echo "Container deleted."
                 break
@@ -94,15 +94,20 @@ jobs:
             echo "ERROR: STORAGE_ACCOUNT_KEY is not set!"
             exit 1
           fi
+          
+          # --- FIX FOR STORAGE ACCOUNT NAME ---
+          # Since STORAGE_ACCOUNT_NAME is a required secret now, we check it.
+          # The variable is simply passed as-is.
+          if [ -z "${{ env.STORAGE_ACCOUNT_NAME }}" ]; then
+            echo "ERROR: STORAGE_ACCOUNT_NAME is not set!"
+            exit 1
+          fi
+          SA_NAME="${{ env.STORAGE_ACCOUNT_NAME }}"
+          # --- END FIX ---
 
           echo "Creating new Azure Container Instance with SMB mount..."
-          # The key fix is to use the structure \${VARIABLE:-} to safely pass secrets.
-          # We also ensure the ACI-specific HF_HOME is passed here.
-          # Note: We prioritize the secret STORAGE_ACCOUNT_NAME, falling back to the default.
-          SA_NAME="${{ env.STORAGE_ACCOUNT_NAME:-${{ env.STORAGE_ACCOUNT_NAME_DEFAULT }} }}"
-          
           az container create \
-            --resource-group "${{ env.RESOURCE_GROUP }}" \
+            --resource-group "$RESOURCE_GROUP" \
             --name $CONTAINER_NAME \
             --image "$IMAGE_TAG" \
             --cpu 2 \
