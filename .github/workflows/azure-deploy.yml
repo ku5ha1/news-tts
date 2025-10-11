@@ -37,7 +37,7 @@ jobs:
       ACR_NAME: ${{ secrets.ACR_NAME }} 
       IMAGE_NAME: ${{ secrets.IMAGE_NAME }}
       STORAGE_ACCOUNT_KEY: ${{ secrets.STORAGE_ACCOUNT_KEY }}
-      STORAGE_ACCOUNT_NAME: ${{ secrets.STORAGE_ACCOUNT_NAME }} # Must be set in GitHub secrets!
+      STORAGE_ACCOUNT_NAME: ${{ secrets.STORAGE_ACCOUNT_NAME }} 
 
     steps:
       - name: Checkout code
@@ -118,7 +118,6 @@ jobs:
             --dns-name-label news-tts-app \
             --registry-username "${{ env.ACR_USERNAME }}" \
             --registry-password "${{ env.ACR_PASSWORD }}" \
-            --user 0 \ 
             --environment-variables \
               PORT="${{ env.PORT }}" \
               PYTHONUNBUFFERED="${{ env.PYTHONUNBUFFERED }}" \
