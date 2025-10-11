@@ -1,38 +1,48 @@
-#!/bin/bash
-set -x  # Enable debug mode to see what's executing
+# =========================
+# Stage 1: Builder
+# =========================
+FROM python:3.11 AS builder
+WORKDIR /app
 
-# Set default PORT if not provided
-PORT=${PORT:-8080}
+# Install dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential git && rm -rf /var/lib/apt/lists/*
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-echo "=== ENTRYPOINT STARTING ===" >&2
-echo "PORT: ${PORT}" >&2
-echo "USER: $(whoami)" >&2
+# Clone IndicTransToolkit and install
+RUN git clone https://github.com/VarunGumma/IndicTransToolkit.git /app/IndicTransToolkit
+WORKDIR /app/IndicTransToolkit
+RUN pip install --editable ./
+WORKDIR /app
+ENV PYTHONPATH="/app/IndicTransToolkit:${PYTHONPATH}"
 
-# Ensure the HF cache mount exists (should be mounted by ACI)
-mkdir -p /mnt/hf-cache || true
-chmod -R 777 /mnt/hf-cache || true
+# Pre-download HF model to /app/hf-cache
+RUN mkdir -p /app/hf-cache && \
+    python -c "from transformers import AutoTokenizer, AutoModelForSeq2SeqLM; \
+    AutoTokenizer.from_pretrained('ai4bharat/indictrans2-en-indic-dist-200M', cache_dir='/app/hf-cache'); \
+    AutoModelForSeq2SeqLM.from_pretrained('ai4bharat/indictrans2-en-indic-dist-200M', cache_dir='/app/hf-cache')"
 
-echo "Testing Python..." >&2
-python --version >&2
+# =========================
+# Stage 2: Production
+# =========================
+FROM python:3.11-slim
+WORKDIR /app
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+COPY --from=builder /app /app
 
-echo "Testing IndicTransToolkit import..." >&2
-python -c "from IndicTransToolkit import IndicProcessor; print('IndicTransToolkit OK')" 2>&1 || {
-    echo "ERROR: IndicTransToolkit import failed" >&2
-    python -c "import IndicTransToolkit; print(dir(IndicTransToolkit))" 2>&1 || echo "Package not found" >&2
-}
+# Runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 
-echo "Testing app.main import..." >&2
-python -c "import app.main; print('app.main import OK')" 2>&1 || {
-    echo "ERROR: Failed to import app.main" >&2
-    python -c "import app.main" 2>&1
-    exit 1
-}
+COPY entrypoint.sh .
+RUN chmod +x entrypoint.sh
 
-echo "Starting uvicorn..." >&2
+USER app
+ENV PORT=8080 \
+    PYTHONUNBUFFERED=1 \
+    HF_HOME=/app/hf-cache \
+    TRANSFORMERS_CACHE=/app/hf-cache \
+    PYTHONPATH="/app/IndicTransToolkit:${PYTHONPATH}"
 
-# Start FastAPI app
-exec uvicorn app.main:app \
-    --host 0.0.0.0 \
-    --port ${PORT} \
-    --workers 1 \
-    --timeout-keep-alive 300
+EXPOSE ${PORT}
+ENTRYPOINT ["./entrypoint.sh"]
