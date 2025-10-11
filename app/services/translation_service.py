@@ -63,35 +63,35 @@ class TranslationService:
         if self.en_indic_model is None and not self.loading_en_indic:
             with self.en_indic_lock:
                 if self.en_indic_model is None:
-            try:
-                self.loading_en_indic = True
+                    try:
+                        self.loading_en_indic = True
                         model_name = MODEL_NAMES["en_indic"]
                         logger.info(f"Loading EN->Indic 1B model: {model_name}")
-                        
+                                
                         self.en_indic_tokenizer = AutoTokenizer.from_pretrained(
-                            model_name, trust_remote_code=True
-                        )
+                                    model_name, trust_remote_code=True
+                                )
                         self.en_indic_model = AutoModelForSeq2SeqLM.from_pretrained(
-                            model_name, trust_remote_code=True
-                        )
+                                    model_name, trust_remote_code=True
+                                )
                         self.en_indic_model.eval()  # Set to evaluation mode
-                        
+                                
                         logger.info("EN->Indic 1B model loaded successfully")
                     except Exception as e:
                         logger.error(f"Failed to load EN->Indic model: {e}")
                         self.en_indic_model = None
                         self.en_indic_tokenizer = None
-                raise
-            finally:
-                self.loading_en_indic = False
+                        raise
+                    finally:
+                        self.loading_en_indic = False
 
     def _ensure_indic_en_model(self):
         """Load Indic->EN model and tokenizer if not already loaded."""
         if self.indic_en_model is None and not self.loading_indic_en:
             with self.indic_en_lock:
                 if self.indic_en_model is None:
-            try:
-                self.loading_indic_en = True
+                    try:
+                        self.loading_indic_en = True
                         model_name = MODEL_NAMES["indic_en"]
                         logger.info(f"Loading Indic->EN 1B model: {model_name}")
                         
@@ -108,9 +108,9 @@ class TranslationService:
                         logger.error(f"Failed to load Indic->EN model: {e}")
                         self.indic_en_model = None
                         self.indic_en_tokenizer = None
-                raise
-            finally:
-                self.loading_indic_en = False
+                        raise
+                    finally:
+                        self.loading_indic_en = False
 
     def _normalize_lang_code(self, lang: str) -> str:
         """Normalize language codes from detection to internal format."""
@@ -122,7 +122,7 @@ class TranslationService:
             return "hindi"
         elif lang in ["kn", "kannada"]:
             return "kannada"
-            else:
+        else:
             return "english"
 
     def _get_lang_code(self, lang: str) -> str:
@@ -313,7 +313,7 @@ class TranslationService:
                 texts,
                 target_languages
             )
-            else:
+        else:
             # First translate to English, then batch to others
             english_text = await loop.run_in_executor(
                 None,

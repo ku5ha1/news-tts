@@ -47,14 +47,11 @@ jobs:
 
       - name: Build and push Docker image
         run: |
-          IMAGE=$ACR_NAME.azurecr.io/$IMAGE_NAME
+          IMAGE=$ACR_NAME.azurecr.io/$IMAGE_NAME:latest
+          echo "Building and pushing image: $IMAGE"
           docker build --no-cache -t $IMAGE .
           docker push $IMAGE
-
-      - name: Get image details
-        run: |
-          echo "Image pushed to: $ACR_NAME.azurecr.io/$IMAGE_NAME"
-          echo "IMAGE_URL=$ACR_NAME.azurecr.io/$IMAGE_NAME" >> $GITHUB_ENV
+          echo "IMAGE=$IMAGE" >> $GITHUB_ENV
 
       - name: Get ACR credentials
         run: |
@@ -63,8 +60,17 @@ jobs:
           echo "ACR_USERNAME=$ACR_USERNAME" >> $GITHUB_ENV
           echo "ACR_PASSWORD=$ACR_PASSWORD" >> $GITHUB_ENV
 
-      - name: Deploy to Azure Container Instance
+      - name: Redeploy container instance
         run: |
+          echo "Checking for existing container..."
+          EXISTS=$(az container show --name news-tts-container --resource-group "$RESOURCE_GROUP" --query "name" -o tsv || true)
+          if [ -n "$EXISTS" ]; then
+            echo "Container exists. Deleting..."
+            az container delete --name news-tts-container --resource-group "$RESOURCE_GROUP" --yes
+            az container wait --name news-tts-container --resource-group "$RESOURCE_GROUP" --deleted
+          fi
+
+          echo "Creating new Azure Container Instance..."
           az container create \
             --resource-group "$RESOURCE_GROUP" \
             --name news-tts-container \
@@ -86,16 +92,28 @@ jobs:
               FIREBASE_STORAGE_BUCKET="$FIREBASE_STORAGE_BUCKET" \
               CORS_ORIGIN="$CORS_ORIGIN" \
               LOG_LEVEL="$LOG_LEVEL" \
-            --restart-policy Always
+            --restart-policy Always \
+            --no-wait
 
-      - name: Get container IP
+      - name: Wait for container public IP
         run: |
-          CONTAINER_IP=$(az container show \
-            --name news-tts-container \
-            --resource-group "$RESOURCE_GROUP" \
-            --query ipAddress.ip \
-            --output tsv)
+          echo "Waiting for container to start and assign IP..."
+          for i in {1..15}; do
+            CONTAINER_IP=$(az container show \
+              --name news-tts-container \
+              --resource-group "$RESOURCE_GROUP" \
+              --query "ipAddress.ip" -o tsv 2>/dev/null || true)
+            if [ -n "$CONTAINER_IP" ]; then
+              echo "Container IP: $CONTAINER_IP"
+              echo "CONTAINER_IP=$CONTAINER_IP" >> $GITHUB_ENV
+              break
+            fi
+            echo "Waiting for IP... ($i/15)"
+            sleep 10
+          done
+
+      - name: Output endpoint info
+        run: |
           echo "Container IP: $CONTAINER_IP"
-          echo "API URL: http://$CONTAINER_IP:8080"
           echo "Health Check: http://$CONTAINER_IP:8080/health"
           echo "API Docs: http://$CONTAINER_IP:8080/docs"

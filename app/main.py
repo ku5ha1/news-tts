@@ -47,26 +47,32 @@ async def background_model_preload():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    task = None  # ✅ define upfront to avoid unbound reference
     try:
         log.info("Starting services...")
-        
+
         # Start background model preloading (non-blocking)
         task = asyncio.create_task(background_model_preload())
-        # Don't await - let it run in background
-        
+        log.info("Background model preload started")
+
         log.info("ElevenLabs TTS service ready - no warmup needed")
-        # Note: _is_ready remains False until models are loaded
+        # _is_ready remains False until models are loaded
+
     except Exception as e:
         log.exception(f"Service initialization failed: {e}")
-        global _model_err
+        global _model_err, _is_ready
         _model_err = str(e)
         _is_ready = False
-    yield
-    # Optional: await task here to ensure cleanup
-    try:
-        await task
-    except Exception as e:
-        log.exception(f"Background model preloading task failed: {e}")
+
+    yield  # lifespan yields to FastAPI's runtime
+
+    # Cleanup / finalization phase
+    if task:
+        try:
+            await task
+        except Exception as e:
+            log.exception(f"Background model preloading task failed: {e}")
+
     
 
 def _parse_cors(origins_env: str | None) -> list[str]:
