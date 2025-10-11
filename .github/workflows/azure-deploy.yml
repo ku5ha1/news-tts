@@ -47,17 +47,28 @@ jobs:
           az extension add -n ml
           az extension update -n ml
 
-      - name: Create Azure ML Endpoint
+      - name: Create or Update Azure ML Endpoint
         run: |
           az ml online-endpoint create \
             --name "$ML_ENDPOINT_NAME" \
             --resource-group "$RESOURCE_GROUP" \
             --workspace-name "$ML_WORKSPACE_NAME" \
+            --file endpoint.yaml || \
+          az ml online-endpoint update \
+            --name "$ML_ENDPOINT_NAME" \
+            --resource-group "$RESOURCE_GROUP" \
+            --workspace-name "$ML_WORKSPACE_NAME" \
             --file endpoint.yaml
 
-      - name: Create Azure ML Deployment
+      - name: Create or Update Azure ML Deployment
         run: |
           az ml online-deployment create \
+            --name news-tts-v1 \
+            --endpoint-name "$ML_ENDPOINT_NAME" \
+            --resource-group "$RESOURCE_GROUP" \
+            --workspace-name "$ML_WORKSPACE_NAME" \
+            --file deployment.yaml || \
+          az ml online-deployment update \
             --name news-tts-v1 \
             --endpoint-name "$ML_ENDPOINT_NAME" \
             --resource-group "$RESOURCE_GROUP" \
