@@ -42,6 +42,17 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
+      - name: Debug Azure context
+        run: |
+          echo "=== Azure Account Info ==="
+          az account show
+          echo "=== Azure Account List ==="
+          az account list --output table
+          echo "=== Azure CLI Version ==="
+          az version
+          echo "=== Environment Variables ==="
+          env | grep -i azure
+
       - name: Install Azure ML CLI extension
         run: |
           az extension add -n ml
