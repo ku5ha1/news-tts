@@ -44,14 +44,19 @@ COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/pytho
 COPY --from=builder /usr/local/bin /usr/local/bin
 COPY --from=builder /app /app
 
-# 4. Set correct ownership for the 'app' user
+# 4. Ensure IndicTransToolkit is properly installed in production stage
+WORKDIR /app/IndicTransToolkit
+RUN pip install --editable ./ --no-deps
+WORKDIR /app
+
+# 5. Set correct ownership for the 'app' user
 RUN chown -R app:app /app
 
-# 5. Copy and set executable permissions for the entrypoint script
+# 6. Copy and set executable permissions for the entrypoint script
 COPY entrypoint.sh .
 RUN chmod +x entrypoint.sh
 
-# 6. Final setup: Set user to root TEMPORARILY so the entrypoint can run chown
+# 7. Final setup: Set user to root TEMPORARILY so the entrypoint can run chown
 # The entrypoint will switch to the non-root user 'app' after fixing permissions.
 USER root 
 ENV PORT=8080 \
