@@ -37,30 +37,33 @@ COPY --from=builder /app/IndicTransToolkit /app/IndicTransToolkit
 
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
+    curl cifs-utils \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy application code and entrypoint
 COPY app/ ./app/
 COPY entrypoint.sh .
 
-# Setup user, cache directory, and permissions
+# Setup user and permissions
 RUN addgroup --system app && \
     adduser --system --ingroup app app && \
-    mkdir -p /app/.cache/huggingface && \
     chown -R app:app /app && \
     chmod +x entrypoint.sh
 
 USER app
 
-# Environment variables
+# Environment variables for HuggingFace cache
+# HF_HOME should point to the mounted Azure File Share
 ENV PORT=8080 \
     PYTHONUNBUFFERED=1 \
     TRUST_REMOTE_CODE=1 \
-    HF_HOME=/app/.cache/huggingface \
-    HF_HUB_CACHE=/app/.cache/huggingface/hub \
-    TRANSFORMERS_CACHE=/app/.cache/huggingface/transformers \
+    HF_HOME=/mnt/hf-cache \
+    HF_HUB_CACHE=/mnt/hf-cache/hub \
+    TRANSFORMERS_CACHE=/mnt/hf-cache/transformers \
     PYTHONPATH="/app/IndicTransToolkit:${PYTHONPATH}"
+
+# Ensure cache directory exists (Azure File Share mount point)
+RUN mkdir -p /mnt/hf-cache && chmod -R 777 /mnt/hf-cache
 
 # Healthcheck
 HEALTHCHECK --interval=30s --timeout=60s --start-period=300s --retries=3 \
