@@ -1,48 +1,41 @@
-# =========================
-# Stage 1: Builder
-# =========================
-FROM python:3.11 AS builder
-WORKDIR /app
+#!/bin/bash
+set -e
 
-# Install dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends build-essential git && rm -rf /var/lib/apt/lists/*
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# ===============================================
+# 1. Initialization and Environment Checks
+# ===============================================
 
-# Clone IndicTransToolkit and install
-RUN git clone https://github.com/VarunGumma/IndicTransToolkit.git /app/IndicTransToolkit
-WORKDIR /app/IndicTransToolkit
-RUN pip install --editable ./
-WORKDIR /app
-ENV PYTHONPATH="/app/IndicTransToolkit:${PYTHONPATH}"
+echo "Starting container as user: $(whoami)"
 
-# Pre-download HF model to /app/hf-cache
-RUN mkdir -p /app/hf-cache && \
-    python -c "from transformers import AutoTokenizer, AutoModelForSeq2SeqLM; \
-    AutoTokenizer.from_pretrained('ai4bharat/indictrans2-en-indic-dist-200M', cache_dir='/app/hf-cache', trust_remote_code=True); \
-    AutoModelForSeq2SeqLM.from_pretrained('ai4bharat/indictrans2-en-indic-dist-200M', cache_dir='/app/hf-cache', trust_remote_code=True)"
-    
-# =========================
-# Stage 2: Production
-# =========================
-FROM python:3.11-slim
-WORKDIR /app
-COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
-COPY --from=builder /usr/local/bin /usr/local/bin
-COPY --from=builder /app /app
+# Check if the mandatory Hugging Face cache directory exists and is accessible.
+if [ ! -d "$HF_HOME" ]; then
+    echo "ERROR: Hugging Face cache directory ($HF_HOME) not found. The model files may be missing."
+    exit 1
+fi
 
-# Runtime dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+# ===============================================
+# 2. Application Startup
+# ===============================================
 
-COPY entrypoint.sh .
-RUN chmod +x entrypoint.sh
+echo "Starting the IndicTrans2 service on port $PORT..."
 
-USER app
-ENV PORT=8080 \
-    PYTHONUNBUFFERED=1 \
-    HF_HOME=/app/hf-cache \
-    TRANSFORMERS_CACHE=/app/hf-cache \
-    PYTHONPATH="/app/IndicTransToolkit:${PYTHONPATH}"
+# Replace the following line with the actual command to start your Python server.
+# Common examples include: gunicorn, uvicorn, or a direct python command.
 
-EXPOSE ${PORT}
-ENTRYPOINT ["./entrypoint.sh"]
+# Example 1: Starting a server using Uvicorn (common for FastAPI/Starlette)
+# This assumes your application entry point is 'main:app' and you installed uvicorn/gunicorn.
+# exec uvicorn main:app --host 0.0.0.0 --port $PORT --workers 4
+
+# Example 2: Starting a server using Gunicorn (common for Flask/Django)
+# This assumes you have a Gunicorn configuration file or simple entry point.
+# exec gunicorn --bind 0.0.0.0:$PORT --workers 4 'main:app'
+
+# Example 3: Running a simple Python script
+# If your application is a simple Python file named 'run_app.py'
+exec python run_app.py --port $PORT
+
+# Note: Using 'exec' replaces the current shell process with the application process.
+# This ensures signals (like SIGTERM) are correctly handled by the Python application,
+# which is crucial for graceful shutdown in Kubernetes or Docker Swarm.
+
+# ===============================================

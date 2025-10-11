@@ -3,24 +3,24 @@ name: Build and Deploy to Azure Container Registry
 on:
   push:
     branches:
-      - main  
+      - main 
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
     env:
-      # Non-sensitive defaults
-      HF_HOME: /app/.cache/huggingface
-      HF_HUB_CACHE: /app/.cache/huggingface/hub
-      TRANSFORMERS_CACHE: /app/.cache/huggingface/transformers
+      HF_HOME: /app/hf-cache
+      HF_HUB_CACHE: /app/hf-cache/hub
+      TRANSFORMERS_CACHE: /app/hf-cache/transformers
       HF_HUB_OFFLINE: 0
       TRUST_REMOTE_CODE: 1
       TRANSLATION_PER_CALL_TIMEOUT: 90
       TRANSLATION_PER_CALL_TIMEOUT_RETRY: 120
       LOG_LEVEL: INFO
+      PORT: 8080
+      PYTHONUNBUFFERED: 1
 
-      # Secrets from GitHub repository
       AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
       DATABASE_NAME: ${{ secrets.DATABASE_NAME }}
       ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
@@ -33,6 +33,9 @@ jobs:
       ACR_NAME: ${{ secrets.ACR_NAME }} 
       IMAGE_NAME: ${{ secrets.IMAGE_NAME }}
       STORAGE_ACCOUNT_KEY: ${{ secrets.STORAGE_ACCOUNT_KEY }}
+      STORAGE_ACCOUNT_NAME: ${{ secrets.STORAGE_ACCOUNT_NAME }}
+      FILE_SHARE_NAME: hf-cache 
+      MOUNT_PATH: /mnt/hf-cache 
 
     steps:
       - name: Checkout code
@@ -44,34 +47,39 @@ jobs:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Log in to ACR
-        run: az acr login --name $ACR_NAME
+        run: az acr login --name ${{ env.ACR_NAME }}
 
       - name: Build and push Docker image
         run: |
-          IMAGE=$ACR_NAME.azurecr.io/$IMAGE_NAME:latest
+          IMAGE=${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:latest
           echo "Building and pushing image: $IMAGE"
+          # Use env vars directly
           docker build --no-cache -t $IMAGE .
           docker push $IMAGE
           echo "IMAGE=$IMAGE" >> $GITHUB_ENV
 
       - name: Get ACR credentials
         run: |
-          ACR_USERNAME=$(az acr credential show --name $ACR_NAME --query username --output tsv)
-          ACR_PASSWORD=$(az acr credential show --name $ACR_NAME --query passwords[0].value --output tsv)
+          ACR_USERNAME=$(az acr credential show --name ${{ env.ACR_NAME }} --query username --output tsv)
+          ACR_PASSWORD=$(az acr credential show --name ${{ env.ACR_NAME }} --query passwords[0].value --output tsv)
           echo "ACR_USERNAME=$ACR_USERNAME" >> $GITHUB_ENV
           echo "ACR_PASSWORD=$ACR_PASSWORD" >> $GITHUB_ENV
 
       - name: Redeploy container instance
         run: |
-          echo "Checking for existing container..."
-          EXISTS=$(az container show --name news-tts-container --resource-group "$RESOURCE_GROUP" --query "name" -o tsv || true)
+          CONTAINER_NAME="news-tts-container"
+          IMAGE_TAG="${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:latest"
+
+          echo "Checking for existing container $CONTAINER_NAME..."
+          # The logic for deletion and polling is good, keeping it simple.
+          EXISTS=$(az container show --name $CONTAINER_NAME --resource-group "${{ env.RESOURCE_GROUP }}" --query "name" -o tsv || true)
           if [ -n "$EXISTS" ]; then
             echo "Container exists. Deleting..."
-            az container delete --name news-tts-container --resource-group "$RESOURCE_GROUP" --yes
-
-            # Poll until deleted
+            az container delete --name $CONTAINER_NAME --resource-group "${{ env.RESOURCE_GROUP }}" --yes
+            
+            # Polling logic
             for i in {1..30}; do
-              EXISTS=$(az container show --name news-tts-container --resource-group "$RESOURCE_GROUP" --query "name" -o tsv || true)
+              EXISTS=$(az container show --name $CONTAINER_NAME --resource-group "${{ env.RESOURCE_GROUP }}" --query "name" -o tsv || true)
               if [ -z "$EXISTS" ]; then
                 echo "Container deleted."
                 break
@@ -81,49 +89,60 @@ jobs:
             done
           fi
 
-          # Ensure STORAGE_ACCOUNT_KEY is set
-          if [ -z "$STORAGE_ACCOUNT_KEY" ]; then
+          if [ -z "${{ env.STORAGE_ACCOUNT_KEY }}" ]; then
             echo "ERROR: STORAGE_ACCOUNT_KEY is not set!"
             exit 1
           fi
 
           echo "Creating new Azure Container Instance with SMB mount..."
           az container create \
-            --resource-group "$RESOURCE_GROUP" \
-            --name news-tts-container \
-            --image "$ACR_NAME.azurecr.io/$IMAGE_NAME:latest" \
+            --resource-group "${{ env.RESOURCE_GROUP }}" \
+            --name $CONTAINER_NAME \
+            --image "$IMAGE_TAG" \
             --cpu 2 \
             --memory 14 \
-            --ports 8080 \
+            --ports ${{ env.PORT }} \
             --os-type Linux \
             --ip-address Public \
             --dns-name-label news-tts-app \
-            --registry-username "$ACR_USERNAME" \
-            --registry-password "$ACR_PASSWORD" \
+            --registry-username "${{ env.ACR_USERNAME }}" \
+            --registry-password "${{ env.ACR_PASSWORD }}" \
             --environment-variables \
-              ELEVENLABS_API_KEY="$ELEVENLABS_API_KEY" \
-              ELEVENLABS_VOICE_ID="$ELEVENLABS_VOICE_ID" \
-              MONGO_URI="$MONGO_URI" \
-              DATABASE_NAME="$DATABASE_NAME" \
-              FIREBASE_SERVICE_ACCOUNT_BASE64="$FIREBASE_SERVICE_ACCOUNT_BASE64" \
-              FIREBASE_STORAGE_BUCKET="$FIREBASE_STORAGE_BUCKET" \
-              CORS_ORIGIN="$CORS_ORIGIN" \
-              LOG_LEVEL="$LOG_LEVEL" \
-              STORAGE_ACCOUNT_KEY="$STORAGE_ACCOUNT_KEY" \
-            --azure-file-volume-account-name diprstorage \
-            --azure-file-volume-account-key "$STORAGE_ACCOUNT_KEY" \
-            --azure-file-volume-share-name hf-cache \
-            --azure-file-volume-mount-path /mnt/hf-cache \
+              # Pass ALL non-secret variables to the container
+              PORT="${{ env.PORT }}" \
+              PYTHONUNBUFFERED="${{ env.PYTHONUNBUFFERED }}" \
+              TRUST_REMOTE_CODE="${{ env.TRUST_REMOTE_CODE }}" \
+              TRANSLATION_PER_CALL_TIMEOUT="${{ env.TRANSLATION_PER_CALL_TIMEOUT }}" \
+              TRANSLATION_PER_CALL_TIMEOUT_RETRY="${{ env.TRANSLATION_PER_CALL_TIMEOUT_RETRY }}" \
+              LOG_LEVEL="${{ env.LOG_LEVEL }}" \
+              # --- FIX 2: Override HF_HOME to the Mount Path ---
+              # The container will now look for the model at /mnt/hf-cache
+              HF_HOME="${{ env.MOUNT_PATH }}" \
+              TRANSFORMERS_CACHE="${{ env.MOUNT_PATH }}" \
+              # Pass all required secrets
+              ELEVENLABS_API_KEY="${{ env.ELEVENLABS_API_KEY }}" \
+              ELEVENLABS_VOICE_ID="${{ env.ELEVENLABS_VOICE_ID }}" \
+              MONGO_URI="${{ env.MONGO_URI }}" \
+              DATABASE_NAME="${{ env.DATABASE_NAME }}" \
+              FIREBASE_SERVICE_ACCOUNT_BASE64="${{ env.FIREBASE_SERVICE_ACCOUNT_BASE64 }}" \
+              FIREBASE_STORAGE_BUCKET="${{ env.FIREBASE_STORAGE_BUCKET }}" \
+              CORS_ORIGIN="${{ env.CORS_ORIGIN }}" \
+            # File Share Configuration
+            --azure-file-volume-account-name ${{ env.STORAGE_ACCOUNT_NAME }} \
+            --azure-file-volume-account-key "${{ env.STORAGE_ACCOUNT_KEY }}" \
+            --azure-file-volume-share-name ${{ env.FILE_SHARE_NAME }} \
+            --azure-file-volume-mount-path ${{ env.MOUNT_PATH }} \
             --restart-policy Always \
             --no-wait
 
       - name: Get container public IP
         run: |
+          CONTAINER_NAME="news-tts-container"
           echo "Waiting for container public IP..."
           for i in {1..15}; do
             CONTAINER_IP=$(az container show \
-              --name news-tts-container \
-              --resource-group "$RESOURCE_GROUP" \
+              --name $CONTAINER_NAME \
+              --resource-group "${{ env.RESOURCE_GROUP }}" \
               --query "ipAddress.ip" -o tsv 2>/dev/null || true)
             if [ -n "$CONTAINER_IP" ]; then
               echo "Container IP found: $CONTAINER_IP"
@@ -136,6 +155,6 @@ jobs:
 
       - name: Output endpoint info
         run: |
-          echo "Container IP: $CONTAINER_IP"
-          echo "Health Check: http://$CONTAINER_IP:8080/health"
-          echo "API Docs: http://$CONTAINER_IP:8080/docs"
+          echo "Container IP: ${{ env.CONTAINER_IP }}"
+          echo "Health Check: http://${{ env.CONTAINER_IP }}:8080/health"
+          echo "API Docs: http://${{ env.CONTAINER_IP }}:8080/docs"
