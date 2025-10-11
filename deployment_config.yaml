@@ -9,9 +9,8 @@ deployments:
   - name: news-tts-v1
     model: null  # No model, just container deployment
     environment:
-      build:
-        path: .
-        dockerfile_path: Dockerfile
+      dockerfile_path: Dockerfile
+      build_context: . 
       ports:
         - port: 8080
     resources:

@@ -53,9 +53,7 @@ jobs:
             --name "$ML_ENDPOINT_NAME" \
             --resource-group "$RESOURCE_GROUP" \
             --workspace-name "$ML_WORKSPACE_NAME" \
-            --file deployment_config.yaml \
-            --build-context . \
-            --build-target production
+            --file deployment_config.yaml
 
       - name: Get endpoint URL
         run: |
