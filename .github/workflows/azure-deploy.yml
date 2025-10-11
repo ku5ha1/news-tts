@@ -30,7 +30,7 @@ jobs:
       MONGO_URI: ${{ secrets.MONGO_URI }}
       RESOURCE_GROUP: ${{ secrets.RESOURCE_GROUP }}
       CORS_ORIGIN: ${{ secrets.CORS_ORIGIN }}
-      ACR_NAME: ${{ secrets.ACR_NAME }}
+      ACR_NAME: ${{ secrets.ACR_NAME }} 
       IMAGE_NAME: ${{ secrets.IMAGE_NAME }}
 
     steps:
@@ -74,6 +74,7 @@ jobs:
             --ports 8080 \
             --os-type Linux \
             --ip-address Public \
+            --dns-name-label news-tts-app \
             --registry-username "$ACR_USERNAME" \
             --registry-password "$ACR_PASSWORD" \
             --environment-variables \
