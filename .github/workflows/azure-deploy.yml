@@ -55,3 +55,36 @@ jobs:
         run: |
           echo "Image pushed to: $ACR_NAME.azurecr.io/$IMAGE_NAME"
           echo "IMAGE_URL=$ACR_NAME.azurecr.io/$IMAGE_NAME" >> $GITHUB_ENV
+
+      - name: Deploy to Azure Container Instance
+        run: |
+          az container create \
+            --resource-group "$RESOURCE_GROUP" \
+            --name news-tts-container \
+            --image "$ACR_NAME.azurecr.io/$IMAGE_NAME:latest" \
+            --cpu 2 \
+            --memory 14 \
+            --ports 8080 \
+            --os-type Linux \
+            --environment-variables \
+              ELEVENLABS_API_KEY="$ELEVENLABS_API_KEY" \
+              ELEVENLABS_VOICE_ID="$ELEVENLABS_VOICE_ID" \
+              MONGO_URI="$MONGO_URI" \
+              DATABASE_NAME="$DATABASE_NAME" \
+              FIREBASE_SERVICE_ACCOUNT_BASE64="$FIREBASE_SERVICE_ACCOUNT_BASE64" \
+              FIREBASE_STORAGE_BUCKET="$FIREBASE_STORAGE_BUCKET" \
+              CORS_ORIGIN="$CORS_ORIGIN" \
+              LOG_LEVEL="$LOG_LEVEL" \
+            --restart-policy Always
+
+      - name: Get container IP
+        run: |
+          CONTAINER_IP=$(az container show \
+            --name news-tts-container \
+            --resource-group "$RESOURCE_GROUP" \
+            --query ipAddress.ip \
+            --output tsv)
+          echo "Container IP: $CONTAINER_IP"
+          echo "API URL: http://$CONTAINER_IP:8080"
+          echo "Health Check: http://$CONTAINER_IP:8080/health"
+          echo "API Docs: http://$CONTAINER_IP:8080/docs"
