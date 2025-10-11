@@ -32,6 +32,7 @@ jobs:
       CORS_ORIGIN: ${{ secrets.CORS_ORIGIN }}
       ACR_NAME: ${{ secrets.ACR_NAME }} 
       IMAGE_NAME: ${{ secrets.IMAGE_NAME }}
+      STORAGE_ACCOUNT_KEY: ${{ secrets.STORAGE_ACCOUNT_KEY }}
 
     steps:
       - name: Checkout code
@@ -114,7 +115,7 @@ jobs:
             --azure-file-volume-mount-path /mnt/hf-cache \
             --restart-policy Always \
             --no-wait
-            
+
       - name: Get container public IP
         run: |
           echo "Waiting for container public IP..."
