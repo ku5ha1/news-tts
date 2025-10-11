@@ -284,12 +284,12 @@ class TranslationService:
         
         # Define target languages based on source
         if source_lang == "english":
-            target_languages = ["hindi", "kannada"]
+            target_languages = ["hi", "kn"]  # Use short codes for API compatibility
         elif source_lang == "kannada":
-            target_languages = ["english", "hindi"]
+            target_languages = ["en", "hi"]
         else:
             # For other languages, translate to English and Hindi
-            target_languages = ["english", "hindi"]
+            target_languages = ["en", "hi"]
         
         # PRE-LOAD MODELS to avoid contention during execution
         logger.info("Pre-loading models to avoid contention...")
