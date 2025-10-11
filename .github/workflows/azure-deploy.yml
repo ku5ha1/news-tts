@@ -128,7 +128,6 @@ jobs:
               HF_HOME="/app/hf-cache" \
               TRANSFORMERS_CACHE="/app/hf-cache" \
               HF_HUB_OFFLINE="${{ env.HF_HUB_OFFLINE }}" \
-              TRUST_REMOTE_CODE="${{ env.TRUST_REMOTE_CODE }}" \
               ELEVENLABS_API_KEY="${{ env.ELEVENLABS_API_KEY }}" \
               ELEVENLABS_VOICE_ID="${{ env.ELEVENLABS_VOICE_ID }}" \
               MONGO_URI="${{ env.MONGO_URI }}" \
