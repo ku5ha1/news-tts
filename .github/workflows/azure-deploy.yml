@@ -67,7 +67,17 @@ jobs:
           if [ -n "$EXISTS" ]; then
             echo "Container exists. Deleting..."
             az container delete --name news-tts-container --resource-group "$RESOURCE_GROUP" --yes
-            az container wait --name news-tts-container --resource-group "$RESOURCE_GROUP" --deleted
+
+            # Poll until deleted
+            for i in {1..30}; do
+              EXISTS=$(az container show --name news-tts-container --resource-group "$RESOURCE_GROUP" --query "name" -o tsv || true)
+              if [ -z "$EXISTS" ]; then
+                echo "Container deleted."
+                break
+              fi
+              echo "Waiting for container deletion... ($i/30)"
+              sleep 5
+            done
           fi
 
           echo "Creating new Azure Container Instance..."
@@ -95,16 +105,16 @@ jobs:
             --restart-policy Always \
             --no-wait
 
-      - name: Wait for container public IP
+      - name: Get container public IP
         run: |
-          echo "Waiting for container to start and assign IP..."
+          echo "Waiting for container public IP..."
           for i in {1..15}; do
             CONTAINER_IP=$(az container show \
               --name news-tts-container \
               --resource-group "$RESOURCE_GROUP" \
               --query "ipAddress.ip" -o tsv 2>/dev/null || true)
             if [ -n "$CONTAINER_IP" ]; then
-              echo "Container IP: $CONTAINER_IP"
+              echo "Container IP found: $CONTAINER_IP"
               echo "CONTAINER_IP=$CONTAINER_IP" >> $GITHUB_ENV
               break
             fi
