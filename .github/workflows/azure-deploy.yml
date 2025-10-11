@@ -1,4 +1,4 @@
-name: Build and Deploy to Azure
+name: Build and Deploy to Azure ML
 
 on:
   push:
@@ -21,19 +21,17 @@ jobs:
       LOG_LEVEL: INFO
 
       # Secrets from GitHub repository
-      ACR_NAME: ${{ secrets.ACR_NAME }}
-      APP_SERVICE_NAME: ${{ secrets.APP_SERVICE_NAME }}
       AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
       DATABASE_NAME: ${{ secrets.DATABASE_NAME }}
       ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
       ELEVENLABS_VOICE_ID: ${{ secrets.ELEVENLABS_VOICE_ID }}
       FIREBASE_SERVICE_ACCOUNT_BASE64: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BASE64 }}
       FIREBASE_STORAGE_BUCKET: ${{ secrets.FIREBASE_STORAGE_BUCKET }}
-      IMAGE_NAME: ${{ secrets.IMAGE_NAME }}
       MONGO_URI: ${{ secrets.MONGO_URI }}
       RESOURCE_GROUP: ${{ secrets.RESOURCE_GROUP }}
       CORS_ORIGIN: ${{ secrets.CORS_ORIGIN }}
-      AI4BHARAT_MODELS_PATH: ${{ secrets.AI4BHARAT_MODELS_PATH }}
+      ML_WORKSPACE_NAME: ${{ secrets.ML_WORKSPACE_NAME }}
+      ML_ENDPOINT_NAME: ${{ secrets.ML_ENDPOINT_NAME }}
 
     steps:
       - name: Checkout code
@@ -44,54 +42,27 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Log in to ACR
-        run: az acr login --name $ACR_NAME
-
-      - name: Build and push Docker image
+      - name: Install Azure ML CLI extension
         run: |
-          IMAGE=$ACR_NAME.azurecr.io/$IMAGE_NAME
-          docker build --no-cache -t $IMAGE .
-          docker push $IMAGE
+          az extension add -n ml
+          az extension update -n ml
 
-      - name: Configure Web App container
+      - name: Deploy to Azure ML Managed Endpoint
         run: |
-          az webapp config container set \
-            --name "$APP_SERVICE_NAME" \
+          az ml online-endpoint create \
+            --name "$ML_ENDPOINT_NAME" \
             --resource-group "$RESOURCE_GROUP" \
-            --docker-custom-image-name "$ACR_NAME.azurecr.io/$IMAGE_NAME" \
-            --docker-registry-server-url "https://$ACR_NAME.azurecr.io"
+            --workspace-name "$ML_WORKSPACE_NAME" \
+            --file deployment_config.yaml \
+            --build-context . \
+            --build-target production
 
-      - name: Apply App Settings
+      - name: Get endpoint URL
         run: |
-          az webapp config appsettings set \
-            --name "$APP_SERVICE_NAME" \
+          ENDPOINT_URL=$(az ml online-endpoint show \
+            --name "$ML_ENDPOINT_NAME" \
             --resource-group "$RESOURCE_GROUP" \
-            --settings \
-            ELEVENLABS_API_KEY="$ELEVENLABS_API_KEY" \
-            ELEVENLABS_VOICE_ID="$ELEVENLABS_VOICE_ID" \
-            MONGO_URI="$MONGO_URI" \
-            DATABASE_NAME="$DATABASE_NAME" \
-            FIREBASE_SERVICE_ACCOUNT_BASE64="$FIREBASE_SERVICE_ACCOUNT_BASE64" \
-            FIREBASE_STORAGE_BUCKET="$FIREBASE_STORAGE_BUCKET" \
-            CORS_ORIGIN="$CORS_ORIGIN" \
-            HF_HOME="/app/.cache/huggingface" \
-            HF_HUB_CACHE="/app/.cache/huggingface/hub" \
-            TRANSFORMERS_CACHE="/app/.cache/huggingface/transformers" \
-            LOG_LEVEL="INFO"
-            ELEVENLABS_API_KEY="$ELEVENLABS_API_KEY" \
-            ELEVENLABS_VOICE_ID="$ELEVENLABS_VOICE_ID" \
-            MONGO_URI="$MONGO_URI" \
-            DATABASE_NAME="$DATABASE_NAME" \
-            FIREBASE_SERVICE_ACCOUNT_BASE64="$FIREBASE_SERVICE_ACCOUNT_BASE64" \
-            FIREBASE_STORAGE_BUCKET="$FIREBASE_STORAGE_BUCKET" \
-            CORS_ORIGIN="$CORS_ORIGIN" \
-            HF_HOME="/app/.cache/huggingface" \
-            HF_HUB_CACHE="/app/.cache/huggingface/hub" \
-            TRANSFORMERS_CACHE="/app/.cache/huggingface/transformers" \
-            LOG_LEVEL="INFO"
-
-      - name: Restart App Service
-        run: |
-          az webapp restart \
-            --name "$APP_SERVICE_NAME" \
-            --resource-group "$RESOURCE_GROUP"
+            --workspace-name "$ML_WORKSPACE_NAME" \
+            --query scoring_uri -o tsv)
+          echo "Endpoint URL: $ENDPOINT_URL"
+          echo "ENDPOINT_URL=$ENDPOINT_URL" >> $GITHUB_ENV

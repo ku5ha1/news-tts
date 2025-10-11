@@ -53,7 +53,7 @@ class TranslationService:
             # Thread locks for model operations
             self.en_indic_lock = Lock()
             self.indic_en_lock = Lock()
-            
+
             # Track loading status
             self.loading_en_indic = False
             self.loading_indic_en = False
@@ -63,8 +63,8 @@ class TranslationService:
         if self.en_indic_model is None and not self.loading_en_indic:
             with self.en_indic_lock:
                 if self.en_indic_model is None:
-                    try:
-                        self.loading_en_indic = True
+            try:
+                self.loading_en_indic = True
                         model_name = MODEL_NAMES["en_indic"]
                         logger.info(f"Loading EN->Indic 1B model: {model_name}")
                         
@@ -81,17 +81,17 @@ class TranslationService:
                         logger.error(f"Failed to load EN->Indic model: {e}")
                         self.en_indic_model = None
                         self.en_indic_tokenizer = None
-                        raise
-                    finally:
-                        self.loading_en_indic = False
+                raise
+            finally:
+                self.loading_en_indic = False
 
     def _ensure_indic_en_model(self):
         """Load Indic->EN model and tokenizer if not already loaded."""
         if self.indic_en_model is None and not self.loading_indic_en:
             with self.indic_en_lock:
                 if self.indic_en_model is None:
-                    try:
-                        self.loading_indic_en = True
+            try:
+                self.loading_indic_en = True
                         model_name = MODEL_NAMES["indic_en"]
                         logger.info(f"Loading Indic->EN 1B model: {model_name}")
                         
@@ -108,9 +108,9 @@ class TranslationService:
                         logger.error(f"Failed to load Indic->EN model: {e}")
                         self.indic_en_model = None
                         self.indic_en_tokenizer = None
-                        raise
-                    finally:
-                        self.loading_indic_en = False
+                raise
+            finally:
+                self.loading_indic_en = False
 
     def _normalize_lang_code(self, lang: str) -> str:
         """Normalize language codes from detection to internal format."""
@@ -122,7 +122,7 @@ class TranslationService:
             return "hindi"
         elif lang in ["kn", "kannada"]:
             return "kannada"
-        else:
+            else:
             return "english"
 
     def _get_lang_code(self, lang: str) -> str:
@@ -195,7 +195,7 @@ class TranslationService:
                     logger.info(f"Translated to {target_lang}: {results[target_lang][:50]}...")
                 
                 return results
-                    
+                
             except Exception as e:
                 logger.error(f"Batch translation error: {e}")
                 raise
@@ -239,10 +239,10 @@ class TranslationService:
                 with self.indic_en_tokenizer.as_target_tokenizer():
                     generated_tokens = self.indic_en_tokenizer.batch_decode(
                         generated_tokens.detach().cpu().tolist(),
-                        skip_special_tokens=True,
-                        clean_up_tokenization_spaces=True,
-                    )
-
+                    skip_special_tokens=True,
+                    clean_up_tokenization_spaces=True,
+                )
+                
                 translations = self.ip.postprocess_batch(
                     generated_tokens, 
                     lang="eng_Latn"
@@ -254,7 +254,7 @@ class TranslationService:
                     
             except Exception as e:
                 logger.error(f"Translation error {source_lang}->EN: {e}")
-                raise
+            raise
 
     def translate(self, text: str, source_lang: str, target_lang: str) -> str:
         """Single translation method."""
@@ -293,9 +293,9 @@ class TranslationService:
         # PRE-LOAD models
         logger.info("Pre-loading models...")
         if source_lang == "english":
-            self._ensure_en_indic_model()
+                self._ensure_en_indic_model()
         else:
-            self._ensure_indic_en_model()
+                self._ensure_indic_en_model()
         logger.info("Models pre-loaded successfully")
         
         # Combine title and description
@@ -313,7 +313,7 @@ class TranslationService:
                 texts,
                 target_languages
             )
-        else:
+            else:
             # First translate to English, then batch to others
             english_text = await loop.run_in_executor(
                 None,
