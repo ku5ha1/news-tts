@@ -19,8 +19,9 @@ ENV PYTHONPATH="/app/IndicTransToolkit:${PYTHONPATH}"
 # Pre-download HF model to /app/hf-cache
 RUN mkdir -p /app/hf-cache && \
     python -c "from transformers import AutoTokenizer, AutoModelForSeq2SeqLM; \
-    AutoTokenizer.from_pretrained('ai4bharat/indictrans2-en-indic-dist-200M', cache_dir='/app/hf-cache'); \
-    AutoModelForSeq2SeqLM.from_pretrained('ai4bharat/indictrans2-en-indic-dist-200M', cache_dir='/app/hf-cache')"
+    AutoTokenizer.from_pretrained('ai4bharat/indictrans2-en-indic-dist-200M', cache_dir='/app/hf-cache', trust_remote_code=True); \
+    AutoModelForSeq2SeqLM.from_pretrained('ai4bharat/indictrans2-en-indic-dist-200M', cache_dir='/app/hf-cache', trust_remote_code=True)"
+
 
 # =========================
 # Stage 2: Production
