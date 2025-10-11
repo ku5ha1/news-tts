@@ -118,6 +118,7 @@ jobs:
             --dns-name-label news-tts-app \
             --registry-username "${{ env.ACR_USERNAME }}" \
             --registry-password "${{ env.ACR_PASSWORD }}" \
+            --user 0 \ 
             --environment-variables \
               PORT="${{ env.PORT }}" \
               PYTHONUNBUFFERED="${{ env.PYTHONUNBUFFERED }}" \
