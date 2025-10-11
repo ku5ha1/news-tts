@@ -56,6 +56,7 @@ RUN chmod +x entrypoint.sh
 USER root 
 ENV PORT=8080 \
     PYTHONUNBUFFERED=1 \
+    LOG_LEVEL=INFO \
     # Point HF_HOME to the mounted volume path expected by ACI
     HF_HOME=/mnt/hf-cache \
     TRANSFORMERS_CACHE=/mnt/hf-cache \

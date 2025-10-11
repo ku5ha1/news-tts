@@ -107,13 +107,20 @@ app.include_router(news.router, prefix="/api", tags=["news"])
 
 @app.get("/health")
 async def health():
+    global _is_ready, _model_err
+    
+    status = "ok" if _is_ready else "loading"
+    if _model_err:
+        status = "error"
     
     return {
-        "status": "ok", 
+        "status": status, 
         "service": "news-tts", 
         "version": "2.0.0",
         "translation": "1B",
-        "tts": "ElevenLabs API"
+        "tts": "ElevenLabs API",
+        "ready": _is_ready,
+        "error": _model_err
     }
 
 @app.get("/")
