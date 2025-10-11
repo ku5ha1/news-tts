@@ -10,10 +10,10 @@ from threading import Lock
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Model names for dist-200M
+# Model names for 1B (better batch processing optimization)
 MODEL_NAMES = {
-    "en_indic": "ai4bharat/indictrans2-en-indic-dist-200M",
-    "indic_en": "ai4bharat/indictrans2-indic-en-dist-200M",
+    "en_indic": "ai4bharat/indictrans2-en-indic-1B",
+    "indic_en": "ai4bharat/indictrans2-indic-en-1B",
 }
 
 class TranslationService:
@@ -28,7 +28,7 @@ class TranslationService:
         if not hasattr(self, "device"):
             # Force CPU-only for lightweight deployment
             self.device = torch.device("cpu")
-            logger.info("[Translation] Using CPU for dist-200M model")
+            logger.info("[Translation] Using CPU for 1B model (optimized for batch processing)")
 
             # Initialize IndicTransToolkit components
             try:

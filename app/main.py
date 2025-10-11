@@ -111,7 +111,7 @@ async def health():
         "status": "ok", 
         "service": "news-tts", 
         "version": "2.0.0",
-        "translation": "dist-200M",
+        "translation": "1B",
         "tts": "ElevenLabs API"
     }
 
@@ -119,7 +119,7 @@ async def health():
 async def root():
     return {
         "message": "Lightweight Translation & TTS", 
-        "translation": "IndicTrans2 dist-200M",
+        "translation": "IndicTrans2 1B",
         "tts": "ElevenLabs API",
         "docs": "/docs", 
         "health": "/health"

@@ -66,8 +66,6 @@ jobs:
           az webapp config appsettings set \
             --name "$APP_SERVICE_NAME" \
             --resource-group "$RESOURCE_GROUP" \
-            --name "$APP_SERVICE_NAME" \
-            --resource-group "$RESOURCE_GROUP" \
             --settings \
             ELEVENLABS_API_KEY="$ELEVENLABS_API_KEY" \
             ELEVENLABS_VOICE_ID="$ELEVENLABS_VOICE_ID" \
