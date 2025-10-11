@@ -47,7 +47,6 @@ COPY entrypoint.sh .
 # Setup user, local cache directory, and permissions
 RUN addgroup --system app && \
     adduser --system --ingroup app app && \
-    mkdir -p /app/.cache/huggingface && \
     chown -R app:app /app && \
     chmod +x entrypoint.sh
 
@@ -57,9 +56,9 @@ USER app
 ENV PORT=8080 \
     PYTHONUNBUFFERED=1 \
     TRUST_REMOTE_CODE=1 \
-    HF_HOME=/app/.cache/huggingface \
-    HF_HUB_CACHE=/app/.cache/huggingface/hub \
-    TRANSFORMERS_CACHE=/app/.cache/huggingface/transformers \
+    HF_HOME=/mnt/hf-cache \
+    HF_HUB_CACHE=/mnt/hf-cache/hub \
+    TRANSFORMERS_CACHE=/mnt/hf-cache/transformers \
     PYTHONPATH="/app/IndicTransToolkit:${PYTHONPATH}"
 
 # Healthcheck

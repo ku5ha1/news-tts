@@ -80,6 +80,12 @@ jobs:
             done
           fi
 
+          # Ensure STORAGE_ACCOUNT_KEY is set
+          if [ -z "$STORAGE_ACCOUNT_KEY" ]; then
+            echo "ERROR: STORAGE_ACCOUNT_KEY is not set!"
+            exit 1
+          fi
+
           echo "Creating new Azure Container Instance with SMB mount..."
           az container create \
             --resource-group "$RESOURCE_GROUP" \
@@ -102,18 +108,13 @@ jobs:
               FIREBASE_STORAGE_BUCKET="$FIREBASE_STORAGE_BUCKET" \
               CORS_ORIGIN="$CORS_ORIGIN" \
               LOG_LEVEL="$LOG_LEVEL" \
-              HF_HOME=/mnt/hf-cache \
-              HF_HUB_CACHE=/mnt/hf-cache/hub \
-              TRANSFORMERS_CACHE=/mnt/hf-cache/transformers \
             --azure-file-volume-account-name diprstorage \
             --azure-file-volume-account-key "$STORAGE_ACCOUNT_KEY" \
             --azure-file-volume-share-name hf-cache \
             --azure-file-volume-mount-path /mnt/hf-cache \
             --restart-policy Always \
             --no-wait
-
-
-
+            
       - name: Get container public IP
         run: |
           echo "Waiting for container public IP..."
