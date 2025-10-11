@@ -20,17 +20,16 @@ RUN pip install IndicTransToolkit
 # 4. Pre-download models to bake them into the image
 ENV HF_HOME=/app/hf-cache
 RUN mkdir -p /app/hf-cache && \
-    python -c "
-from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
-import os
-print('Downloading EN->Indic model...')
-AutoTokenizer.from_pretrained('ai4bharat/indictrans2-en-indic-dist-200M', trust_remote_code=True)
-AutoModelForSeq2SeqLM.from_pretrained('ai4bharat/indictrans2-en-indic-dist-200M', trust_remote_code=True)
-print('Downloading Indic->EN model...')
-AutoTokenizer.from_pretrained('ai4bharat/indictrans2-indic-en-dist-200M', trust_remote_code=True)
-AutoModelForSeq2SeqLM.from_pretrained('ai4bharat/indictrans2-indic-en-dist-200M', trust_remote_code=True)
-print('Models downloaded successfully!')
-"
+    python -c "\
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM; \
+import os; \
+print('Downloading EN->Indic model...'); \
+AutoTokenizer.from_pretrained('ai4bharat/indictrans2-en-indic-dist-200M', trust_remote_code=True); \
+AutoModelForSeq2SeqLM.from_pretrained('ai4bharat/indictrans2-en-indic-dist-200M', trust_remote_code=True); \
+print('Downloading Indic->EN model...'); \
+AutoTokenizer.from_pretrained('ai4bharat/indictrans2-indic-en-dist-200M', trust_remote_code=True); \
+AutoModelForSeq2SeqLM.from_pretrained('ai4bharat/indictrans2-indic-en-dist-200M', trust_remote_code=True); \
+print('Models downloaded successfully!')"
 
 
 # =========================
