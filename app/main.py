@@ -29,15 +29,14 @@ async def background_model_preload():
         log.info("Starting background model preloading...")
         from app.services.translation_service import translation_service
         
-        # Test translation to ensure models work
-        test_result = await asyncio.to_thread(
-            translation_service.translate, 
-            "Hello world", 
-            "english", 
-            "hindi"
+        # Test translation to ensure models work using translate_to_all_async
+        test_result = await translation_service.translate_to_all_async(
+            title="Hello world",
+            description="This is a test",
+            source_lang="english"
         )
         
-        log.info(f"Background model preloading completed: 'Hello world' -> '{test_result}'")
+        log.info(f"Background model preloading completed: 'Hello world' -> {test_result}")
         _is_ready = True
         _model_err = None
         
