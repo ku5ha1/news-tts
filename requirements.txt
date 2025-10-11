@@ -52,8 +52,4 @@ pytest-asyncio==0.21.1
 structlog==23.2.0
 colorama==0.4.6
 
-# Azure ML (for managed endpoint deployment)
-azureml-core>=1.55.0
-azureml-inference-server-http>=0.7.0
-
 # IndicTransToolkit will be cloned and installed in Dockerfile

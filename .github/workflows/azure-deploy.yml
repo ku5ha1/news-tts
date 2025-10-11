@@ -1,4 +1,4 @@
-name: Build and Deploy to Azure ML
+name: Build and Deploy to Azure Container Registry
 
 on:
   push:
@@ -30,8 +30,8 @@ jobs:
       MONGO_URI: ${{ secrets.MONGO_URI }}
       RESOURCE_GROUP: ${{ secrets.RESOURCE_GROUP }}
       CORS_ORIGIN: ${{ secrets.CORS_ORIGIN }}
-      ML_WORKSPACE_NAME: ${{ secrets.ML_WORKSPACE_NAME }}
-      ML_ENDPOINT_NAME: ${{ secrets.ML_ENDPOINT_NAME }}
+      ACR_NAME: ${{ secrets.ACR_NAME }}
+      IMAGE_NAME: ${{ secrets.IMAGE_NAME }}
 
     steps:
       - name: Checkout code
@@ -42,59 +42,16 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Debug Azure context
-        run: |
-          echo "=== Azure Account Info ==="
-          az account show
-          echo "=== Azure Account List ==="
-          az account list --output table
-          echo "=== Azure CLI Version ==="
-          az version
-          echo "=== Environment Variables ==="
-          env | grep -i azure
+      - name: Log in to ACR
+        run: az acr login --name $ACR_NAME
 
-      - name: Install Azure ML CLI extension
+      - name: Build and push Docker image
         run: |
-          az extension add -n ml
-          az extension update -n ml
+          IMAGE=$ACR_NAME.azurecr.io/$IMAGE_NAME
+          docker build --no-cache -t $IMAGE .
+          docker push $IMAGE
 
-      - name: Create Azure ML Endpoint
+      - name: Get image details
         run: |
-          az ml online-endpoint create \
-            --name "$ML_ENDPOINT_NAME" \
-            --resource-group "$RESOURCE_GROUP" \
-            --workspace-name "$ML_WORKSPACE_NAME" \
-            --file endpoint.yaml
-
-      - name: Create or Update Azure ML Deployment
-        run: |
-          az ml online-deployment create \
-            --name news-tts-v1 \
-            --endpoint-name "$ML_ENDPOINT_NAME" \
-            --resource-group "$RESOURCE_GROUP" \
-            --workspace-name "$ML_WORKSPACE_NAME" \
-            --file deployment.yaml || \
-          az ml online-deployment update \
-            --name news-tts-v1 \
-            --endpoint-name "$ML_ENDPOINT_NAME" \
-            --resource-group "$RESOURCE_GROUP" \
-            --workspace-name "$ML_WORKSPACE_NAME" \
-            --file deployment.yaml
-
-      - name: Set Traffic to 100%
-        run: |
-          az ml online-endpoint update \
-            --name "$ML_ENDPOINT_NAME" \
-            --resource-group "$RESOURCE_GROUP" \
-            --workspace-name "$ML_WORKSPACE_NAME" \
-            --traffic news-tts-v1=100
-
-      - name: Get endpoint URL
-        run: |
-          ENDPOINT_URL=$(az ml online-endpoint show \
-            --name "$ML_ENDPOINT_NAME" \
-            --resource-group "$RESOURCE_GROUP" \
-            --workspace-name "$ML_WORKSPACE_NAME" \
-            --query scoring_uri -o tsv)
-          echo "Endpoint URL: $ENDPOINT_URL"
-          echo "ENDPOINT_URL=$ENDPOINT_URL" >> $GITHUB_ENV
+          echo "Image pushed to: $ACR_NAME.azurecr.io/$IMAGE_NAME"
+          echo "IMAGE_URL=$ACR_NAME.azurecr.io/$IMAGE_NAME" >> $GITHUB_ENV
