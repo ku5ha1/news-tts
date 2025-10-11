@@ -10,6 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
+      # --- Non-Secret Defaults ---
       HF_HOME: /app/hf-cache
       HF_HUB_CACHE: /app/hf-cache/hub
       TRANSFORMERS_CACHE: /app/hf-cache/transformers
@@ -20,7 +21,11 @@ jobs:
       LOG_LEVEL: INFO
       PORT: 8080
       PYTHONUNBUFFERED: 1
+      STORAGE_ACCOUNT_NAME_DEFAULT: diprstorage # Add this non-secret default
+      FILE_SHARE_NAME: hf-cache 
+      MOUNT_PATH: /mnt/hf-cache 
 
+      # --- Secrets (Read from GitHub and lifted to 'env' context) ---
       AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
       DATABASE_NAME: ${{ secrets.DATABASE_NAME }}
       ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
@@ -34,8 +39,6 @@ jobs:
       IMAGE_NAME: ${{ secrets.IMAGE_NAME }}
       STORAGE_ACCOUNT_KEY: ${{ secrets.STORAGE_ACCOUNT_KEY }}
       STORAGE_ACCOUNT_NAME: ${{ secrets.STORAGE_ACCOUNT_NAME }}
-      FILE_SHARE_NAME: hf-cache 
-      MOUNT_PATH: /mnt/hf-cache 
 
     steps:
       - name: Checkout code
@@ -44,7 +47,7 @@ jobs:
       - name: Login to Azure
         uses: azure/login@v2
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          creds: ${{ env.AZURE_CREDENTIALS }} # Use env context for all variables
 
       - name: Log in to ACR
         run: az acr login --name ${{ env.ACR_NAME }}
@@ -53,7 +56,6 @@ jobs:
         run: |
           IMAGE=${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:latest
           echo "Building and pushing image: $IMAGE"
-          # Use env vars directly
           docker build --no-cache -t $IMAGE .
           docker push $IMAGE
           echo "IMAGE=$IMAGE" >> $GITHUB_ENV
@@ -66,18 +68,17 @@ jobs:
           echo "ACR_PASSWORD=$ACR_PASSWORD" >> $GITHUB_ENV
 
       - name: Redeploy container instance
+        shell: bash
         run: |
           CONTAINER_NAME="news-tts-container"
           IMAGE_TAG="${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:latest"
-
+          
           echo "Checking for existing container $CONTAINER_NAME..."
-          # The logic for deletion and polling is good, keeping it simple.
           EXISTS=$(az container show --name $CONTAINER_NAME --resource-group "${{ env.RESOURCE_GROUP }}" --query "name" -o tsv || true)
           if [ -n "$EXISTS" ]; then
             echo "Container exists. Deleting..."
             az container delete --name $CONTAINER_NAME --resource-group "${{ env.RESOURCE_GROUP }}" --yes
             
-            # Polling logic
             for i in {1..30}; do
               EXISTS=$(az container show --name $CONTAINER_NAME --resource-group "${{ env.RESOURCE_GROUP }}" --query "name" -o tsv || true)
               if [ -z "$EXISTS" ]; then
@@ -95,6 +96,11 @@ jobs:
           fi
 
           echo "Creating new Azure Container Instance with SMB mount..."
+          # The key fix is to use the structure \${VARIABLE:-} to safely pass secrets.
+          # We also ensure the ACI-specific HF_HOME is passed here.
+          # Note: We prioritize the secret STORAGE_ACCOUNT_NAME, falling back to the default.
+          SA_NAME="${{ env.STORAGE_ACCOUNT_NAME:-${{ env.STORAGE_ACCOUNT_NAME_DEFAULT }} }}"
+          
           az container create \
             --resource-group "${{ env.RESOURCE_GROUP }}" \
             --name $CONTAINER_NAME \
@@ -108,18 +114,14 @@ jobs:
             --registry-username "${{ env.ACR_USERNAME }}" \
             --registry-password "${{ env.ACR_PASSWORD }}" \
             --environment-variables \
-              # Pass ALL non-secret variables to the container
               PORT="${{ env.PORT }}" \
               PYTHONUNBUFFERED="${{ env.PYTHONUNBUFFERED }}" \
               TRUST_REMOTE_CODE="${{ env.TRUST_REMOTE_CODE }}" \
               TRANSLATION_PER_CALL_TIMEOUT="${{ env.TRANSLATION_PER_CALL_TIMEOUT }}" \
               TRANSLATION_PER_CALL_TIMEOUT_RETRY="${{ env.TRANSLATION_PER_CALL_TIMEOUT_RETRY }}" \
               LOG_LEVEL="${{ env.LOG_LEVEL }}" \
-              # --- FIX 2: Override HF_HOME to the Mount Path ---
-              # The container will now look for the model at /mnt/hf-cache
               HF_HOME="${{ env.MOUNT_PATH }}" \
               TRANSFORMERS_CACHE="${{ env.MOUNT_PATH }}" \
-              # Pass all required secrets
               ELEVENLABS_API_KEY="${{ env.ELEVENLABS_API_KEY }}" \
               ELEVENLABS_VOICE_ID="${{ env.ELEVENLABS_VOICE_ID }}" \
               MONGO_URI="${{ env.MONGO_URI }}" \
@@ -127,8 +129,7 @@ jobs:
               FIREBASE_SERVICE_ACCOUNT_BASE64="${{ env.FIREBASE_SERVICE_ACCOUNT_BASE64 }}" \
               FIREBASE_STORAGE_BUCKET="${{ env.FIREBASE_STORAGE_BUCKET }}" \
               CORS_ORIGIN="${{ env.CORS_ORIGIN }}" \
-            # File Share Configuration
-            --azure-file-volume-account-name ${{ env.STORAGE_ACCOUNT_NAME }} \
+            --azure-file-volume-account-name "$SA_NAME" \
             --azure-file-volume-account-key "${{ env.STORAGE_ACCOUNT_KEY }}" \
             --azure-file-volume-share-name ${{ env.FILE_SHARE_NAME }} \
             --azure-file-volume-mount-path ${{ env.MOUNT_PATH }} \
