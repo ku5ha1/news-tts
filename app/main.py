@@ -27,29 +27,55 @@ async def background_model_preload():
     
     try:
         log.info("Starting background model preloading...")
+        
+        # Check if HF_HOME is accessible
+        hf_home = os.getenv("HF_HOME", "/mnt/hf-cache")
+        if not os.path.exists(hf_home):
+            log.warning(f"HF_HOME directory {hf_home} does not exist, creating it...")
+            os.makedirs(hf_home, exist_ok=True)
+        
+        # Check if we can write to the cache directory
+        test_file = os.path.join(hf_home, "test_write.tmp")
+        try:
+            with open(test_file, "w") as f:
+                f.write("test")
+            os.remove(test_file)
+            log.info(f"HF_HOME {hf_home} is writable")
+        except Exception as e:
+            log.error(f"Cannot write to HF_HOME {hf_home}: {e}")
+            raise RuntimeError(f"HF_HOME directory {hf_home} is not writable: {e}")
+        
         from app.services.translation_service import translation_service
         
         # Test translation to ensure models work using translate_to_all_async
+        log.info("Testing translation service with sample text...")
         test_result = await translation_service.translate_to_all_async(
             title="Hello world",
             description="This is a test",
             source_lang="english"
         )
         
-        log.info(f"Background model preloading completed: 'Hello world' -> {test_result}")
+        log.info(f"Background model preloading completed successfully: 'Hello world' -> {test_result}")
         _is_ready = True
         _model_err = None
         
     except Exception as e:
-        log.exception(f"Background model preloading failed: {e}")
-        _model_err = str(e)
+        log.error(f"Background model preloading failed: {e}")
+        log.exception("Full traceback:")
+        _model_err = f"Model loading failed: {str(e)}"
         _is_ready = False
+        
+        # Don't let the app continue if models can't load
+        log.error("CRITICAL: Cannot load translation models. Application will not function properly.")
+        raise RuntimeError(f"Critical model loading failure: {e}")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     task = None  # ✅ define upfront to avoid unbound reference
     try:
         log.info("Starting services...")
+        log.info(f"Environment: HF_HOME={os.getenv('HF_HOME')}, TRANSFORMERS_CACHE={os.getenv('TRANSFORMERS_CACHE')}")
+        log.info(f"Offline mode: HF_HUB_OFFLINE={os.getenv('HF_HUB_OFFLINE')}")
 
         # Start background model preloading (non-blocking)
         task = asyncio.create_task(background_model_preload())
@@ -63,6 +89,8 @@ async def lifespan(app: FastAPI):
         global _model_err, _is_ready
         _model_err = str(e)
         _is_ready = False
+        # Don't start the app if critical services fail
+        raise RuntimeError(f"Critical service initialization failed: {e}")
 
     yield  # lifespan yields to FastAPI's runtime
 
@@ -113,14 +141,37 @@ async def health():
     if _model_err:
         status = "error"
     
+    # Additional diagnostics
+    hf_home = os.getenv("HF_HOME", "/mnt/hf-cache")
+    hf_home_exists = os.path.exists(hf_home)
+    hf_home_writable = False
+    
+    if hf_home_exists:
+        try:
+            test_file = os.path.join(hf_home, "health_check.tmp")
+            with open(test_file, "w") as f:
+                f.write("health_check")
+            os.remove(test_file)
+            hf_home_writable = True
+        except Exception:
+            hf_home_writable = False
+    
     return {
         "status": status, 
         "service": "news-tts", 
         "version": "2.0.0",
-        "translation": "1B",
+        "translation": "IndicTrans2 200M",
         "tts": "ElevenLabs API",
         "ready": _is_ready,
-        "error": _model_err
+        "error": _model_err,
+        "diagnostics": {
+            "hf_home": hf_home,
+            "hf_home_exists": hf_home_exists,
+            "hf_home_writable": hf_home_writable,
+            "hf_hub_offline": os.getenv("HF_HUB_OFFLINE", "not_set"),
+            "trust_remote_code": os.getenv("TRUST_REMOTE_CODE", "not_set"),
+            "transformers_cache": os.getenv("TRANSFORMERS_CACHE", "not_set")
+        }
     }
 
 @app.get("/")

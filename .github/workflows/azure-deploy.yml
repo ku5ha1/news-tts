@@ -11,9 +11,9 @@ jobs:
 
     env:
       # --- Non-Secret Defaults ---
-      HF_HOME: /app/hf-cache
-      HF_HUB_CACHE: /app/hf-cache/hub
-      TRANSFORMERS_CACHE: /app/hf-cache/transformers
+      HF_HOME: /mnt/hf-cache
+      HF_HUB_CACHE: /mnt/hf-cache/hub
+      TRANSFORMERS_CACHE: /mnt/hf-cache/transformers
       HF_HUB_OFFLINE: 0
       TRUST_REMOTE_CODE: 1
       TRANSLATION_PER_CALL_TIMEOUT: 90
@@ -127,6 +127,8 @@ jobs:
               LOG_LEVEL="${{ env.LOG_LEVEL }}" \
               HF_HOME="${{ env.MOUNT_PATH }}" \
               TRANSFORMERS_CACHE="${{ env.MOUNT_PATH }}" \
+              HF_HUB_OFFLINE="${{ env.HF_HUB_OFFLINE }}" \
+              TRUST_REMOTE_CODE="${{ env.TRUST_REMOTE_CODE }}" \
               ELEVENLABS_API_KEY="${{ env.ELEVENLABS_API_KEY }}" \
               ELEVENLABS_VOICE_ID="${{ env.ELEVENLABS_VOICE_ID }}" \
               MONGO_URI="${{ env.MONGO_URI }}" \

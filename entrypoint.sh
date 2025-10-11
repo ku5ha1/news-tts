@@ -8,6 +8,10 @@ LOG_LEVEL="${LOG_LEVEL:-INFO}"
 echo "Starting container as user: $(whoami)"
 echo "LOG_LEVEL is set to: $LOG_LEVEL"
 echo "HF_HOME is set to: $HF_HOME"
+echo "Environment validation:"
+echo "  HF_HUB_OFFLINE: ${HF_HUB_OFFLINE:-not_set}"
+echo "  TRUST_REMOTE_CODE: ${TRUST_REMOTE_CODE:-not_set}"
+echo "  TRANSFORMERS_CACHE: ${TRANSFORMERS_CACHE:-not_set}"
 
 if [ "$(id -u)" -eq 0 ]; then
     echo "Running as root. Granting $APP_USER access to mounted volume $HF_HOME."
@@ -30,11 +34,19 @@ if [ "$(id -u)" -eq 0 ]; then
     chown -R "$APP_USER":"$APP_USER" "$HF_HOME"
     echo "Ownership of $HF_HOME set to $APP_USER."
 
+    # Verify the mount is writable
+    if ! su "$APP_USER" -c "touch $HF_HOME/test_write.tmp && rm $HF_HOME/test_write.tmp"; then
+        echo "ERROR: Cannot write to mounted volume $HF_HOME!"
+        exit 1
+    fi
+    echo "Mount $HF_HOME is writable."
+
     # Verify app user can access the app directory
     if ! su "$APP_USER" -c "test -r /app/app/main.py"; then
         echo "ERROR: App user cannot access application files!"
         exit 1
     fi
+    echo "Application files are accessible."
 
     echo "Switching to user $APP_USER and starting uvicorn..."
     exec su "$APP_USER" -c "cd /app && uvicorn app.main:app --host 0.0.0.0 --port 8080 --log-level $LOG_LEVEL"

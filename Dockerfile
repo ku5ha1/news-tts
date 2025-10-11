@@ -55,7 +55,9 @@ ENV PORT=8080 \
     LOG_LEVEL=INFO \
     # Point HF_HOME to the mounted volume path expected by ACI
     HF_HOME=/mnt/hf-cache \
-    TRANSFORMERS_CACHE=/mnt/hf-cache
+    TRANSFORMERS_CACHE=/mnt/hf-cache \
+    HF_HUB_OFFLINE=0 \
+    TRUST_REMOTE_CODE=1
 
 EXPOSE ${PORT}
 ENTRYPOINT ["./entrypoint.sh"]
