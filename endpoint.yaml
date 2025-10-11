@@ -1,0 +1,4 @@
+$schema: https://azuremlschemas.azureedge.net/latest/managedOnlineEndpoint.schema.json
+name: news-tts-endpoint
+auth_mode: key
+description: "News TTS API with IndicTrans2 1B models"

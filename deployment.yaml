@@ -1,0 +1,30 @@
+$schema: https://azuremlschemas.azureedge.net/latest/managedOnlineDeployment.schema.json
+name: news-tts-v1
+endpoint_name: news-tts-endpoint
+model: null
+environment:
+  dockerfile_path: Dockerfile
+  build_context: .
+resources:
+  cpu: 2
+  memory: 14Gi
+scaling:
+  min_instances: 1
+  max_instances: 3
+  target_utilization_percent: 70
+liveness_probe:
+  failure_threshold: 30
+  period_seconds: 10
+  timeout_seconds: 2
+  success_threshold: 1
+  initial_delay_seconds: 30
+  path: /health
+  port: 8080
+readiness_probe:
+  failure_threshold: 10
+  period_seconds: 5
+  timeout_seconds: 2
+  success_threshold: 1
+  initial_delay_seconds: 10
+  path: /health
+  port: 8080
