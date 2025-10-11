@@ -29,10 +29,6 @@ async def background_model_preload():
         log.info("Starting background model preloading...")
         from app.services.translation_service import translation_service
         
-        # Preload models in background
-        await asyncio.to_thread(translation_service._ensure_en_indic_model)
-        await asyncio.to_thread(translation_service._ensure_indic_en_model)
-        
         # Test translation to ensure models work
         test_result = await asyncio.to_thread(
             translation_service.translate, 
