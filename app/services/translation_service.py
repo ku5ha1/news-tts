@@ -163,7 +163,7 @@ class TranslationService:
                 with torch.no_grad():
                     generated_tokens = self.en_indic_model.generate(
                         **inputs,
-                        use_cache=True,  # Re-enable cache for performance
+                        use_cache=False,  # FIX: Disable cache to avoid past_key_values bug
                         min_length=0,
                         max_length=256,
                         num_beams=5,
@@ -225,7 +225,7 @@ class TranslationService:
                 with torch.no_grad():
                     generated_tokens = self.indic_en_model.generate(
                         **inputs,
-                        use_cache=True,  # Re-enable cache for performance
+                        use_cache=False,  # FIX: Disable cache to avoid past_key_values bug
                         min_length=0,
                         max_length=256,
                         num_beams=5,
