@@ -132,6 +132,10 @@ class TranslationService:
             if self.en_indic_model is None or self.en_indic_tokenizer is None:
                 raise RuntimeError("EN->Indic model not loaded")
 
+            # Clear any cached states
+            if hasattr(self.en_indic_model, 'past_key_values'):
+                self.en_indic_model.past_key_values = None
+            
             # Preprocess text
             batch = self.ip.preprocess_batch(
                 [text], 
@@ -148,8 +152,12 @@ class TranslationService:
                     return_attention_mask=True,
             ).to(self.device)
 
-            # Generate translation
+            # Generate translation with fresh state
             with torch.no_grad():
+                # Clear CUDA cache if using GPU
+                if self.device.type == 'cuda':
+                    torch.cuda.empty_cache()
+                
                 generated_tokens = self.en_indic_model.generate(
                     **inputs,
                     use_cache=False,  # Disable cache to avoid past_key_values issue
@@ -159,6 +167,8 @@ class TranslationService:
                     num_return_sequences=1,
                     do_sample=False,  # Use deterministic generation
                     pad_token_id=self.en_indic_tokenizer.pad_token_id,
+                    temperature=1.0,  # Ensure deterministic output
+                    top_p=1.0,
                 )
 
             # Decode tokens
@@ -193,6 +203,10 @@ class TranslationService:
             if self.indic_en_model is None or self.indic_en_tokenizer is None:
                 raise RuntimeError("Indic->EN model not loaded")
 
+            # Clear any cached states
+            if hasattr(self.indic_en_model, 'past_key_values'):
+                self.indic_en_model.past_key_values = None
+
             # Preprocess text
             batch = self.ip.preprocess_batch(
                 [text], 
@@ -209,8 +223,12 @@ class TranslationService:
                 return_attention_mask=True,
             ).to(self.device)
 
-            # Generate translation
+            # Generate translation with fresh state
             with torch.no_grad():
+                # Clear CUDA cache if using GPU
+                if self.device.type == 'cuda':
+                    torch.cuda.empty_cache()
+                
                 generated_tokens = self.indic_en_model.generate(
                         **inputs,
                     use_cache=False,  # Disable cache to avoid past_key_values issue
@@ -220,6 +238,8 @@ class TranslationService:
                         num_return_sequences=1,
                     do_sample=False,  # Use deterministic generation
                     pad_token_id=self.indic_en_tokenizer.pad_token_id,
+                    temperature=1.0,  # Ensure deterministic output
+                    top_p=1.0,
                 )
 
             # Decode tokens
