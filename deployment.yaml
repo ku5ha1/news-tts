@@ -1,6 +1,6 @@
 $schema: https://azuremlschemas.azureedge.net/latest/managedOnlineDeployment.schema.json
 name: news-tts-v1
-endpoint_name: news-tts-endpoint
+endpoint_name: news-tts-endpoint-v2
 model: null
 environment:
   dockerfile_path: Dockerfile
