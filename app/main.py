@@ -21,51 +21,57 @@ log = logging.getLogger("news-tts-service")
 _is_ready = False
 _model_err: str | None = None
 
-async def preload_models() -> None:
+async def background_model_preload():
+    """Background task to preload translation models without blocking startup."""
     global _is_ready, _model_err
+    
     try:
-        t0 = perf_counter()
-        log.info("🔁 Skipping model preload - IndicTrans2 handles model loading natively...")
+        log.info("Starting background model preloading...")
+        from app.services.translation_service import translation_service
         
-        # Ensure cache directory exists
-        cache_dir = os.getenv("HF_HUB_CACHE", "/app/.cache/huggingface/hub")
-        Path(cache_dir).mkdir(parents=True, exist_ok=True)
-
-        dt = perf_counter() - t0
+        # Preload models in background
+        await asyncio.to_thread(translation_service._ensure_en_indic_model)
+        await asyncio.to_thread(translation_service._ensure_indic_en_model)
+        
+        # Test translation to ensure models work
+        test_result = await asyncio.to_thread(
+            translation_service.translate, 
+            "Hello world", 
+            "english", 
+            "hindi"
+        )
+        
+        log.info(f"Background model preloading completed: 'Hello world' -> '{test_result}'")
         _is_ready = True
-        log.info(f"IndicTrans2 setup ready in {dt:.2f}s")
-        log.info("Models will be loaded on-demand by IndicTrans2")
-        log.info("TTS will use ElevenLabs API - no local model preloading needed")
+        _model_err = None
         
     except Exception as e:
-        _model_err = repr(e)
+        log.exception(f"Background model preloading failed: {e}")
+        _model_err = str(e)
         _is_ready = False
-        log.exception("IndicTrans2 setup failed")
-        
-        # Add specific guidance for IndicTrans2 errors
-        if "IndicTrans2" in str(e) or "Model" in str(e):
-            log.error("CRITICAL: IndicTrans2 setup issue detected!")
-            log.error("This error suggests IndicTrans2 failed to initialize properly.")
-            log.error("Please check IndicTrans2 installation and repository clone.")
-            log.error("Or run the diagnostic script: python app/scripts/fix_indictrans.py")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
-        log.info("Starting service warmup...")
-        from app.services.translation_service import translation_service
-    
-        await asyncio.to_thread(translation_service.warmup)
-        log.info("Translation service warmup completed successfully")
+        log.info("Starting services...")
+        
+        # Start background model preloading (non-blocking)
+        task = asyncio.create_task(background_model_preload())
+        # Don't await - let it run in background
+        
         log.info("ElevenLabs TTS service ready - no warmup needed")
-        global _is_ready
-        _is_ready = True
+        # Note: _is_ready remains False until models are loaded
     except Exception as e:
-        log.exception(f"Warmup failed: {e}")
+        log.exception(f"Service initialization failed: {e}")
         global _model_err
         _model_err = str(e)
         _is_ready = False
     yield
+    # Optional: await task here to ensure cleanup
+    try:
+        await task
+    except Exception as e:
+        log.exception(f"Background model preloading task failed: {e}")
     
 
 def _parse_cors(origins_env: str | None) -> list[str]:
@@ -98,21 +104,6 @@ app.add_middleware(
 
 app.include_router(news.router, prefix="/api", tags=["news"])
 
-@app.middleware("http")
-async def readiness_gate(request, call_next):
-    path = request.url.path
-    # Gate translation-heavy endpoints until warmup completes
-    if path in ("/api/create", "/api/translate") and not _is_ready:
-        return JSONResponse(
-            status_code=503,
-            content={
-                "detail": "Service warming up, please retry shortly",
-                "ready": _is_ready,
-                "error": _model_err,
-            },
-        )
-    return await call_next(request)
-
 @app.get("/health")
 async def health():
     
@@ -124,18 +115,6 @@ async def health():
         "tts": "ElevenLabs API"
     }
 
-@app.get("/ready")
-async def ready():
-    
-    return {
-        "ready": _is_ready,
-        "error": _model_err,
-        "service": "news-tts",
-        "version": "2.0.0",
-        "translation_models": "dist-200M loaded" if _is_ready else "loading...",
-        "tts_service": "ElevenLabs API ready"
-    }
-
 @app.get("/")
 async def root():
     return {
@@ -143,8 +122,7 @@ async def root():
         "translation": "IndicTrans2 dist-200M",
         "tts": "ElevenLabs API",
         "docs": "/docs", 
-        "health": "/health", 
-        "ready": "/ready"
+        "health": "/health"
     }
 
 if __name__ == "__main__":
