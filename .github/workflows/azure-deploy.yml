@@ -47,14 +47,17 @@ jobs:
           az extension add -n ml
           az extension update -n ml
 
-      - name: Create or Update Azure ML Endpoint
+      - name: Delete corrupted endpoint if exists
         run: |
-          az ml online-endpoint create \
+          az ml online-endpoint delete \
             --name "$ML_ENDPOINT_NAME" \
             --resource-group "$RESOURCE_GROUP" \
             --workspace-name "$ML_WORKSPACE_NAME" \
-            --file endpoint.yaml || \
-          az ml online-endpoint update \
+            --yes || true
+
+      - name: Create Azure ML Endpoint
+        run: |
+          az ml online-endpoint create \
             --name "$ML_ENDPOINT_NAME" \
             --resource-group "$RESOURCE_GROUP" \
             --workspace-name "$ML_WORKSPACE_NAME" \
