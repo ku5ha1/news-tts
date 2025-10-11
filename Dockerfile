@@ -14,12 +14,8 @@ RUN apt-get update && \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 3. Clone and install IndicTransToolkit
-RUN git clone https://github.com/VarunGumma/IndicTransToolkit.git /app/IndicTransToolkit
-WORKDIR /app/IndicTransToolkit
-RUN pip install --editable ./
-WORKDIR /app
-ENV PYTHONPATH="/app/IndicTransToolkit:${PYTHONPATH}"
+# 3. Install IndicTransToolkit from PyPI (no compilation needed)
+RUN pip install IndicTransToolkit
 
 # REMOVED: Pre-downloading model here, as the model must be loaded from the mounted volume /mnt/hf-cache.
 
@@ -44,19 +40,14 @@ COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/pytho
 COPY --from=builder /usr/local/bin /usr/local/bin
 COPY --from=builder /app /app
 
-# 4. Ensure IndicTransToolkit is properly installed in production stage
-WORKDIR /app/IndicTransToolkit
-RUN pip install --editable ./ --no-deps
-WORKDIR /app
-
-# 5. Set correct ownership for the 'app' user
+# 4. Set correct ownership for the 'app' user
 RUN chown -R app:app /app
 
-# 6. Copy and set executable permissions for the entrypoint script
+# 5. Copy and set executable permissions for the entrypoint script
 COPY entrypoint.sh .
 RUN chmod +x entrypoint.sh
 
-# 7. Final setup: Set user to root TEMPORARILY so the entrypoint can run chown
+# 6. Final setup: Set user to root TEMPORARILY so the entrypoint can run chown
 # The entrypoint will switch to the non-root user 'app' after fixing permissions.
 USER root 
 ENV PORT=8080 \
@@ -64,8 +55,7 @@ ENV PORT=8080 \
     LOG_LEVEL=INFO \
     # Point HF_HOME to the mounted volume path expected by ACI
     HF_HOME=/mnt/hf-cache \
-    TRANSFORMERS_CACHE=/mnt/hf-cache \
-    PYTHONPATH="/app/IndicTransToolkit:${PYTHONPATH}"
+    TRANSFORMERS_CACHE=/mnt/hf-cache
 
 EXPOSE ${PORT}
 ENTRYPOINT ["./entrypoint.sh"]

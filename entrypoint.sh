@@ -37,7 +37,7 @@ if [ "$(id -u)" -eq 0 ]; then
     fi
 
     echo "Switching to user $APP_USER and starting uvicorn..."
-    exec su "$APP_USER" -c "cd /app && PYTHONPATH=/app/IndicTransToolkit:\$PYTHONPATH uvicorn app.main:app --host 0.0.0.0 --port 8080 --log-level $LOG_LEVEL"
+    exec su "$APP_USER" -c "cd /app && uvicorn app.main:app --host 0.0.0.0 --port 8080 --log-level $LOG_LEVEL"
 
 fi
 
