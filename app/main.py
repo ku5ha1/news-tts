@@ -85,7 +85,7 @@ async def lifespan(app: FastAPI):
         # Skip background model preloading for faster startup
         # Models will be downloaded on first use
         log.info("Skipping background model preload - models will download on first use")
-        global _is_ready
+        global _is_ready, _model_err
         _is_ready = True  # Mark as ready immediately
 
         log.info("ElevenLabs TTS service ready - no warmup needed")
@@ -93,7 +93,6 @@ async def lifespan(app: FastAPI):
 
     except Exception as e:
         log.exception(f"Service initialization failed: {e}")
-        global _model_err, _is_ready
         _model_err = str(e)
         _is_ready = False
         # Log the error but don't crash - let the app start and show error in health check
