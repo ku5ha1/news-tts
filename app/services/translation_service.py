@@ -111,14 +111,13 @@ class TranslationService:
                 return_attention_mask=True,
             ).to(self.device)
 
-            # Generate as per official snippet
+            # Generate with safe parameters to avoid KV cache issues
             with torch.no_grad():
                 generated_tokens = self.en_indic_model.generate(
                     **inputs,
-                    use_cache=True,
-                    min_length=0,
+                    use_cache=False,  # Disable cache to avoid KV cache issues
                     max_length=256,
-                    num_beams=5,
+                    num_beams=1,      # Single beam to avoid beam search conflicts
                     num_return_sequences=1,
                 )
 
@@ -162,7 +161,6 @@ class TranslationService:
                 generated_tokens = self.indic_en_model.generate(
                     **inputs,
                     use_cache=False,
-                    min_length=0,
                     max_length=256,
                     num_beams=1,
                     num_return_sequences=1,
