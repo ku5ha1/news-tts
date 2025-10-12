@@ -73,7 +73,7 @@ jobs:
               --resource-group ${{ env.RESOURCE_GROUP }} \
               --plan ${{ env.RESOURCE_GROUP }}-plan \
               --name ${{ env.AZURE_WEBAPP_NAME }} \
-              --deployment-container-image-name ${{ env.REGISTRY_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}
+              --deployment-container-image-name ${{ env.REGISTRY_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:latest
           else
             echo "App Service already exists"
           fi
@@ -83,12 +83,21 @@ jobs:
       with:
         app-name: ${{ env.AZURE_WEBAPP_NAME }}
         resource-group: ${{ env.RESOURCE_GROUP }}
-        images: ${{ env.REGISTRY_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}
+        images: ${{ env.REGISTRY_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:latest
 
     - name: Configure App Service Settings
       uses: azure/CLI@v1
       with:
         inlineScript: |
+          # Configure ACR authentication
+          az webapp config container set \
+            --name ${{ env.AZURE_WEBAPP_NAME }} \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --docker-custom-image-name ${{ env.REGISTRY_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:latest \
+            --docker-registry-server-url https://${{ env.REGISTRY_NAME }}.azurecr.io \
+            --docker-registry-server-user ${{ secrets.ACR_USERNAME }} \
+            --docker-registry-server-password ${{ secrets.ACR_PASSWORD }}
+          
           # Set environment variables
           az webapp config appsettings set \
             --name ${{ env.AZURE_WEBAPP_NAME }} \
