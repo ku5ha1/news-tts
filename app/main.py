@@ -77,9 +77,11 @@ async def lifespan(app: FastAPI):
         log.info(f"Environment: HF_HOME={os.getenv('HF_HOME')}, TRANSFORMERS_CACHE={os.getenv('TRANSFORMERS_CACHE')}")
         log.info(f"Offline mode: HF_HUB_OFFLINE={os.getenv('HF_HUB_OFFLINE')}")
 
-        # Start background model preloading (non-blocking)
-        task = asyncio.create_task(background_model_preload())
-        log.info("Background model preload started")
+        # Skip background model preloading for faster startup
+        # Models will be downloaded on first use
+        log.info("Skipping background model preload - models will download on first use")
+        global _is_ready
+        _is_ready = True  # Mark as ready immediately
 
         log.info("ElevenLabs TTS service ready - no warmup needed")
         # _is_ready remains False until models are loaded
