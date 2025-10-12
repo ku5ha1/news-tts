@@ -1,9 +1,11 @@
 #!/bin/bash
-set -ex 
+set -ex
 
 APP_USER="app"
-HF_HOME="/app/hf-cache"  # Use runtime model download
-LOG_LEVEL="${LOG_LEVEL:-INFO}"
+HF_HOME="/app/hf-cache"
+
+# Use runtime model download
+LOG_LEVEL="${LOG_LEVEL:-info}"  # Default to lowercase 'info'
 
 echo "Starting container as user: $(whoami)"
 echo "LOG_LEVEL is set to: $LOG_LEVEL"
@@ -23,7 +25,7 @@ if [ "$(id -u)" -eq 0 ]; then
     fi
 
     echo "Models directory ready: $HF_HOME"
-    
+
     # Set ownership of the models directory
     chown -R "$APP_USER":"$APP_USER" "$HF_HOME" || {
         echo "WARNING: Could not set ownership of $HF_HOME - continuing anyway"
