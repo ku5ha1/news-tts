@@ -57,7 +57,7 @@ jobs:
           ${{ env.REGISTRY_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}
           ${{ env.REGISTRY_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:latest
         cache-from: type=gha
-        cache-to: type=gha,mode=max
+        cache-to: type=gha
 
     - name: Deploy to Azure App Service
       uses: azure/webapps-deploy@v2
