@@ -8,9 +8,9 @@ on:
 env:
   # Azure Configuration
   AZURE_WEBAPP_NAME: news-tts-app
-  RESOURCE_GROUP: ${{ vars.RESOURCE_GROUP }}
-  REGISTRY_NAME: ${{ vars.ACR_NAME }}
-  IMAGE_NAME: ${{ vars.IMAGE_NAME }}
+  RESOURCE_GROUP: ${{ secrets.RESOURCE_GROUP }}
+  REGISTRY_NAME: ${{ secrets.ACR_NAME }}
+  IMAGE_NAME: ${{ secrets.IMAGE_NAME }}
   
   # App Service Configuration
   WEBSITES_MOUNT_ENABLED: 0
