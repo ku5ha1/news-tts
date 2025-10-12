@@ -16,11 +16,8 @@ except ImportError:
     logger.error("Failed to import IndicProcessor from IndicTransToolkit.processor")
     IndicProcessor = None
 
-# Model names for 1B (CORRECT MODELS)
-MODEL_NAMES = {
-    "en_indic": "ai4bharat/indictrans2-en-indic-dist-200M",
-    "indic_en": "ai4bharat/indictrans2-indic-en-dist-200M",
-}
+# Model name - use 200M model for faster loading
+MODEL_NAME = "ai4bharat/indictrans2-en-indic-dist-200M"
 
 class TranslationService:
     _instance = None
@@ -43,6 +40,8 @@ class TranslationService:
 
             # Initialize IndicTransToolkit components with graceful degradation
             self.ip = None
+            self.tokenizer = None
+            self.model = None
             self._initialization_error = None
             
             try:
@@ -53,6 +52,13 @@ class TranslationService:
                 else:
                     logger.info("Initializing IndicTransToolkit components...")
                     self.ip = IndicProcessor(inference=True)
+                    
+                    # Load model and tokenizer at startup (like the sample)
+                    logger.info(f"Loading model: {MODEL_NAME}")
+                    self.tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, trust_remote_code=True)
+                    self.model = AutoModelForSeq2SeqLM.from_pretrained(MODEL_NAME, trust_remote_code=True)
+                    logger.info("Model and tokenizer loaded successfully")
+                    
                     logger.info("IndicTransToolkit components initialized successfully")
             except Exception as e:
                 logger.error(f"Failed to initialize IndicTransToolkit components: {e}")
@@ -318,11 +324,11 @@ class TranslationService:
             raise
 
     def translate(self, text: str, source_lang: str, target_lang: str) -> str:
-        """Single translation method."""
+        """Single translation method using simplified approach."""
         try:
-            # Check if IndicTransToolkit is available
-            if self.ip is None:
-                logger.warning("IndicTransToolkit not available - returning original text")
+            # Check if models are loaded
+            if self.ip is None or self.model is None or self.tokenizer is None:
+                logger.warning("Models not loaded - returning original text")
                 return text
             
             source_lang = self._normalize_lang_code(source_lang)
@@ -331,19 +337,52 @@ class TranslationService:
             if source_lang == target_lang:
                 return text
             
-            if source_lang == "english":
-                results = self._translate_en_to_indic_batch([text], [target_lang])
-                return results[target_lang]
-            elif target_lang == "english":
-                return self._translate_indic_to_en(text, source_lang)
+            # Use simple translation approach like the sample
+            if source_lang == "english" and target_lang != "english":
+                return self._simple_translate(text, source_lang, target_lang)
             else:
-                # Translate through English
-                english_text = self._translate_indic_to_en(text, source_lang)
-                results = self._translate_en_to_indic_batch([english_text], [target_lang])
-                return results[target_lang]
+                logger.warning(f"Translation from {source_lang} to {target_lang} not supported in simple mode")
+                return text
+                
         except Exception as e:
-            logger.error(f"Translation failed {source_lang}->{target_lang}: {e}")
+            logger.error(f"Translation error: {e}")
             raise
+    
+    def _simple_translate(self, text: str, src_lang: str, tgt_lang: str) -> str:
+        """Simple translation using the sample's approach."""
+        try:
+            # 1) Preprocess
+            batch = self.ip.preprocess_batch([text], src_lang=src_lang, tgt_lang=tgt_lang)
+            
+            # 2) Tokenize
+            inputs = self.tokenizer(
+                batch,
+                truncation=True,
+                padding="longest",
+                return_tensors="pt",
+                return_attention_mask=True,
+            )
+            
+            # 3) Generate
+            with torch.no_grad():
+                generated = self.model.generate(
+                    **inputs,
+                    use_cache=True,
+                    min_length=0,
+                    max_length=256,
+                    num_beams=5,
+                    num_return_sequences=1,
+                )
+            
+            # 4) Decode + postprocess
+            decoded = self.tokenizer.batch_decode(generated, skip_special_tokens=True, clean_up_tokenization_spaces=True)
+            result = self.ip.postprocess_batch(decoded, lang=tgt_lang)
+            
+            return result[0] if result else text
+            
+        except Exception as e:
+            logger.error(f"Simple translation error: {e}")
+            return text
 
     async def translate_to_all_async(self, title: str, description: str, source_lang: str) -> dict:
         """BATCH translate to multiple languages efficiently."""
