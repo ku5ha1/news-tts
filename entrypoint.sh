@@ -2,36 +2,39 @@
 set -ex 
 
 APP_USER="app"
-HF_HOME="/app/hf-cache"  # Use baked-in models
+HF_HOME="/mnt/models"  # Use mounted models for App Service
 LOG_LEVEL="${LOG_LEVEL:-INFO}"
 
 echo "Starting container as user: $(whoami)"
 echo "LOG_LEVEL is set to: $LOG_LEVEL"
-echo "HF_HOME is set to: $HF_HOME (baked-in models)"
+echo "HF_HOME is set to: $HF_HOME (mounted models)"
 echo "Environment validation:"
 echo "  HF_HUB_OFFLINE: ${HF_HUB_OFFLINE:-not_set}"
 echo "  TRUST_REMOTE_CODE: ${TRUST_REMOTE_CODE:-not_set}"
 echo "  TRANSFORMERS_CACHE: ${TRANSFORMERS_CACHE:-not_set}"
 
 if [ "$(id -u)" -eq 0 ]; then
-    echo "Running as root. Setting up baked-in models directory."
+    echo "Running as root. Setting up mounted models directory."
 
-    # Verify baked-in models directory exists and is accessible
+    # Verify mounted models directory exists and is accessible
     if [ ! -d "$HF_HOME" ]; then
-        echo "ERROR: Baked-in models directory $HF_HOME does not exist!"
-        exit 1
+        echo "WARNING: Mounted models directory $HF_HOME does not exist - creating it..."
+        mkdir -p "$HF_HOME"
     fi
 
-    echo "Baked-in models directory found: $HF_HOME"
+    echo "Mounted models directory: $HF_HOME"
     
-    # Skip ownership change for now - models are already accessible
-    echo "Skipping ownership change - models should be accessible"
-    
-    # Quick check if models directory is readable
-    if [ -r "$HF_HOME" ]; then
-        echo "Models directory is readable"
+    # Set ownership of the models directory
+    chown -R "$APP_USER":"$APP_USER" "$HF_HOME" || {
+        echo "WARNING: Could not set ownership of $HF_HOME - continuing anyway"
+    }
+    echo "Ownership of $HF_HOME set to $APP_USER."
+
+    # Verify app user can access the models
+    if ! su "$APP_USER" -c "test -r $HF_HOME"; then
+        echo "WARNING: App user cannot access models directory $HF_HOME - continuing anyway"
     else
-        echo "WARNING: Models directory may not be readable"
+        echo "Models directory is accessible."
     fi
 
     # Verify app user can access the app directory

@@ -29,7 +29,7 @@ async def background_model_preload():
         log.info("Starting background model preloading...")
         
         # Check if HF_HOME is accessible (graceful degradation)
-        hf_home = os.getenv("HF_HOME", "/app/hf-cache")
+        hf_home = os.getenv("HF_HOME", "/mnt/models")
         if not os.path.exists(hf_home):
             log.warning(f"HF_HOME directory {hf_home} does not exist - models may not be available")
             # Don't fail - allow app to start and show error in health check
@@ -142,7 +142,7 @@ async def health():
         status = "error"
     
     # Additional diagnostics
-    hf_home = os.getenv("HF_HOME", "/app/hf-cache")  # Fixed default
+    hf_home = os.getenv("HF_HOME", "/mnt/models")  # Fixed default
     hf_home_exists = os.path.exists(hf_home)
     hf_home_writable = False
     

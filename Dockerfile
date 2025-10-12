@@ -17,19 +17,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # 3. Install IndicTransToolkit from PyPI (no compilation needed)
 RUN pip install IndicTransToolkit
 
-# 4. Pre-download models to bake them into the image
-ENV HF_HOME=/app/hf-cache
-RUN mkdir -p /app/hf-cache && \
-    python -c "\
-from transformers import AutoTokenizer, AutoModelForSeq2SeqLM; \
-import os; \
-print('Downloading EN->Indic model...'); \
-AutoTokenizer.from_pretrained('ai4bharat/indictrans2-en-indic-dist-200M', trust_remote_code=True); \
-AutoModelForSeq2SeqLM.from_pretrained('ai4bharat/indictrans2-en-indic-dist-200M', trust_remote_code=True); \
-print('Downloading Indic->EN model...'); \
-AutoTokenizer.from_pretrained('ai4bharat/indictrans2-indic-en-dist-200M', trust_remote_code=True); \
-AutoModelForSeq2SeqLM.from_pretrained('ai4bharat/indictrans2-indic-en-dist-200M', trust_remote_code=True); \
-print('Models downloaded successfully!')"
+# 4. Create models directory for mounted storage
+RUN mkdir -p /mnt/models && \
+    echo "Models directory created for App Service mounting"
 
 
 # =========================
@@ -47,7 +37,7 @@ RUN apt-get update && \
 # The user is consistently named 'app'
 RUN groupadd -r app && useradd -r -g app -d /app -s /bin/bash app
 
-# 3. Copy files from the builder stage (including pre-downloaded models)
+# 3. Copy files from the builder stage
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 COPY --from=builder /app /app
@@ -65,10 +55,10 @@ USER root
 ENV PORT=8080 \
     PYTHONUNBUFFERED=1 \
     LOG_LEVEL=INFO \
-    # Use baked-in models from /app/hf-cache
-    HF_HOME=/app/hf-cache \
-    TRANSFORMERS_CACHE=/app/hf-cache \
-    HF_HUB_OFFLINE=1 \
+    # Use mounted models for App Service
+    HF_HOME=/mnt/models \
+    TRANSFORMERS_CACHE=/mnt/models \
+    HF_HUB_OFFLINE=0 \
     TRUST_REMOTE_CODE=1
 
 EXPOSE ${PORT}

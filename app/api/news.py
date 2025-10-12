@@ -20,9 +20,52 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # Initialize services that are safe to import at module level
-tts_service = TTSService()
-firebase_service = FirebaseService()
-db_service = DBService()
+# Use lazy initialization to avoid module-level failures
+tts_service = None
+firebase_service = None
+db_service = None
+
+def get_tts_service():
+    """Lazy import of TTS service to avoid module-level failures."""
+    global tts_service
+    if tts_service is None:
+        try:
+            tts_service = TTSService()
+        except Exception as e:
+            logger.error(f"Failed to initialize TTS service: {e}")
+            raise HTTPException(
+                status_code=503, 
+                detail=f"TTS service unavailable: {str(e)}"
+            )
+    return tts_service
+
+def get_firebase_service():
+    """Lazy import of Firebase service to avoid module-level failures."""
+    global firebase_service
+    if firebase_service is None:
+        try:
+            firebase_service = FirebaseService()
+        except Exception as e:
+            logger.error(f"Failed to initialize Firebase service: {e}")
+            raise HTTPException(
+                status_code=503, 
+                detail=f"Firebase service unavailable: {str(e)}"
+            )
+    return firebase_service
+
+def get_db_service():
+    """Lazy import of DB service to avoid module-level failures."""
+    global db_service
+    if db_service is None:
+        try:
+            db_service = DBService()
+        except Exception as e:
+            logger.error(f"Failed to initialize DB service: {e}")
+            raise HTTPException(
+                status_code=503, 
+                detail=f"Database service unavailable: {str(e)}"
+            )
+    return db_service
 
 def get_translation_service():
     """Lazy import of translation service to avoid module-level failures."""
@@ -68,7 +111,7 @@ async def _generate_and_attach_audio(document_id: ObjectId, payload: NewsCreateR
     """Background job: generate TTS sequentially, upload to Firebase, update Mongo doc."""
     try:
         # Verify document exists
-        existing_doc = await db_service.get_news_by_id(document_id)
+        existing_doc = await get_db_service().get_news_by_id(document_id)
         if not existing_doc:
             logger.warning(f"[BG-TTS] Document not found, skipping TTS generation doc={document_id}")
             return
@@ -91,8 +134,8 @@ async def _generate_and_attach_audio(document_id: ObjectId, payload: NewsCreateR
                 logger.info(f"[BG-TTS] Generating audio for {lang} (doc={document_id})")
 
                 # Run blocking TTS & Firebase calls in separate threads
-                audio_file = await asyncio.to_thread(tts_service.generate_audio, text, lang)
-                audio_url = await asyncio.to_thread(firebase_service.upload_audio, audio_file, lang, str(document_id))
+                audio_file = await asyncio.to_thread(get_tts_service().generate_audio, text, lang)
+                audio_url = await asyncio.to_thread(get_firebase_service().upload_audio, audio_file, lang, str(document_id))
 
                 # Update DB fields
                 field = f"{lang_map[lang]}.audio_description"
@@ -107,7 +150,7 @@ async def _generate_and_attach_audio(document_id: ObjectId, payload: NewsCreateR
                 continue
 
         # Update MongoDB with generated audio URLs
-        ok = await db_service.update_news_fields(document_id, updates)
+        ok = await get_db_service().update_news_fields(document_id, updates)
         if not ok:
             logger.error(f"[BG-TTS] Mongo update returned modified_count=0 for doc={document_id}")
         else:
@@ -223,7 +266,7 @@ async def create_news(payload: NewsCreateRequest, background_tasks: BackgroundTa
         }
 
         # Insert into DB
-        await asyncio.wait_for(db_service.insert_news(news_document), timeout=15.0)
+        await asyncio.wait_for(get_db_service().insert_news(news_document), timeout=15.0)
 
         # Schedule TTS in background
         background_tasks.add_task(
@@ -238,7 +281,7 @@ async def create_news(payload: NewsCreateRequest, background_tasks: BackgroundTa
     except Exception as e:
         logger.error(f"[CREATE] failed doc={document_id} error={e}")
         try:
-            await db_service.update_news_fields(document_id, {"_deleted_due_to_error": True})
+            await get_db_service().update_news_fields(document_id, {"_deleted_due_to_error": True})
         except:
             pass
         raise HTTPException(status_code=500, detail=f"Error creating news: {str(e)}")
@@ -321,10 +364,10 @@ async def translate_text(payload: TranslationRequest):
 async def generate_tts(payload: TTSRequest):
     """Generate TTS audio"""
     try:
-        audio_file = await asyncio.to_thread(tts_service.generate_audio, payload.text, payload.language)
-        audio_url = await asyncio.to_thread(firebase_service.upload_audio, audio_file, payload.language) 
-        duration = tts_service.get_audio_duration(audio_file)
-        file_size = tts_service.get_file_size(audio_file)
+        audio_file = await asyncio.to_thread(get_tts_service().generate_audio, payload.text, payload.language)
+        audio_url = await asyncio.to_thread(get_firebase_service().upload_audio, audio_file, payload.language) 
+        duration = get_tts_service().get_audio_duration(audio_file)
+        file_size = get_tts_service().get_file_size(audio_file)
 
         return TTSResponse(
             success=True,
@@ -346,8 +389,8 @@ async def health_check():
     return HealthResponse(
         status="healthy",
         models_loaded=True, # type: ignore
-        database_connected=await db_service.is_connected(),
-        firebase_connected=firebase_service.is_connected(),
+        database_connected=await get_db_service().is_connected(),
+        firebase_connected=get_firebase_service().is_connected(),
         timestamp=datetime.utcnow(),
         version="1.0.0"
     )
