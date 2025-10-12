@@ -21,8 +21,9 @@ RUN git clone https://github.com/VarunGumma/IndicTransToolkit.git /tmp/IndicTran
     cd /app && \
     rm -rf /tmp/IndicTransToolkit
 
-# 4. Pre-download models to bake them into the image
-RUN python -c "import os; os.environ['HF_HOME'] = '/app/hf-cache'; os.environ['TRANSFORMERS_CACHE'] = '/app/hf-cache'; os.environ['HF_HUB_OFFLINE'] = '0'; from IndicTransToolkit import IndicProcessor; processor = IndicProcessor()"
+# 4. Create models directory for runtime download
+RUN mkdir -p /app/hf-cache && \
+    echo "Models directory created - will download at runtime"
 
 
 # =========================
@@ -58,10 +59,10 @@ USER root
 ENV PORT=8080 \
     PYTHONUNBUFFERED=1 \
     LOG_LEVEL=INFO \
-    # Use baked-in models (no file share needed)
+    # Use runtime model download
     HF_HOME=/app/hf-cache \
     TRANSFORMERS_CACHE=/app/hf-cache \
-    HF_HUB_OFFLINE=1 \
+    HF_HUB_OFFLINE=0 \
     TRUST_REMOTE_CODE=1
 
 EXPOSE ${PORT}
