@@ -15,13 +15,7 @@ RUN pip install --no-cache-dir -r requirements.txt && \
     pip cache purge && \
     rm -rf /root/.cache/pip
 
-# 3. Clone and install IndicTransToolkit from source (editable install)
-RUN git clone https://github.com/VarunGumma/IndicTransToolkit.git /tmp/IndicTransToolkit && \
-    cd /tmp/IndicTransToolkit && \
-    pip install --no-cache-dir --editable ./ && \
-    cd /app && \
-    rm -rf /tmp/IndicTransToolkit && \
-    pip cache purge
+# 3. IndicTransToolkit will be installed via requirements.txt
 
 # 4. Copy application source code
 COPY app /app/app

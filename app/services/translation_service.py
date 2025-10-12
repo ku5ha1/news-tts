@@ -11,9 +11,9 @@ logger = logging.getLogger(__name__)
 
 # Handle IndicTransToolkit import with fallback
 try:
-    from IndicTransToolkit import IndicProcessor
+    from IndicTransToolkit.processor import IndicProcessor
 except ImportError:
-    logger.error("Failed to import IndicProcessor from IndicTransToolkit")
+    logger.error("Failed to import IndicProcessor from IndicTransToolkit.processor")
     IndicProcessor = None
 
 # Model names for 1B (CORRECT MODELS)
