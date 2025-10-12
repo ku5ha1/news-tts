@@ -2,41 +2,41 @@
 set -ex
 
 APP_USER="app"
-HF_HOME="/app/hf-cache"
+HF_HOME="/root/.cache/huggingface"
 
-# Use runtime model download
+# Use default HuggingFace cache location
 LOG_LEVEL="${LOG_LEVEL:-info}"  # Default to lowercase 'info'
 
 echo "Starting container as user: $(whoami)"
 echo "LOG_LEVEL is set to: $LOG_LEVEL"
-echo "HF_HOME is set to: $HF_HOME (runtime model download)"
+echo "HF_HOME is set to: $HF_HOME (default HuggingFace cache)"
 echo "Environment validation:"
 echo "  HF_HUB_OFFLINE: ${HF_HUB_OFFLINE:-not_set}"
 echo "  TRUST_REMOTE_CODE: ${TRUST_REMOTE_CODE:-not_set}"
 echo "  TRANSFORMERS_CACHE: ${TRANSFORMERS_CACHE:-not_set}"
 
 if [ "$(id -u)" -eq 0 ]; then
-    echo "Running as root. Setting up models directory for runtime download."
+    echo "Running as root. Setting up default HuggingFace cache directory."
 
-    # Create models directory if it doesn't exist
+    # Create default HuggingFace cache directory if it doesn't exist
     if [ ! -d "$HF_HOME" ]; then
-        echo "Creating models directory: $HF_HOME"
+        echo "Creating default HuggingFace cache directory: $HF_HOME"
         mkdir -p "$HF_HOME"
     fi
 
-    echo "Models directory ready: $HF_HOME"
-
-    # Set ownership of the models directory
+    echo "Default HuggingFace cache directory ready: $HF_HOME"
+    
+    # Set ownership of the cache directory
     chown -R "$APP_USER":"$APP_USER" "$HF_HOME" || {
         echo "WARNING: Could not set ownership of $HF_HOME - continuing anyway"
     }
     echo "Ownership of $HF_HOME set to $APP_USER."
 
-    # Verify app user can access the models
+    # Verify app user can access the cache directory
     if ! su "$APP_USER" -c "test -r $HF_HOME"; then
-        echo "WARNING: App user cannot access models directory $HF_HOME - continuing anyway"
+        echo "WARNING: App user cannot access cache directory $HF_HOME - continuing anyway"
     else
-        echo "Models directory is accessible."
+        echo "Cache directory is accessible."
     fi
 
     # Set ownership of the entire app directory

@@ -3,14 +3,13 @@ import os
 import asyncio
 import logging
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
-from IndicTransToolkit import IndicProcessor
-from threading import Lock
+from IndicTransToolkit.processor import IndicProcessor
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Model names for 1B (CORRECT MODELS)
+# Model names for 200M models
 MODEL_NAMES = {
     "en_indic": "ai4bharat/indictrans2-en-indic-dist-200M",
     "indic_en": "ai4bharat/indictrans2-indic-en-dist-200M",
@@ -26,14 +25,9 @@ class TranslationService:
 
     def __init__(self):
         if not hasattr(self, "device"):
-            # Force CPU-only for lightweight deployment
-            self.device = torch.device("cpu")
-            
-            # CRITICAL: Enable CPU optimizations
-            torch.set_num_threads(2)  # Use both P1V3 cores
-            torch.set_num_interop_threads(2)
-            
-            logger.info("[Translation] Using CPU for 1B model with optimizations")
+            # Device detection as per official snippet
+            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            logger.info(f"[Translation] Using device: {self.device}")
 
             # Initialize IndicTransToolkit components
             try:
@@ -44,73 +38,40 @@ class TranslationService:
                 logger.error(f"Failed to initialize IndicTransToolkit components: {e}")
                 raise RuntimeError(f"IndicTransToolkit initialization failed: {e}")
 
-            # Placeholders for lazy model load
-            self.en_indic_model = None
-            self.indic_en_model = None
-            self.en_indic_tokenizer = None
-            self.indic_en_tokenizer = None
+            # Load models immediately as per official snippet
+            try:
+                logger.info("Loading EN->Indic model immediately...")
+                self.en_indic_tokenizer = AutoTokenizer.from_pretrained(
+                    MODEL_NAMES["en_indic"], trust_remote_code=True
+                )
+                self.en_indic_model = AutoModelForSeq2SeqLM.from_pretrained(
+                    MODEL_NAMES["en_indic"], 
+                    trust_remote_code=True, 
+                    torch_dtype=torch.float16 if self.device.type == "cuda" else torch.float32,
+                    attn_implementation="flash_attention_2" if self.device.type == "cuda" else None
+                ).to(self.device)
+                self.en_indic_model.eval()
+                logger.info("EN->Indic model loaded successfully")
+            except Exception as e:
+                logger.error(f"Failed to load EN->Indic model: {e}")
+                raise RuntimeError(f"EN->Indic model loading failed: {e}")
 
-            # Thread locks for model operations
-            self.en_indic_lock = Lock()
-            self.indic_en_lock = Lock()
-
-            # Track loading status
-            self.loading_en_indic = False
-            self.loading_indic_en = False
-
-    def _ensure_en_indic_model(self):
-        """Load EN->Indic model and tokenizer if not already loaded."""
-        if self.en_indic_model is None and not self.loading_en_indic:
-            with self.en_indic_lock:
-                if self.en_indic_model is None:
-                    try:
-                        self.loading_en_indic = True
-                        model_name = MODEL_NAMES["en_indic"]
-                        logger.info(f"Loading EN->Indic 1B model: {model_name}")
-                        
-                        self.en_indic_tokenizer = AutoTokenizer.from_pretrained(
-                            model_name, trust_remote_code=True
-                        )
-                        self.en_indic_model = AutoModelForSeq2SeqLM.from_pretrained(
-                            model_name, trust_remote_code=True
-                        )
-                        self.en_indic_model.eval()  # Set to evaluation mode
-                        
-                        logger.info("EN->Indic 1B model loaded successfully")
-                    except Exception as e:
-                        logger.error(f"Failed to load EN->Indic model: {e}")
-                        self.en_indic_model = None
-                        self.en_indic_tokenizer = None
-                        raise
-                    finally:
-                        self.loading_en_indic = False
-
-    def _ensure_indic_en_model(self):
-        """Load Indic->EN model and tokenizer if not already loaded."""
-        if self.indic_en_model is None and not self.loading_indic_en:
-            with self.indic_en_lock:
-                if self.indic_en_model is None:
-                    try:
-                        self.loading_indic_en = True
-                        model_name = MODEL_NAMES["indic_en"]
-                        logger.info(f"Loading Indic->EN 1B model: {model_name}")
-                        
-                        self.indic_en_tokenizer = AutoTokenizer.from_pretrained(
-                            model_name, trust_remote_code=True
-                        )
-                        self.indic_en_model = AutoModelForSeq2SeqLM.from_pretrained(
-                            model_name, trust_remote_code=True
-                        )
-                        self.indic_en_model.eval()  # Set to evaluation mode
-                        
-                        logger.info("Indic->EN 1B model loaded successfully")
-                    except Exception as e:
-                        logger.error(f"Failed to load Indic->EN model: {e}")
-                        self.indic_en_model = None
-                        self.indic_en_tokenizer = None
-                        raise
-                    finally:
-                        self.loading_indic_en = False
+            try:
+                logger.info("Loading Indic->EN model immediately...")
+                self.indic_en_tokenizer = AutoTokenizer.from_pretrained(
+                    MODEL_NAMES["indic_en"], trust_remote_code=True
+                )
+                self.indic_en_model = AutoModelForSeq2SeqLM.from_pretrained(
+                    MODEL_NAMES["indic_en"], 
+                    trust_remote_code=True, 
+                    torch_dtype=torch.float16 if self.device.type == "cuda" else torch.float32,
+                    attn_implementation="flash_attention_2" if self.device.type == "cuda" else None
+                ).to(self.device)
+                self.indic_en_model.eval()
+                logger.info("Indic->EN model loaded successfully")
+            except Exception as e:
+                logger.error(f"Failed to load Indic->EN model: {e}")
+                raise RuntimeError(f"Indic->EN model loading failed: {e}")
 
     def _normalize_lang_code(self, lang: str) -> str:
         """Normalize language codes from detection to internal format."""
@@ -134,127 +95,97 @@ class TranslationService:
         }
         return lang_map.get(lang.lower(), "hin_Deva")
 
-    def _translate_en_to_indic_batch(self, texts: list, target_langs: list) -> dict:
-        """BATCH translate English to multiple Indic languages in ONE model call."""
-        with self.en_indic_lock:
-            try:
-                self._ensure_en_indic_model()
-                if self.en_indic_model is None or self.en_indic_tokenizer is None:
-                    raise RuntimeError("EN->Indic model not loaded")
-                
-                logger.info(f"Batch translating {len(texts)} texts to {len(target_langs)} languages")
-                
-                # Prepare batch for all target languages
-                all_batches = []
-                for text, target_lang in zip(texts, target_langs):
-                    batch = self.ip.preprocess_batch(
-                        [text], 
-                        src_lang="eng_Latn", 
-                        tgt_lang=self._get_lang_code(target_lang)
-                    )
-                    all_batches.extend(batch)
-                
-                # Tokenize all at once
-                inputs = self.en_indic_tokenizer(
-                    all_batches,
-                    truncation=True,
-                    padding="longest",
-                    return_tensors="pt",
-                    return_attention_mask=True,
-                ).to(self.device)
+    def _translate_en_to_indic(self, text: str, target_lang: str) -> str:
+        """Translate English to Indic language using official snippet approach."""
+        try:
+            src_lang, tgt_lang = "eng_Latn", self._get_lang_code(target_lang)
+            
+            # Preprocess as per official snippet
+            batch = self.ip.preprocess_batch([text], src_lang=src_lang, tgt_lang=tgt_lang)
+            
+            # Tokenize as per official snippet
+            inputs = self.en_indic_tokenizer(
+                batch,
+                truncation=True,
+                padding="longest",
+                return_tensors="pt",
+                return_attention_mask=True,
+            ).to(self.device)
 
-                # Single inference for all languages
-                with torch.no_grad():
-                    generated_tokens = self.en_indic_model.generate(
-                        **inputs,
-                        use_cache=False,
-                        min_length=0,
-                        max_length=128,
-                        num_beams=1,  # Greedy for speed
-                        num_return_sequences=1,
-                        pad_token_id=self.en_indic_tokenizer.pad_token_id,
-                        early_stopping=True,
-                    )
+            # Generate as per official snippet
+            with torch.no_grad():
+                generated_tokens = self.en_indic_model.generate(
+                    **inputs,
+                    use_cache=True,
+                    min_length=0,
+                    max_length=256,
+                    num_beams=5,
+                    num_return_sequences=1,
+                )
 
-                # Decode all results
-                with self.en_indic_tokenizer.as_target_tokenizer():
-                    decoded = self.en_indic_tokenizer.batch_decode(
-                        generated_tokens.detach().cpu().tolist(),
-                        skip_special_tokens=True,
-                        clean_up_tokenization_spaces=True,
-                    )
+            # Decode as per official snippet
+            generated_tokens = self.en_indic_tokenizer.batch_decode(
+                generated_tokens,
+                skip_special_tokens=True,
+                clean_up_tokenization_spaces=True,
+            )
 
-                # Postprocess each language
-                results = {}
-                for i, target_lang in enumerate(target_langs):
-                    translated = self.ip.postprocess_batch(
-                        [decoded[i]], 
-                        lang=self._get_lang_code(target_lang)
-                    )
-                    results[target_lang] = translated[0] if translated else texts[i]
-                    logger.info(f"Translated to {target_lang}: {results[target_lang][:50]}...")
-                
-                return results
-                
-            except Exception as e:
-                logger.error(f"Batch translation error: {e}")
-                raise
+            # Postprocess as per official snippet
+            translations = self.ip.postprocess_batch(generated_tokens, lang=tgt_lang)
+            
+            result = translations[0] if translations else text
+            logger.info(f"Translated to {target_lang}: {result[:50]}...")
+            return result
+            
+        except Exception as e:
+            logger.error(f"Translation error EN->{target_lang}: {e}")
+            raise
 
     def _translate_indic_to_en(self, text: str, source_lang: str) -> str:
-        """Translate Indic language text to English."""
-        with self.indic_en_lock:
-            try:
-                logger.info(f"Translating {source_lang}->EN: {text[:50]}...")
-                
-                self._ensure_indic_en_model()
-                if self.indic_en_model is None or self.indic_en_tokenizer is None:
-                    raise RuntimeError("Indic->EN model not loaded")
+        """Translate Indic language to English using official snippet approach."""
+        try:
+            src_lang, tgt_lang = self._get_lang_code(source_lang), "eng_Latn"
+            
+            # Preprocess as per official snippet
+            batch = self.ip.preprocess_batch([text], src_lang=src_lang, tgt_lang=tgt_lang)
+            
+            # Tokenize as per official snippet
+            inputs = self.indic_en_tokenizer(
+                batch,
+                truncation=True,
+                padding="longest",
+                return_tensors="pt",
+                return_attention_mask=True,
+            ).to(self.device)
 
-                batch = self.ip.preprocess_batch(
-                    [text], 
-                    src_lang=self._get_lang_code(source_lang), 
-                    tgt_lang="eng_Latn"
+            # Generate as per official snippet
+            with torch.no_grad():
+                generated_tokens = self.indic_en_model.generate(
+                    **inputs,
+                    use_cache=True,
+                    min_length=0,
+                    max_length=256,
+                    num_beams=5,
+                    num_return_sequences=1,
                 )
 
-                inputs = self.indic_en_tokenizer(
-                    batch,
-                    truncation=True,
-                    padding="longest",
-                    return_tensors="pt",
-                    return_attention_mask=True,
-                ).to(self.device)
+            # Decode as per official snippet
+            generated_tokens = self.indic_en_tokenizer.batch_decode(
+                generated_tokens,
+                skip_special_tokens=True,
+                clean_up_tokenization_spaces=True,
+            )
 
-                with torch.no_grad():
-                    generated_tokens = self.indic_en_model.generate(
-                        **inputs,
-                        use_cache=False,
-                        min_length=0,
-                        max_length=128,
-                        num_beams=1,
-                        num_return_sequences=1,
-                        pad_token_id=self.indic_en_tokenizer.pad_token_id,
-                        early_stopping=True,
-                    )
-
-                with self.indic_en_tokenizer.as_target_tokenizer():
-                    generated_tokens = self.indic_en_tokenizer.batch_decode(
-                        generated_tokens.detach().cpu().tolist(),
-                        skip_special_tokens=True,
-                        clean_up_tokenization_spaces=True,
-                    )
-                
-                translations = self.ip.postprocess_batch(
-                    generated_tokens, 
-                    lang="eng_Latn"
-                )
-
-                result = translations[0] if translations else text
-                logger.info(f"Translation result: {result[:50]}...")
-                return result
-                    
-            except Exception as e:
-                logger.error(f"Translation error {source_lang}->EN: {e}")
-                raise
+            # Postprocess as per official snippet
+            translations = self.ip.postprocess_batch(generated_tokens, lang=tgt_lang)
+            
+            result = translations[0] if translations else text
+            logger.info(f"Translated to English: {result[:50]}...")
+            return result
+            
+        except Exception as e:
+            logger.error(f"Translation error {source_lang}->EN: {e}")
+            raise
 
     def translate(self, text: str, source_lang: str, target_lang: str) -> str:
         """Single translation method."""
@@ -266,89 +197,82 @@ class TranslationService:
                 return text
             
             if source_lang == "english":
-                results = self._translate_en_to_indic_batch([text], [target_lang])
-                return results[target_lang]
+                return self._translate_en_to_indic(text, target_lang)
             elif target_lang == "english":
                 return self._translate_indic_to_en(text, source_lang)
             else:
                 # Translate through English
                 english_text = self._translate_indic_to_en(text, source_lang)
-                results = self._translate_en_to_indic_batch([english_text], [target_lang])
-                return results[target_lang]
+                return self._translate_en_to_indic(english_text, target_lang)
         except Exception as e:
             logger.error(f"Translation failed {source_lang}->{target_lang}: {e}")
             raise
 
     async def translate_to_all_async(self, title: str, description: str, source_lang: str) -> dict:
-        """BATCH translate to multiple languages efficiently."""
-        source_lang = self._normalize_lang_code(source_lang)
-        
-        if source_lang == "english":
-            target_languages = ["hindi", "kannada"]
-        elif source_lang == "kannada":
-            target_languages = ["english", "hindi"]
-        else:
-            target_languages = ["english", "hindi"]
-        
-        # PRE-LOAD models
-        logger.info("Pre-loading models...")
-        if source_lang == "english":
-            self._ensure_en_indic_model()
-        else:
-            self._ensure_indic_en_model()
-        logger.info("Models pre-loaded successfully")
-        
-        # Combine title and description
-        combined_text = f"{title}. {description}"
-        
-        # BATCH translate to all target languages at once
-        loop = asyncio.get_event_loop()
-        
-        if source_lang == "english":
-            # Batch translate to both Hindi and Kannada in ONE call
-            texts = [combined_text, combined_text]
-            results = await loop.run_in_executor(
-                None,
-                self._translate_en_to_indic_batch,
-                texts,
-                target_languages
-            )
-        else:
-            # First translate to English, then batch to others
-            english_text = await loop.run_in_executor(
-                None,
-                self._translate_indic_to_en,
-                combined_text,
-                source_lang
-            )
+        """Translate to multiple languages using official snippet approach."""
+        try:
+            source_lang = self._normalize_lang_code(source_lang)
             
-            # Filter out english if it's already a target
-            indic_targets = [lang for lang in target_languages if lang != "english"]
+            if source_lang == "english":
+                target_languages = ["hindi", "kannada"]
+            elif source_lang == "kannada":
+                target_languages = ["english", "hindi"]
+            else:
+                target_languages = ["english", "hindi"]
             
-            results = {"english": english_text}
+            # Combine title and description
+            combined_text = f"{title}. {description}"
             
-            if indic_targets:
-                self._ensure_en_indic_model()
-                texts = [english_text] * len(indic_targets)
-                indic_results = await loop.run_in_executor(
+            # Run translations in executor to avoid blocking
+            loop = asyncio.get_event_loop()
+            results = {}
+            
+            if source_lang == "english":
+                # Translate to both Hindi and Kannada
+                for target_lang in target_languages:
+                    result = await loop.run_in_executor(
+                        None,
+                        self._translate_en_to_indic,
+                        combined_text,
+                        target_lang
+                    )
+                    results[target_lang] = result
+            else:
+                # First translate to English
+                english_text = await loop.run_in_executor(
                     None,
-                    self._translate_en_to_indic_batch,
-                    texts,
-                    indic_targets
+                    self._translate_indic_to_en,
+                    combined_text,
+                    source_lang
                 )
-                results.update(indic_results)
-        
-        # Split back into title and description
-        translations = {}
-        for lang, translated_text in results.items():
-            parts = translated_text.split('. ', 1)
-            translations[lang] = {
-                "title": parts[0] if parts else translated_text,
-                "description": parts[1] if len(parts) > 1 else translated_text
-            }
-        
-        logger.info(f"Batch translation completed: {list(translations.keys())}")
-        return translations
+                results["english"] = english_text
+                
+                # Then translate English to other languages
+                for target_lang in target_languages:
+                    if target_lang != "english":
+                        result = await loop.run_in_executor(
+                            None,
+                            self._translate_en_to_indic,
+                            english_text,
+                            target_lang
+                        )
+                        results[target_lang] = result
+            
+            # Split back into title and description
+            translations = {}
+            for lang, translated_text in results.items():
+                parts = translated_text.split('. ', 1)
+                translations[lang] = {
+                    "title": parts[0] if parts else translated_text,
+                    "description": parts[1] if len(parts) > 1 else translated_text
+                }
+            
+            logger.info(f"Translation completed: {list(translations.keys())}")
+            return translations
+            
+        except Exception as e:
+            logger.error(f"Batch translation failed: {e}")
+            raise
 
 # Create singleton instance
 translation_service = TranslationService()

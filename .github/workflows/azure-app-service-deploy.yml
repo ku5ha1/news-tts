@@ -11,9 +11,9 @@ env:
   VM_USERNAME: ${{ secrets.VM_USERNAME }}
   IMAGE_NAME: news-tts
   
-  # Environment Variables - Consistent across all files
-  HF_HOME: /app/hf-cache
-  TRANSFORMERS_CACHE: /app/hf-cache
+  # Environment Variables - Using default HuggingFace cache
+  HF_HOME: /root/.cache/huggingface
+  TRANSFORMERS_CACHE: /root/.cache/huggingface
   HF_HUB_OFFLINE: 0
   TRUST_REMOTE_CODE: 1
   LOG_LEVEL: info
@@ -68,8 +68,8 @@ jobs:
           
           # Run new container with environment variables
           docker run -d -p 8080:8080 --name news-tts-container --user root \
-            -e HF_HOME=/app/hf-cache \
-            -e TRANSFORMERS_CACHE=/app/hf-cache \
+            -e HF_HOME=/root/.cache/huggingface \
+            -e TRANSFORMERS_CACHE=/root/.cache/huggingface \
             -e HF_HUB_OFFLINE=0 \
             -e TRUST_REMOTE_CODE=1 \
             -e LOG_LEVEL=info \
