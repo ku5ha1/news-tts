@@ -55,8 +55,8 @@ echo "Running as non-root user directly. Starting uvicorn."
 if [ -d "/app" ]; then
     echo "Using container directory /app"
     cd /app
-    exec uvicorn app.main:app --host 0.0.0.0 --port 8080 --log-level "$LOG_LEVEL"
+    exec uvicorn app.main:app --host 0.0.0.0 --port 8181 --log-level "$LOG_LEVEL"
 else
     echo "Using current directory for local testing"
-    exec uvicorn app.main:app --host 0.0.0.0 --port 8080 --log-level "$LOG_LEVEL"
+    exec uvicorn app.main:app --host 0.0.0.0 --port 8181 --log-level "$LOG_LEVEL"
 fi
