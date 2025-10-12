@@ -2,44 +2,38 @@
 set -ex 
 
 APP_USER="app"
-HF_HOME="/mnt/hf-cache"
+HF_HOME="/app/hf-cache"  # Use baked-in models
 LOG_LEVEL="${LOG_LEVEL:-INFO}"
 
 echo "Starting container as user: $(whoami)"
 echo "LOG_LEVEL is set to: $LOG_LEVEL"
-echo "HF_HOME is set to: $HF_HOME"
+echo "HF_HOME is set to: $HF_HOME (baked-in models)"
 echo "Environment validation:"
 echo "  HF_HUB_OFFLINE: ${HF_HUB_OFFLINE:-not_set}"
 echo "  TRUST_REMOTE_CODE: ${TRUST_REMOTE_CODE:-not_set}"
 echo "  TRANSFORMERS_CACHE: ${TRANSFORMERS_CACHE:-not_set}"
 
 if [ "$(id -u)" -eq 0 ]; then
-    echo "Running as root. Granting $APP_USER access to mounted volume $HF_HOME."
+    echo "Running as root. Setting up baked-in models directory."
 
-    # Wait for mount with timeout
-    timeout=60
-    counter=0
-    while [ ! -d "$HF_HOME" ] && [ $counter -lt $timeout ]; do
-        echo "Waiting for $HF_HOME to mount... ($counter/$timeout)"
-        sleep 1
-        counter=$((counter + 1))
-    done
-
+    # Verify baked-in models directory exists and is accessible
     if [ ! -d "$HF_HOME" ]; then
-        echo "ERROR: $HF_HOME did not mount within $timeout seconds!"
+        echo "ERROR: Baked-in models directory $HF_HOME does not exist!"
         exit 1
     fi
 
-    echo "Mount found. Setting ownership..."
+    echo "Baked-in models directory found: $HF_HOME"
+    
+    # Set ownership of the models directory
     chown -R "$APP_USER":"$APP_USER" "$HF_HOME"
     echo "Ownership of $HF_HOME set to $APP_USER."
 
-    # Verify the mount is writable
-    if ! su "$APP_USER" -c "touch $HF_HOME/test_write.tmp && rm $HF_HOME/test_write.tmp"; then
-        echo "ERROR: Cannot write to mounted volume $HF_HOME!"
+    # Verify app user can access the models
+    if ! su "$APP_USER" -c "test -r $HF_HOME"; then
+        echo "ERROR: App user cannot access models directory $HF_HOME!"
         exit 1
     fi
-    echo "Mount $HF_HOME is writable."
+    echo "Models directory is accessible."
 
     # Verify app user can access the app directory
     if ! su "$APP_USER" -c "test -r /app/app/main.py"; then

@@ -8,7 +8,7 @@ from app.models.news import (
     TranslationRequest, TranslationResponse,
     TTSRequest, TTSResponse, HealthResponse
 )
-from app.services.translation_service import translation_service
+# REMOVED: Module-level import of translation_service - will import lazily
 from app.services.tts_service import TTSService
 from app.services.firebase_service import FirebaseService
 from app.services.db_service import DBService
@@ -19,9 +19,22 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+# Initialize services that are safe to import at module level
 tts_service = TTSService()
 firebase_service = FirebaseService()
 db_service = DBService()
+
+def get_translation_service():
+    """Lazy import of translation service to avoid module-level failures."""
+    try:
+        from app.services.translation_service import translation_service
+        return translation_service
+    except Exception as e:
+        logger.error(f"Failed to import translation service: {e}")
+        raise HTTPException(
+            status_code=503, 
+            detail=f"Translation service unavailable: {str(e)}"
+        )
 
 def _to_extended_json(document: dict) -> dict:
     def oidify(value):
@@ -160,6 +173,7 @@ async def create_news(payload: NewsCreateRequest, background_tasks: BackgroundTa
             timeout_sec = 90.0
 
         try:
+            translation_service = get_translation_service()
             translations = await asyncio.wait_for(
                 translation_service.translate_to_all_async(payload.title, payload.description, source_lang),
                 timeout=timeout_sec
@@ -261,6 +275,7 @@ async def translate_text(payload: TranslationRequest):
         # Add timeout for translation (5 minutes for model loading)
         try:
             logger.info("Calling translation_service.translate...")
+            translation_service = get_translation_service()
             translated_text = translation_service.translate(
                 payload.text, 
                 payload.source_language, 

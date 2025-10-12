@@ -35,14 +35,18 @@ class TranslationService:
             
             logger.info("[Translation] Using CPU for 1B model with optimizations")
 
-            # Initialize IndicTransToolkit components
+            # Initialize IndicTransToolkit components with graceful degradation
+            self.ip = None
+            self._initialization_error = None
+            
             try:
                 logger.info("Initializing IndicTransToolkit components...")
                 self.ip = IndicProcessor(inference=True)
                 logger.info("IndicTransToolkit components initialized successfully")
             except Exception as e:
                 logger.error(f"Failed to initialize IndicTransToolkit components: {e}")
-                raise RuntimeError(f"IndicTransToolkit initialization failed: {e}")
+                self._initialization_error = str(e)
+                # Don't raise - allow service to start in degraded mode
 
             # Placeholders for lazy model load
             self.en_indic_model = None
@@ -57,6 +61,52 @@ class TranslationService:
             # Track loading status
             self.loading_en_indic = False
             self.loading_indic_en = False
+            
+            # Circuit breaker state
+            self._circuit_open = False
+            self._failure_count = 0
+            self._last_failure_time = None
+
+    def _check_circuit_breaker(self):
+        """Check if circuit breaker should prevent operations."""
+        if self._circuit_open:
+            import time
+            # Reset circuit after 5 minutes
+            if time.time() - self._last_failure_time > 300:
+                self._circuit_open = False
+                self._failure_count = 0
+                logger.info("Circuit breaker reset - attempting operations again")
+            else:
+                raise RuntimeError("Circuit breaker is open - translation service unavailable")
+    
+    def _record_failure(self):
+        """Record a failure for circuit breaker."""
+        import time
+        self._failure_count += 1
+        self._last_failure_time = time.time()
+        
+        # Open circuit after 3 consecutive failures
+        if self._failure_count >= 3:
+            self._circuit_open = True
+            logger.error(f"Circuit breaker opened after {self._failure_count} failures")
+    
+    def _record_success(self):
+        """Record a success for circuit breaker."""
+        self._failure_count = 0
+        self._circuit_open = False
+    
+    def get_health_status(self):
+        """Get health status of the translation service."""
+        return {
+            "initialization_error": self._initialization_error,
+            "circuit_open": self._circuit_open,
+            "failure_count": self._failure_count,
+            "models_loaded": {
+                "en_indic": self.en_indic_model is not None,
+                "indic_en": self.indic_en_model is not None
+            },
+            "indictrans_available": self.ip is not None
+        }
 
     def _ensure_en_indic_model(self):
         """Load EN->Indic model and tokenizer if not already loaded."""

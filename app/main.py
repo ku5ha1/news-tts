@@ -28,46 +28,46 @@ async def background_model_preload():
     try:
         log.info("Starting background model preloading...")
         
-        # Check if HF_HOME is accessible
-        hf_home = os.getenv("HF_HOME", "/mnt/hf-cache")
+        # Check if HF_HOME is accessible (graceful degradation)
+        hf_home = os.getenv("HF_HOME", "/app/hf-cache")
         if not os.path.exists(hf_home):
-            log.warning(f"HF_HOME directory {hf_home} does not exist, creating it...")
-            os.makedirs(hf_home, exist_ok=True)
+            log.warning(f"HF_HOME directory {hf_home} does not exist - models may not be available")
+            # Don't fail - allow app to start and show error in health check
+        else:
+            log.info(f"HF_HOME {hf_home} exists - checking accessibility")
+            # Check if we can read the cache directory
+            try:
+                test_file = os.path.join(hf_home, "test_read.tmp")
+                with open(test_file, "w") as f:
+                    f.write("test")
+                os.remove(test_file)
+                log.info(f"HF_HOME {hf_home} is accessible")
+            except Exception as e:
+                log.warning(f"Cannot access HF_HOME {hf_home}: {e} - models may not work")
+                # Don't fail - allow app to start
         
-        # Check if we can write to the cache directory
-        test_file = os.path.join(hf_home, "test_write.tmp")
+        # Try to initialize translation service lazily
         try:
-            with open(test_file, "w") as f:
-                f.write("test")
-            os.remove(test_file)
-            log.info(f"HF_HOME {hf_home} is writable")
+            from app.services.translation_service import translation_service
+            
+            # Test translation to ensure models work using translate_to_all_async
+            log.info("Testing translation service with sample text...")
+            test_result = await translation_service.translate_to_all_async(
+                title="Hello world",
+                description="This is a test",
+                source_lang="english"
+            )
+            
+            log.info(f"Background model preloading completed successfully: 'Hello world' -> {test_result}")
+            _is_ready = True
+            _model_err = None
+            
         except Exception as e:
-            log.error(f"Cannot write to HF_HOME {hf_home}: {e}")
-            raise RuntimeError(f"HF_HOME directory {hf_home} is not writable: {e}")
-        
-        from app.services.translation_service import translation_service
-        
-        # Test translation to ensure models work using translate_to_all_async
-        log.info("Testing translation service with sample text...")
-        test_result = await translation_service.translate_to_all_async(
-            title="Hello world",
-            description="This is a test",
-            source_lang="english"
-        )
-        
-        log.info(f"Background model preloading completed successfully: 'Hello world' -> {test_result}")
-        _is_ready = True
-        _model_err = None
-        
-    except Exception as e:
-        log.error(f"Background model preloading failed: {e}")
-        log.exception("Full traceback:")
-        _model_err = f"Model loading failed: {str(e)}"
-        _is_ready = False
-        
-        # Don't let the app continue if models can't load
-        log.error("CRITICAL: Cannot load translation models. Application will not function properly.")
-        raise RuntimeError(f"Critical model loading failure: {e}")
+            log.warning(f"Translation service test failed: {e}")
+            # Don't fail - allow app to start in degraded mode
+            _is_ready = False
+            _model_err = f"Translation service unavailable: {str(e)}"
+            log.info("Application will start in degraded mode - translation features may not work")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -89,8 +89,8 @@ async def lifespan(app: FastAPI):
         global _model_err, _is_ready
         _model_err = str(e)
         _is_ready = False
-        # Don't start the app if critical services fail
-        raise RuntimeError(f"Critical service initialization failed: {e}")
+        # Log the error but don't crash - let the app start and show error in health check
+        log.error("Service initialization failed, but allowing app to start for debugging")
 
     yield  # lifespan yields to FastAPI's runtime
 

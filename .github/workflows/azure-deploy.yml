@@ -135,10 +135,7 @@ jobs:
               FIREBASE_SERVICE_ACCOUNT_BASE64="${{ env.FIREBASE_SERVICE_ACCOUNT_BASE64 }}" \
               FIREBASE_STORAGE_BUCKET="${{ env.FIREBASE_STORAGE_BUCKET }}" \
               CORS_ORIGIN="${{ env.CORS_ORIGIN }}" \
-            --azure-file-volume-account-name "$SA_NAME" \
-            --azure-file-volume-account-key "${{ env.STORAGE_ACCOUNT_KEY }}" \
-            --azure-file-volume-share-name ${{ env.FILE_SHARE_NAME }} \
-            --azure-file-volume-mount-path ${{ env.MOUNT_PATH }} \
+            # REMOVED: Volume mounting - using baked-in models instead
             --restart-policy Always \
             --no-wait
 
