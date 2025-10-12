@@ -8,19 +8,19 @@ on:
 env:
   # Azure Configuration
   AZURE_WEBAPP_NAME: news-tts-app
-  RESOURCE_GROUP: dipr-search-pipeline
-  REGISTRY_NAME: newsttsacr
-  IMAGE_NAME: news-tts
+  RESOURCE_GROUP: ${{ vars.RESOURCE_GROUP }}
+  REGISTRY_NAME: ${{ vars.ACR_NAME }}
+  IMAGE_NAME: ${{ vars.IMAGE_NAME }}
   
   # App Service Configuration
-  WEBSITES_MOUNT_ENABLED: 1
-  WEBSITES_MOUNT_PATH: /mnt/models
+  WEBSITES_MOUNT_ENABLED: 0
+  WEBSITES_MOUNT_PATH: ""
   WEBSITES_PORT: 8080
   
   # Environment Variables - Consistent across all files
-  HF_HOME: /mnt/models
-  TRANSFORMERS_CACHE: /mnt/models
-  HF_HUB_OFFLINE: 0
+  HF_HOME: /app/hf-cache
+  TRANSFORMERS_CACHE: /app/hf-cache
+  HF_HUB_OFFLINE: 1
   TRUST_REMOTE_CODE: 1
   LOG_LEVEL: INFO
   PORT: 8080
@@ -56,8 +56,22 @@ jobs:
         tags: |
           ${{ env.REGISTRY_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}
           ${{ env.REGISTRY_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:latest
-        cache-from: type=gha
-        cache-to: type=gha
+
+    - name: Create App Service (if not exists)
+      uses: azure/CLI@v1
+      with:
+        inlineScript: |
+          # Check if App Service exists
+          if ! az webapp show --name ${{ env.AZURE_WEBAPP_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} >/dev/null 2>&1; then
+            echo "Creating App Service..."
+            az webapp create \
+              --resource-group ${{ env.RESOURCE_GROUP }} \
+              --plan ${{ env.RESOURCE_GROUP }}-plan \
+              --name ${{ env.AZURE_WEBAPP_NAME }} \
+              --deployment-container-image-name ${{ env.REGISTRY_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          else
+            echo "App Service already exists"
+          fi
 
     - name: Deploy to Azure App Service
       uses: azure/webapps-deploy@v2

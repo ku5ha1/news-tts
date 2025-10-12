@@ -17,9 +17,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # 3. Install IndicTransToolkit from PyPI (no compilation needed)
 RUN pip install IndicTransToolkit
 
-# 4. Create models directory for mounted storage
-RUN mkdir -p /mnt/models && \
-    echo "Models directory created for App Service mounting"
+# 4. Pre-download models to bake them into the image
+RUN python -c "import os; os.environ['HF_HOME'] = '/app/hf-cache'; os.environ['TRANSFORMERS_CACHE'] = '/app/hf-cache'; os.environ['HF_HUB_OFFLINE'] = '0'; from IndicTransToolkit import IndicProcessor; processor = IndicProcessor()"
 
 
 # =========================
@@ -55,10 +54,10 @@ USER root
 ENV PORT=8080 \
     PYTHONUNBUFFERED=1 \
     LOG_LEVEL=INFO \
-    # Use mounted models for App Service
-    HF_HOME=/mnt/models \
-    TRANSFORMERS_CACHE=/mnt/models \
-    HF_HUB_OFFLINE=0 \
+    # Use baked-in models (no file share needed)
+    HF_HOME=/app/hf-cache \
+    TRANSFORMERS_CACHE=/app/hf-cache \
+    HF_HUB_OFFLINE=1 \
     TRUST_REMOTE_CODE=1
 
 EXPOSE ${PORT}
