@@ -15,7 +15,7 @@ httpx==0.25.2
 aiofiles==23.2.1
 python-multipart==0.0.6
 
-# PyTorch CPU-only (updated for IndicTransToolkit compatibility)
+# PyTorch CPU-only (optimized for high-memory VMs)
 --find-links https://download.pytorch.org/whl/cpu/torch_stable.html
 torch>=2.5.0
 torchvision>=0.20.0+cpu  

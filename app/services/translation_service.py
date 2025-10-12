@@ -16,8 +16,15 @@ except ImportError:
     logger.error("Failed to import IndicProcessor from IndicTransToolkit.processor")
     IndicProcessor = None
 
-# Model name - use 200M model for faster loading
+# Model name - use 200M model optimized for high-memory CPU
 MODEL_NAME = "ai4bharat/indictrans2-en-indic-dist-200M"
+
+# Use CPU with high memory optimization
+DEVICE = "cpu"
+logger.info(f"Using device: {DEVICE}")
+
+# CPU-optimized model configuration
+model_kwargs = {"trust_remote_code": True}
 
 class TranslationService:
     _instance = None
@@ -53,11 +60,17 @@ class TranslationService:
                     logger.info("Initializing IndicTransToolkit components...")
                     self.ip = IndicProcessor(inference=True)
                     
-                    # Load model and tokenizer at startup (like the sample)
-                    logger.info(f"Loading model: {MODEL_NAME}")
-                    self.tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, trust_remote_code=True)
-                    self.model = AutoModelForSeq2SeqLM.from_pretrained(MODEL_NAME, trust_remote_code=True)
-                    logger.info("Model and tokenizer loaded successfully")
+                    # Load model and tokenizer at startup (CPU optimized for high memory)
+                    logger.info(f"Loading model: {MODEL_NAME} on {DEVICE}")
+                    try:
+                        self.tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, trust_remote_code=True)
+                        self.model = AutoModelForSeq2SeqLM.from_pretrained(MODEL_NAME, **model_kwargs).eval()
+                        logger.info(f"Model and tokenizer loaded successfully on {DEVICE}")
+                    except Exception as model_error:
+                        logger.error(f"Model loading failed: {model_error}")
+                        self.tokenizer = None
+                        self.model = None
+                        raise
                     
                     logger.info("IndicTransToolkit components initialized successfully")
             except Exception as e:
@@ -132,7 +145,7 @@ class TranslationService:
                 if self.en_indic_model is None:
                     try:
                         self.loading_en_indic = True
-                        model_name = MODEL_NAMES["en_indic"]
+                        model_name = MODEL_NAME
                         logger.info(f"Loading EN->Indic 1B model: {model_name}")
                                 
                         self.en_indic_tokenizer = AutoTokenizer.from_pretrained(
@@ -159,7 +172,7 @@ class TranslationService:
                 if self.indic_en_model is None:
                     try:
                         self.loading_indic_en = True
-                        model_name = MODEL_NAMES["indic_en"]
+                        model_name = MODEL_NAME
                         logger.info(f"Loading Indic->EN 1B model: {model_name}")
                         
                         self.indic_en_tokenizer = AutoTokenizer.from_pretrained(
@@ -351,8 +364,12 @@ class TranslationService:
     def _simple_translate(self, text: str, src_lang: str, tgt_lang: str) -> str:
         """Simple translation using the sample's approach."""
         try:
+            # Convert to proper language codes
+            src_code = self._get_lang_code(src_lang)
+            tgt_code = self._get_lang_code(tgt_lang)
+            
             # 1) Preprocess
-            batch = self.ip.preprocess_batch([text], src_lang=src_lang, tgt_lang=tgt_lang)
+            batch = self.ip.preprocess_batch([text], src_lang=src_code, tgt_lang=tgt_code)
             
             # 2) Tokenize
             inputs = self.tokenizer(
@@ -376,7 +393,7 @@ class TranslationService:
             
             # 4) Decode + postprocess
             decoded = self.tokenizer.batch_decode(generated, skip_special_tokens=True, clean_up_tokenization_spaces=True)
-            result = self.ip.postprocess_batch(decoded, lang=tgt_lang)
+            result = self.ip.postprocess_batch(decoded, lang=tgt_code)
             
             return result[0] if result else text
             
