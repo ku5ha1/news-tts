@@ -72,7 +72,7 @@ jobs:
             -e TRANSFORMERS_CACHE=/app/hf-cache \
             -e HF_HUB_OFFLINE=0 \
             -e TRUST_REMOTE_CODE=1 \
-            -e LOG_LEVEL=INFO \
+            -e LOG_LEVEL=info \
             -e PORT=8080 \
             -e PYTHONUNBUFFERED=1 \
             news-tts
