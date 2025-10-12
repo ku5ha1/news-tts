@@ -20,9 +20,9 @@ RUN pip install --no-cache-dir -r requirements.txt && \
 # 4. Copy application source code
 COPY app /app/app
 
-# 5. Create default HuggingFace cache directory
-RUN mkdir -p /root/.cache/huggingface && \
-    echo "Default HuggingFace cache directory created - will download at runtime"
+# 5. Create app user's home directory and cache directory
+RUN mkdir -p /home/app/.cache/huggingface && \
+    echo "App user's HuggingFace cache directory created - will download at runtime"
 
 # 6. Clean up build dependencies to reduce image size
 RUN apt-get autoremove -y build-essential git && \
@@ -71,8 +71,8 @@ USER root
 ENV PORT=8080 \
     PYTHONUNBUFFERED=1 \
     LOG_LEVEL=info \
-    HF_HOME=/root/.cache/huggingface \
-    TRANSFORMERS_CACHE=/root/.cache/huggingface \
+    HF_HOME=/home/app/.cache/huggingface \
+    TRANSFORMERS_CACHE=/home/app/.cache/huggingface \
     HF_HUB_OFFLINE=0 \
     TRUST_REMOTE_CODE=1
 

@@ -2,9 +2,9 @@
 set -ex
 
 APP_USER="app"
-HF_HOME="/root/.cache/huggingface"
+HF_HOME="/home/app/.cache/huggingface"
 
-# Use default HuggingFace cache location
+# Use app user's home directory for cache
 LOG_LEVEL="${LOG_LEVEL:-info}"  # Default to lowercase 'info'
 
 echo "Starting container as user: $(whoami)"
@@ -16,27 +16,36 @@ echo "  TRUST_REMOTE_CODE: ${TRUST_REMOTE_CODE:-not_set}"
 echo "  TRANSFORMERS_CACHE: ${TRANSFORMERS_CACHE:-not_set}"
 
 if [ "$(id -u)" -eq 0 ]; then
-    echo "Running as root. Setting up default HuggingFace cache directory."
+    echo "Running as root. Setting up HuggingFace cache directory for app user."
 
-    # Create default HuggingFace cache directory if it doesn't exist
+    # Create app user's home directory and cache directory
+    mkdir -p "/home/app"
     if [ ! -d "$HF_HOME" ]; then
-        echo "Creating default HuggingFace cache directory: $HF_HOME"
+        echo "Creating HuggingFace cache directory: $HF_HOME"
         mkdir -p "$HF_HOME"
     fi
 
     echo "Default HuggingFace cache directory ready: $HF_HOME"
     
-    # Set ownership of the cache directory
+    # Set ownership and permissions of the cache directory
     chown -R "$APP_USER":"$APP_USER" "$HF_HOME" || {
         echo "WARNING: Could not set ownership of $HF_HOME - continuing anyway"
     }
-    echo "Ownership of $HF_HOME set to $APP_USER."
+    chmod -R 755 "$HF_HOME" || {
+        echo "WARNING: Could not set permissions of $HF_HOME - continuing anyway"
+    }
+    echo "Ownership and permissions of $HF_HOME set to $APP_USER."
 
-    # Verify app user can access the cache directory
-    if ! su "$APP_USER" -c "test -r $HF_HOME"; then
-        echo "WARNING: App user cannot access cache directory $HF_HOME - continuing anyway"
+    # Verify app user can access and write to the cache directory
+    if ! su "$APP_USER" -c "test -w $HF_HOME"; then
+        echo "ERROR: App user cannot write to cache directory $HF_HOME"
+        echo "=== Debug: Cache directory permissions ==="
+        ls -la "$HF_HOME" || echo "Cannot list cache directory"
+        echo "=== Debug: Trying to create test file as app user ==="
+        su "$APP_USER" -c "touch $HF_HOME/test_write.tmp && rm $HF_HOME/test_write.tmp" || echo "Cannot write test file"
+        exit 1
     else
-        echo "Cache directory is accessible."
+        echo "Cache directory is writable by app user."
     fi
 
     # Set ownership of the entire app directory
