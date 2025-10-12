@@ -370,6 +370,7 @@ class TranslationService:
             
             # 1) Preprocess
             batch = self.ip.preprocess_batch([text], src_lang=src_code, tgt_lang=tgt_code)
+            logger.info(f"Preprocessed batch: {batch}")
             
             # 2) Tokenize
             inputs = self.tokenizer(
@@ -379,6 +380,11 @@ class TranslationService:
                 return_tensors="pt",
                 return_attention_mask=True,
             )
+            
+            # Debug: Check if inputs is valid
+            if inputs is None or inputs.input_ids is None:
+                logger.error(f"Tokenization failed - inputs is None or input_ids is None")
+                return text
             
             # 3) Generate
             with torch.no_grad():
