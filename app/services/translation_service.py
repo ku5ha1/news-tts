@@ -9,11 +9,8 @@ from threading import Lock
 try:
     from IndicTransToolkit import IndicProcessor
 except ImportError:
-    try:
-        from IndicTransToolkit.IndicTransToolkit import IndicProcessor
-    except ImportError:
-        logger.error("Failed to import IndicProcessor from IndicTransToolkit")
-        IndicProcessor = None
+    logger.error("Failed to import IndicProcessor from IndicTransToolkit")
+    IndicProcessor = None
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -49,6 +46,9 @@ class TranslationService:
             self._initialization_error = None
             
             try:
+                if IndicProcessor is None:
+                    raise ImportError("IndicProcessor is not available - IndicTransToolkit import failed")
+                
                 logger.info("Initializing IndicTransToolkit components...")
                 self.ip = IndicProcessor(inference=True)
                 logger.info("IndicTransToolkit components initialized successfully")
