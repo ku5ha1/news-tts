@@ -42,7 +42,8 @@ jobs:
           # Navigate to project directory
           cd ~/news-tts
           
-          # Pull latest changes
+          # Stash local changes and pull latest changes
+          git stash || true
           git pull origin main
           
           # Stop existing container
@@ -53,14 +54,17 @@ jobs:
           docker system prune -a -f --volumes || true
           docker builder prune -a -f || true
           docker image prune -a -f || true
+          docker container prune -f || true
+          docker network prune -f || true
           
           # Clean up system space
           sudo apt clean || true
           sudo apt autoremove -y || true
           sudo rm -rf /tmp/* /var/tmp/* || true
           
-          # Build new image
-          docker build -t news-tts . --no-cache
+          # Clear Docker build cache and build new image
+          docker builder prune -a -f || true
+          docker build -t news-tts . --no-cache --pull
           
           # Run new container with environment variables
           docker run -d -p 8080:8080 --name news-tts-container --user root \
