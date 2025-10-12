@@ -161,10 +161,10 @@ class TranslationService:
             with torch.no_grad():
                 generated_tokens = self.indic_en_model.generate(
                     **inputs,
-                    use_cache=True,
+                    use_cache=False,
                     min_length=0,
                     max_length=256,
-                    num_beams=5,
+                    num_beams=1,
                     num_return_sequences=1,
                 )
 
