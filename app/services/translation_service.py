@@ -48,7 +48,7 @@ class TranslationService:
                     MODEL_NAMES["en_indic"], 
                     trust_remote_code=True, 
                     torch_dtype=torch.float16 if self.device.type == "cuda" else torch.float32,
-                    attn_implementation="flash_attention_2" if self.device.type == "cuda" else None
+                    # attn_implementation="flash_attention_2" if self.device.type == "cuda" else None
                 ).to(self.device)
                 self.en_indic_model.eval()
                 logger.info("EN->Indic model loaded successfully")
