@@ -1,7 +1,7 @@
 # =========================
 # Stage 1: Builder
 # =========================
-FROM python:3.11 AS builder
+FROM python:3.11-slim AS builder
 WORKDIR /app
 
 # 1. Install build-time dependencies
@@ -29,9 +29,12 @@ RUN mkdir -p /app/hf-cache && \
     echo "Models directory created - will download at runtime"
 
 # 5. Clean up build dependencies to reduce image size
-RUN apt-get autoremove -y build-essential && \
+RUN apt-get autoremove -y build-essential git && \
     apt-get clean && \
-    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    apt-get autoclean && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /root/.cache/* && \
+    find /usr -name "*.pyc" -delete 2>/dev/null || true && \
+    find /usr -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
 
 
 # =========================
