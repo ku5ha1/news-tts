@@ -3,28 +3,18 @@ import os
 import asyncio
 import logging
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+from IndicTransToolkit import IndicProcessor
 from threading import Lock
 
-# Set up logging first
+# Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Handle IndicTransToolkit import with fallback
-try:
-    from IndicTransToolkit.processor import IndicProcessor
-except ImportError:
-    logger.error("Failed to import IndicProcessor from IndicTransToolkit.processor")
-    IndicProcessor = None
-
-# Model name - use 200M model optimized for high-memory CPU
-MODEL_NAME = "ai4bharat/indictrans2-en-indic-dist-200M"
-
-# Use CPU with high memory optimization
-DEVICE = "cpu"
-logger.info(f"Using device: {DEVICE}")
-
-# CPU-optimized model configuration
-model_kwargs = {"trust_remote_code": True}
+# Model names for 1B (CORRECT MODELS)
+MODEL_NAMES = {
+    "en_indic": "ai4bharat/indictrans2-en-indic-1B",
+    "indic_en": "ai4bharat/indictrans2-indic-en-1B",
+}
 
 class TranslationService:
     _instance = None
@@ -45,38 +35,14 @@ class TranslationService:
             
             logger.info("[Translation] Using CPU for 1B model with optimizations")
 
-            # Initialize IndicTransToolkit components with graceful degradation
-            self.ip = None
-            self.tokenizer = None
-            self.model = None
-            self._initialization_error = None
-            
+            # Initialize IndicTransToolkit components
             try:
-                if IndicProcessor is None:
-                    logger.warning("IndicProcessor is not available - using fallback transformers-only mode")
-                    self.ip = None  # Use fallback mode
-                    logger.info("Using fallback translation mode without IndicTransToolkit")
-                else:
-                    logger.info("Initializing IndicTransToolkit components...")
-                    self.ip = IndicProcessor(inference=True)
-                    
-                    # Load model and tokenizer at startup (CPU optimized for high memory)
-                    logger.info(f"Loading model: {MODEL_NAME} on {DEVICE}")
-                    try:
-                        self.tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, trust_remote_code=True)
-                        self.model = AutoModelForSeq2SeqLM.from_pretrained(MODEL_NAME, **model_kwargs).eval()
-                        logger.info(f"Model and tokenizer loaded successfully on {DEVICE}")
-                    except Exception as model_error:
-                        logger.error(f"Model loading failed: {model_error}")
-                        self.tokenizer = None
-                        self.model = None
-                        raise
-                    
-                    logger.info("IndicTransToolkit components initialized successfully")
+                logger.info("Initializing IndicTransToolkit components...")
+                self.ip = IndicProcessor(inference=True)
+                logger.info("IndicTransToolkit components initialized successfully")
             except Exception as e:
                 logger.error(f"Failed to initialize IndicTransToolkit components: {e}")
-                self._initialization_error = str(e)
-                # Don't raise - allow service to start in degraded mode
+                raise RuntimeError(f"IndicTransToolkit initialization failed: {e}")
 
             # Placeholders for lazy model load
             self.en_indic_model = None
@@ -91,52 +57,6 @@ class TranslationService:
             # Track loading status
             self.loading_en_indic = False
             self.loading_indic_en = False
-            
-            # Circuit breaker state
-            self._circuit_open = False
-            self._failure_count = 0
-            self._last_failure_time = None
-
-    def _check_circuit_breaker(self):
-        """Check if circuit breaker should prevent operations."""
-        if self._circuit_open:
-            import time
-            # Reset circuit after 5 minutes
-            if time.time() - self._last_failure_time > 300:
-                self._circuit_open = False
-                self._failure_count = 0
-                logger.info("Circuit breaker reset - attempting operations again")
-            else:
-                raise RuntimeError("Circuit breaker is open - translation service unavailable")
-    
-    def _record_failure(self):
-        """Record a failure for circuit breaker."""
-        import time
-        self._failure_count += 1
-        self._last_failure_time = time.time()
-        
-        # Open circuit after 3 consecutive failures
-        if self._failure_count >= 3:
-            self._circuit_open = True
-            logger.error(f"Circuit breaker opened after {self._failure_count} failures")
-    
-    def _record_success(self):
-        """Record a success for circuit breaker."""
-        self._failure_count = 0
-        self._circuit_open = False
-    
-    def get_health_status(self):
-        """Get health status of the translation service."""
-        return {
-            "initialization_error": self._initialization_error,
-            "circuit_open": self._circuit_open,
-            "failure_count": self._failure_count,
-            "models_loaded": {
-                "en_indic": self.en_indic_model is not None,
-                "indic_en": self.indic_en_model is not None
-            },
-            "indictrans_available": self.ip is not None
-        }
 
     def _ensure_en_indic_model(self):
         """Load EN->Indic model and tokenizer if not already loaded."""
@@ -145,17 +65,17 @@ class TranslationService:
                 if self.en_indic_model is None:
                     try:
                         self.loading_en_indic = True
-                        model_name = MODEL_NAME
+                        model_name = MODEL_NAMES["en_indic"]
                         logger.info(f"Loading EN->Indic 1B model: {model_name}")
-                                
+                        
                         self.en_indic_tokenizer = AutoTokenizer.from_pretrained(
-                                    model_name, trust_remote_code=True
-                                )
+                            model_name, trust_remote_code=True
+                        )
                         self.en_indic_model = AutoModelForSeq2SeqLM.from_pretrained(
-                                    model_name, trust_remote_code=True
-                                )
+                            model_name, trust_remote_code=True
+                        )
                         self.en_indic_model.eval()  # Set to evaluation mode
-                                
+                        
                         logger.info("EN->Indic 1B model loaded successfully")
                     except Exception as e:
                         logger.error(f"Failed to load EN->Indic model: {e}")
@@ -172,7 +92,7 @@ class TranslationService:
                 if self.indic_en_model is None:
                     try:
                         self.loading_indic_en = True
-                        model_name = MODEL_NAME
+                        model_name = MODEL_NAMES["indic_en"]
                         logger.info(f"Loading Indic->EN 1B model: {model_name}")
                         
                         self.indic_en_tokenizer = AutoTokenizer.from_pretrained(
@@ -319,9 +239,9 @@ class TranslationService:
                 with self.indic_en_tokenizer.as_target_tokenizer():
                     generated_tokens = self.indic_en_tokenizer.batch_decode(
                         generated_tokens.detach().cpu().tolist(),
-                    skip_special_tokens=True,
-                    clean_up_tokenization_spaces=True,
-                )
+                        skip_special_tokens=True,
+                        clean_up_tokenization_spaces=True,
+                    )
                 
                 translations = self.ip.postprocess_batch(
                     generated_tokens, 
@@ -334,78 +254,30 @@ class TranslationService:
                     
             except Exception as e:
                 logger.error(f"Translation error {source_lang}->EN: {e}")
-            raise
+                raise
 
     def translate(self, text: str, source_lang: str, target_lang: str) -> str:
-        """Single translation method using simplified approach."""
+        """Single translation method."""
         try:
-            # Check if models are loaded
-            if self.ip is None or self.model is None or self.tokenizer is None:
-                logger.warning("Models not loaded - returning original text")
-                return text
-            
             source_lang = self._normalize_lang_code(source_lang)
             target_lang = self._normalize_lang_code(target_lang)
             
             if source_lang == target_lang:
                 return text
             
-            # Use simple translation approach like the sample
-            if source_lang == "english" and target_lang != "english":
-                return self._simple_translate(text, source_lang, target_lang)
+            if source_lang == "english":
+                results = self._translate_en_to_indic_batch([text], [target_lang])
+                return results[target_lang]
+            elif target_lang == "english":
+                return self._translate_indic_to_en(text, source_lang)
             else:
-                logger.warning(f"Translation from {source_lang} to {target_lang} not supported in simple mode")
-                return text
-                
+                # Translate through English
+                english_text = self._translate_indic_to_en(text, source_lang)
+                results = self._translate_en_to_indic_batch([english_text], [target_lang])
+                return results[target_lang]
         except Exception as e:
-            logger.error(f"Translation error: {e}")
+            logger.error(f"Translation failed {source_lang}->{target_lang}: {e}")
             raise
-    
-    def _simple_translate(self, text: str, src_lang: str, tgt_lang: str) -> str:
-        """Simple translation using the sample's approach."""
-        try:
-            # Convert to proper language codes
-            src_code = self._get_lang_code(src_lang)
-            tgt_code = self._get_lang_code(tgt_lang)
-            
-            # 1) Preprocess
-            batch = self.ip.preprocess_batch([text], src_lang=src_code, tgt_lang=tgt_code)
-            logger.info(f"Preprocessed batch: {batch}")
-            
-            # 2) Tokenize
-            inputs = self.tokenizer(
-                batch,
-                truncation=True,
-                padding="longest",
-                return_tensors="pt",
-                return_attention_mask=True,
-            )
-            
-            # Debug: Check if inputs is valid
-            if inputs is None or inputs.input_ids is None:
-                logger.error(f"Tokenization failed - inputs is None or input_ids is None")
-                return text
-            
-            # 3) Generate
-            with torch.no_grad():
-                generated = self.model.generate(
-                    **inputs,
-                    use_cache=True,
-                    min_length=0,
-                    max_length=256,
-                    num_beams=5,
-                    num_return_sequences=1,
-                )
-            
-            # 4) Decode + postprocess
-            decoded = self.tokenizer.batch_decode(generated, skip_special_tokens=True, clean_up_tokenization_spaces=True)
-            result = self.ip.postprocess_batch(decoded, lang=tgt_code)
-            
-            return result[0] if result else text
-            
-        except Exception as e:
-            logger.error(f"Simple translation error: {e}")
-            return text
 
     async def translate_to_all_async(self, title: str, description: str, source_lang: str) -> dict:
         """BATCH translate to multiple languages efficiently."""
@@ -421,9 +293,9 @@ class TranslationService:
         # PRE-LOAD models
         logger.info("Pre-loading models...")
         if source_lang == "english":
-                self._ensure_en_indic_model()
+            self._ensure_en_indic_model()
         else:
-                self._ensure_indic_en_model()
+            self._ensure_indic_en_model()
         logger.info("Models pre-loaded successfully")
         
         # Combine title and description
