@@ -68,6 +68,11 @@ async def background_model_preload():
             _is_ready = False
             _model_err = f"Translation service unavailable: {str(e)}"
             log.info("Application will start in degraded mode - translation features may not work")
+    
+    except Exception as e:
+        log.error(f"Background model preloading failed: {e}")
+        _is_ready = False
+        _model_err = f"Model preloading failed: {str(e)}"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

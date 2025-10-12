@@ -1,4 +1,4 @@
-name: Deploy to Azure App Service
+name: Deploy to VM
 
 on:
   push:
@@ -6,17 +6,10 @@ on:
   workflow_dispatch:
 
 env:
-  # Azure Configuration
-  AZURE_WEBAPP_NAME: news-tts-app
-  RESOURCE_GROUP: ${{ secrets.RESOURCE_GROUP }}
-  DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-  DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+  # VM Configuration
+  VM_HOST: ${{ secrets.VM_HOST }}
+  VM_USERNAME: ${{ secrets.VM_USERNAME }}
   IMAGE_NAME: news-tts
-  
-  # App Service Configuration
-  WEBSITES_MOUNT_ENABLED: 0
-  WEBSITES_MOUNT_PATH: ""
-  WEBSITES_PORT: 8080
   
   # Environment Variables - Consistent across all files
   HF_HOME: /app/hf-cache
@@ -39,102 +32,43 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-
-    - name: Login to Docker Hub
-      uses: docker/login-action@v3
+    - name: Deploy to VM
+      uses: appleboy/ssh-action@v1.0.3
       with:
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_PASSWORD }}
-
-    - name: Build and push Docker image
-      uses: docker/build-push-action@v5
-      with:
-        context: .
-        push: true
-        tags: |
-          ${{ env.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
-          ${{ env.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:latest
-
-    - name: Azure Login
-      uses: azure/login@v1
-      with:
-        creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-    - name: Create App Service (if not exists)
-      uses: azure/CLI@v1
-      with:
-        inlineScript: |
-          # Check if App Service exists
-          if ! az webapp show --name ${{ env.AZURE_WEBAPP_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} >/dev/null 2>&1; then
-            echo "Creating App Service..."
-            az webapp create \
-              --resource-group ${{ env.RESOURCE_GROUP }} \
-              --plan ${{ env.RESOURCE_GROUP }}-plan \
-              --name ${{ env.AZURE_WEBAPP_NAME }} \
-              --deployment-container-image-name ${{ env.REGISTRY_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:latest
-          else
-            echo "App Service already exists"
-          fi
-
-    - name: Deploy to Azure App Service
-      uses: azure/webapps-deploy@v2
-      with:
-        app-name: ${{ env.AZURE_WEBAPP_NAME }}
-        resource-group: ${{ env.RESOURCE_GROUP }}
-        images: ${{ env.REGISTRY_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:latest
-
-    - name: Configure App Service Settings
-      uses: azure/CLI@v1
-      with:
-        inlineScript: |
-          # Configure Docker Hub image (no authentication needed for public images)
-          az webapp config container set \
-            --name ${{ env.AZURE_WEBAPP_NAME }} \
-            --resource-group ${{ env.RESOURCE_GROUP }} \
-            --docker-custom-image-name ${{ env.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:latest
+        host: ${{ secrets.VM_HOST }}
+        username: ${{ secrets.VM_USERNAME }}
+        key: ${{ secrets.VM_SSH_KEY }}
+        script: |
+          # Navigate to project directory
+          cd ~/news-tts
           
-          # Set environment variables
-          az webapp config appsettings set \
-            --name ${{ env.AZURE_WEBAPP_NAME }} \
-            --resource-group ${{ env.RESOURCE_GROUP }} \
-            --settings \
-              WEBSITES_MOUNT_ENABLED="${{ env.WEBSITES_MOUNT_ENABLED }}" \
-              WEBSITES_MOUNT_PATH="${{ env.WEBSITES_MOUNT_PATH }}" \
-              WEBSITES_PORT="${{ env.WEBSITES_PORT }}" \
-              HF_HOME="${{ env.HF_HOME }}" \
-              TRANSFORMERS_CACHE="${{ env.TRANSFORMERS_CACHE }}" \
-              HF_HUB_OFFLINE="${{ env.HF_HUB_OFFLINE }}" \
-              TRUST_REMOTE_CODE="${{ env.TRUST_REMOTE_CODE }}" \
-              LOG_LEVEL="${{ env.LOG_LEVEL }}" \
-              PORT="${{ env.PORT }}" \
-              PYTHONUNBUFFERED="${{ env.PYTHONUNBUFFERED }}" \
-              TRANSLATION_PER_CALL_TIMEOUT="${{ env.TRANSLATION_PER_CALL_TIMEOUT }}" \
-              TRANSLATION_PER_CALL_TIMEOUT_RETRY="${{ env.TRANSLATION_PER_CALL_TIMEOUT_RETRY }}" \
-              ELEVENLABS_API_KEY="${{ secrets.ELEVENLABS_API_KEY }}" \
-              ELEVENLABS_VOICE_ID="${{ secrets.ELEVENLABS_VOICE_ID }}" \
-              MONGO_URI="${{ secrets.MONGO_URI }}" \
-              DATABASE_NAME="${{ secrets.DATABASE_NAME }}" \
-              FIREBASE_SERVICE_ACCOUNT_BASE64="${{ secrets.FIREBASE_SERVICE_ACCOUNT_BASE64 }}" \
-              FIREBASE_STORAGE_BUCKET="${{ secrets.FIREBASE_STORAGE_BUCKET }}" \
-              CORS_ORIGIN="${{ secrets.CORS_ORIGIN }}"
-
-    - name: Get App Service URL
-      uses: azure/CLI@v1
-      with:
-        inlineScript: |
-          APP_URL=$(az webapp show --name ${{ env.AZURE_WEBAPP_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} --query "defaultHostName" -o tsv)
-          echo "App Service URL: https://$APP_URL"
-          echo "Health Check: https://$APP_URL/health"
-
-    - name: Wait for deployment
-      run: |
-        echo "Waiting for App Service to start and download models..."
-        sleep 600  # Wait 10 minutes for model download
-
-    - name: Test deployment
-      run: |
-        APP_URL=$(az webapp show --name ${{ env.AZURE_WEBAPP_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} --query "defaultHostName" -o tsv)
-        echo "Testing health endpoint: https://$APP_URL/health"
-        curl --max-time 60 --retry 3 "https://$APP_URL/health" || echo "Health check failed - check App Service logs"
+          # Pull latest changes
+          git pull origin main
+          
+          # Stop existing container
+          docker stop news-tts-container || true
+          docker rm news-tts-container || true
+          
+          # Build new image
+          docker build -t news-tts . --no-cache
+          
+          # Run new container with environment variables
+          docker run -d -p 8080:8080 --name news-tts-container --user root \
+            -e HF_HOME=/app/hf-cache \
+            -e TRANSFORMERS_CACHE=/app/hf-cache \
+            -e HF_HUB_OFFLINE=0 \
+            -e TRUST_REMOTE_CODE=1 \
+            -e LOG_LEVEL=INFO \
+            -e PORT=8080 \
+            -e PYTHONUNBUFFERED=1 \
+            news-tts
+          
+          # Wait for container to start
+          sleep 10
+          
+          # Check health
+          curl -f http://localhost:8080/health || exit 1
+          
+          echo "Deployment successful!"
+          echo "App URL: http://${{ secrets.VM_HOST }}:8080"
+          echo "Health Check: http://${{ secrets.VM_HOST }}:8080/health"
