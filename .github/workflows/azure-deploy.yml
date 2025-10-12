@@ -135,8 +135,6 @@ jobs:
               FIREBASE_SERVICE_ACCOUNT_BASE64="${{ env.FIREBASE_SERVICE_ACCOUNT_BASE64 }}" \
               FIREBASE_STORAGE_BUCKET="${{ env.FIREBASE_STORAGE_BUCKET }}" \
               CORS_ORIGIN="${{ env.CORS_ORIGIN }}" \
-            # REMOVED: Volume mounting - using baked-in models instead
-            --restart-policy Always \
             --no-wait
 
       - name: Get container public IP
