@@ -49,6 +49,10 @@ jobs:
           docker stop news-tts-container || true
           docker rm news-tts-container || true
           
+          # Clean up Docker to free space
+          docker system prune -a -f || true
+          docker volume prune -f || true
+          
           # Build new image
           docker build -t news-tts . --no-cache
           
