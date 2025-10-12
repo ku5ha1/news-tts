@@ -64,7 +64,8 @@ RUN find /usr/local/lib/python3.11/site-packages -name "*.pyc" -delete && \
     rm -rf /tmp/* /var/tmp/* /root/.cache/*
 
 # 5. Set correct ownership for the 'app' user
-RUN chown -R app:app /app
+RUN chown -R app:app /app && \
+    chmod -R 755 /app
 
 # 6. Copy and set executable permissions for the entrypoint script
 COPY entrypoint.sh .

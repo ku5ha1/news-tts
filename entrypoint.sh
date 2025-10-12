@@ -37,6 +37,16 @@ if [ "$(id -u)" -eq 0 ]; then
         echo "Models directory is accessible."
     fi
 
+    # Set ownership of the entire app directory
+    echo "Setting ownership of application files..."
+    chown -R "$APP_USER":"$APP_USER" /app || {
+        echo "WARNING: Could not set ownership of /app - continuing anyway"
+    }
+    chmod -R 755 /app || {
+        echo "WARNING: Could not set permissions of /app - continuing anyway"
+    }
+    echo "Ownership of /app set to $APP_USER."
+
     # Verify app user can access the app directory
     if ! su "$APP_USER" -c "test -r /app/app/main.py"; then
         echo "ERROR: App user cannot access application files!"
