@@ -5,16 +5,16 @@ import logging
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 from threading import Lock
 
+# Set up logging first
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 # Handle IndicTransToolkit import with fallback
 try:
     from IndicTransToolkit import IndicProcessor
 except ImportError:
     logger.error("Failed to import IndicProcessor from IndicTransToolkit")
     IndicProcessor = None
-
-# Set up logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 # Model names for 1B (CORRECT MODELS)
 MODEL_NAMES = {
