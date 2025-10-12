@@ -13,7 +13,7 @@ from pathlib import Path
 settings = Settings()
 
 logging.basicConfig(
-    level=os.getenv("LOG_LEVEL", "INFO").upper(),
+    level=os.getenv("LOG_LEVEL", "info").upper(),
     format="%(asctime)s %(levelname)s %(name)s - %(message)s",
 )
 log = logging.getLogger("news-tts-service") 

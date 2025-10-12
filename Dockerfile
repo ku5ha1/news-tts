@@ -76,7 +76,7 @@ RUN chmod +x entrypoint.sh
 USER root 
 ENV PORT=8080 \
     PYTHONUNBUFFERED=1 \
-    LOG_LEVEL=INFO \
+    LOG_LEVEL=info \
     HF_HOME=/app/hf-cache \
     TRANSFORMERS_CACHE=/app/hf-cache \
     HF_HUB_OFFLINE=0 \
