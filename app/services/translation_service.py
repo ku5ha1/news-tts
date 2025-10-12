@@ -64,8 +64,7 @@ class TranslationService:
                 self.indic_en_model = AutoModelForSeq2SeqLM.from_pretrained(
                     MODEL_NAMES["indic_en"], 
                     trust_remote_code=True, 
-                    torch_dtype=torch.float16 if self.device.type == "cuda" else torch.float32,
-                    attn_implementation="flash_attention_2" if self.device.type == "cuda" else None
+                    torch_dtype=torch.float16 if self.device.type == "cuda" else torch.float32
                 ).to(self.device)
                 self.indic_en_model.eval()
                 logger.info("Indic->EN model loaded successfully")
