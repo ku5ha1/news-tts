@@ -16,7 +16,7 @@ env:
   # App Service Configuration
   WEBSITES_MOUNT_ENABLED: 0
   WEBSITES_MOUNT_PATH: ""
-  WEBSITES_PORT: 8181
+  WEBSITES_PORT: 8080
   
   # Environment Variables - Consistent across all files
   HF_HOME: /app/hf-cache
@@ -24,7 +24,7 @@ env:
   HF_HUB_OFFLINE: 0
   TRUST_REMOTE_CODE: 1
   LOG_LEVEL: INFO
-  PORT: 8181
+  PORT: 8080
   PYTHONUNBUFFERED: 1
   
   # Service Configuration
