@@ -32,8 +32,8 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Deploy to VM
-      uses: appleboy/ssh-action@v1.0.3
+            - name: Deploy to VM
+              uses: appleboy/ssh-action@v1.0.3
       with:
         host: ${{ secrets.VM_HOST }}
         username: ${{ secrets.VM_USERNAME }}
@@ -64,6 +64,7 @@ jobs:
           
           # Clear Docker build cache and build new image
           docker builder prune -a -f || true
+          echo "Starting optimized Docker build..."
           docker build -t news-tts . --no-cache --pull
           
           # Run new container with environment variables
