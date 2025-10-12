@@ -10,6 +10,7 @@ env:
   AZURE_WEBAPP_NAME: news-tts-app
   RESOURCE_GROUP: ${{ secrets.RESOURCE_GROUP }}
   DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+  DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
   IMAGE_NAME: news-tts
   
   # App Service Configuration
