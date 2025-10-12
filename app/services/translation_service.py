@@ -3,8 +3,17 @@ import os
 import asyncio
 import logging
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
-from IndicTransToolkit import IndicProcessor
 from threading import Lock
+
+# Handle IndicTransToolkit import with fallback
+try:
+    from IndicTransToolkit import IndicProcessor
+except ImportError:
+    try:
+        from IndicTransToolkit.IndicTransToolkit import IndicProcessor
+    except ImportError:
+        logger.error("Failed to import IndicProcessor from IndicTransToolkit")
+        IndicProcessor = None
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)

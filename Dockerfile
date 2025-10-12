@@ -14,8 +14,12 @@ RUN apt-get update && \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 3. Install IndicTransToolkit from PyPI (no compilation needed)
-RUN pip install IndicTransToolkit
+# 3. Clone and install IndicTransToolkit from source (editable install)
+RUN git clone https://github.com/VarunGumma/IndicTransToolkit.git /tmp/IndicTransToolkit && \
+    cd /tmp/IndicTransToolkit && \
+    pip install --editable ./ && \
+    cd /app && \
+    rm -rf /tmp/IndicTransToolkit
 
 # 4. Pre-download models to bake them into the image
 RUN python -c "import os; os.environ['HF_HOME'] = '/app/hf-cache'; os.environ['TRANSFORMERS_CACHE'] = '/app/hf-cache'; os.environ['HF_HUB_OFFLINE'] = '0'; from IndicTransToolkit import IndicProcessor; processor = IndicProcessor()"
