@@ -11,18 +11,26 @@ env:
   VM_USERNAME: ${{ secrets.VM_USERNAME }}
   IMAGE_NAME: news-tts
   
-  # Environment Variables - Using app user's cache directory
+  # Non-sensitive defaults
   HF_HOME: /home/app/.cache/huggingface
-  TRANSFORMERS_CACHE: /home/app/.cache/huggingface
+  HF_HUB_CACHE: /home/app/.cache/huggingface/hub
+  TRANSFORMERS_CACHE: /home/app/.cache/huggingface/transformers
   HF_HUB_OFFLINE: 0
   TRUST_REMOTE_CODE: 1
+  TRANSLATION_PER_CALL_TIMEOUT: 90
+  TRANSLATION_PER_CALL_TIMEOUT_RETRY: 120
   LOG_LEVEL: info
   PORT: 8080
   PYTHONUNBUFFERED: 1
-  
-  # Service Configuration
-  TRANSLATION_PER_CALL_TIMEOUT: 90
-  TRANSLATION_PER_CALL_TIMEOUT_RETRY: 120
+
+  # Secrets from GitHub repository
+  DATABASE_NAME: ${{ secrets.DATABASE_NAME }}
+  ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+  ELEVENLABS_VOICE_ID: ${{ secrets.ELEVENLABS_VOICE_ID }}
+  FIREBASE_SERVICE_ACCOUNT_BASE64: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BASE64 }}
+  FIREBASE_STORAGE_BUCKET: ${{ secrets.FIREBASE_STORAGE_BUCKET }}
+  MONGO_URI: ${{ secrets.MONGO_URI }}
+  CORS_ORIGIN: ${{ secrets.CORS_ORIGIN }}
 
 jobs:
   build-and-deploy:
@@ -69,13 +77,21 @@ jobs:
           
           # Run new container with environment variables
           docker run -d -p 8080:8080 --name news-tts-container --user root \
-            -e HF_HOME=/home/app/.cache/huggingface \
-            -e TRANSFORMERS_CACHE=/home/app/.cache/huggingface \
-            -e HF_HUB_OFFLINE=0 \
-            -e TRUST_REMOTE_CODE=1 \
-            -e LOG_LEVEL=info \
-            -e PORT=8080 \
-            -e PYTHONUNBUFFERED=1 \
+            -e HF_HOME="$HF_HOME" \
+            -e HF_HUB_CACHE="$HF_HUB_CACHE" \
+            -e TRANSFORMERS_CACHE="$TRANSFORMERS_CACHE" \
+            -e HF_HUB_OFFLINE="$HF_HUB_OFFLINE" \
+            -e TRUST_REMOTE_CODE="$TRUST_REMOTE_CODE" \
+            -e LOG_LEVEL="$LOG_LEVEL" \
+            -e PORT="$PORT" \
+            -e PYTHONUNBUFFERED="$PYTHONUNBUFFERED" \
+            -e DATABASE_NAME="$DATABASE_NAME" \
+            -e ELEVENLABS_API_KEY="$ELEVENLABS_API_KEY" \
+            -e ELEVENLABS_VOICE_ID="$ELEVENLABS_VOICE_ID" \
+            -e FIREBASE_SERVICE_ACCOUNT_BASE64="$FIREBASE_SERVICE_ACCOUNT_BASE64" \
+            -e FIREBASE_STORAGE_BUCKET="$FIREBASE_STORAGE_BUCKET" \
+            -e MONGO_URI="$MONGO_URI" \
+            -e CORS_ORIGIN="$CORS_ORIGIN" \
             news-tts
           
           # Wait for container to start
