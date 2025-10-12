@@ -120,7 +120,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-_cors_origins = _parse_cors(settings.CORS_ORIGINS)  
+_cors_origins = _parse_cors(getattr(settings, 'CORS_ORIGINS', None))  
 _allow_credentials = False if _cors_origins == ["*"] else True
 
 app.add_middleware(
@@ -142,7 +142,7 @@ async def health():
         status = "error"
     
     # Additional diagnostics
-    hf_home = os.getenv("HF_HOME", "/mnt/hf-cache")
+    hf_home = os.getenv("HF_HOME", "/app/hf-cache")  # Fixed default
     hf_home_exists = os.path.exists(hf_home)
     hf_home_writable = False
     
