@@ -47,11 +47,13 @@ class TranslationService:
             
             try:
                 if IndicProcessor is None:
-                    raise ImportError("IndicProcessor is not available - IndicTransToolkit import failed")
-                
-                logger.info("Initializing IndicTransToolkit components...")
-                self.ip = IndicProcessor(inference=True)
-                logger.info("IndicTransToolkit components initialized successfully")
+                    logger.warning("IndicProcessor is not available - using fallback transformers-only mode")
+                    self.ip = None  # Use fallback mode
+                    logger.info("Using fallback translation mode without IndicTransToolkit")
+                else:
+                    logger.info("Initializing IndicTransToolkit components...")
+                    self.ip = IndicProcessor(inference=True)
+                    logger.info("IndicTransToolkit components initialized successfully")
             except Exception as e:
                 logger.error(f"Failed to initialize IndicTransToolkit components: {e}")
                 self._initialization_error = str(e)
@@ -318,6 +320,11 @@ class TranslationService:
     def translate(self, text: str, source_lang: str, target_lang: str) -> str:
         """Single translation method."""
         try:
+            # Check if IndicTransToolkit is available
+            if self.ip is None:
+                logger.warning("IndicTransToolkit not available - returning original text")
+                return text
+            
             source_lang = self._normalize_lang_code(source_lang)
             target_lang = self._normalize_lang_code(target_lang)
             
