@@ -89,14 +89,26 @@ jobs:
       uses: azure/CLI@v1
       with:
         inlineScript: |
-          # Configure ACR authentication
+          # Configure ACR authentication using managed identity
           az webapp config container set \
             --name ${{ env.AZURE_WEBAPP_NAME }} \
             --resource-group ${{ env.RESOURCE_GROUP }} \
             --docker-custom-image-name ${{ env.REGISTRY_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:latest \
-            --docker-registry-server-url https://${{ env.REGISTRY_NAME }}.azurecr.io \
-            --docker-registry-server-user ${{ secrets.ACR_USERNAME }} \
-            --docker-registry-server-password ${{ secrets.ACR_PASSWORD }}
+            --docker-registry-server-url https://${{ env.REGISTRY_NAME }}.azurecr.io
+          
+          # Enable managed identity for ACR access
+          az webapp identity assign \
+            --name ${{ env.AZURE_WEBAPP_NAME }} \
+            --resource-group ${{ env.RESOURCE_GROUP }}
+          
+          # Get the managed identity principal ID
+          PRINCIPAL_ID=$(az webapp identity show --name ${{ env.AZURE_WEBAPP_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} --query principalId -o tsv)
+          
+          # Grant ACR pull permissions to the managed identity
+          az role assignment create \
+            --assignee $PRINCIPAL_ID \
+            --role AcrPull \
+            --scope /subscriptions/$(az account show --query id -o tsv)/resourceGroups/${{ env.RESOURCE_GROUP }}/providers/Microsoft.ContainerRegistry/registries/${{ env.REGISTRY_NAME }}
           
           # Set environment variables
           az webapp config appsettings set \
