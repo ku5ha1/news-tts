@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Literal
 from datetime import datetime
 
 class NewsCreateRequest(BaseModel):
@@ -9,6 +9,8 @@ class NewsCreateRequest(BaseModel):
     author: str
     newsImage: str
     publishedAt: datetime
+    magazineType: Literal["magazine", "magazine2"]
+    newsType: Literal["statenews", "districtnews", "specialnews"]
 
 class TranslationData(BaseModel):
     title: str

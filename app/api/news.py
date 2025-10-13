@@ -241,6 +241,8 @@ async def create_news(payload: NewsCreateRequest, background_tasks: BackgroundTa
             "category": ObjectId(payload.category) if isinstance(payload.category, str) and len(payload.category) == 24 else payload.category,
             "author": payload.author,
             "publishedAt": payload.publishedAt,
+            "magazineType": payload.magazineType,
+            "newsType": payload.newsType,
             "isLive": False,
             "views": 0,
             "total_Likes": 0,
