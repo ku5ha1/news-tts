@@ -86,24 +86,24 @@ class GoogleTranslateService:
                 # Default: translate to Hindi and Kannada
                 target_languages = ["hi", "kn"]
             
-            # Combine title and description for translation
-            combined_text = f"{title}. {description}"
-            
             results = {}
             
-            # Translate to each target language
+            # Translate title and description separately for better accuracy
             for target_lang in target_languages:
                 try:
-                    translated_combined = await self._translate_text(
-                        combined_text,
+                    # Translate title separately
+                    translated_title = await self._translate_text(
+                        title,
                         source_lang,
                         target_lang
                     )
                     
-                    # Split back into title and description
-                    parts = translated_combined.split('. ', 1)
-                    translated_title = parts[0] if parts else translated_combined
-                    translated_description = parts[1] if len(parts) > 1 else translated_combined
+                    # Translate description separately
+                    translated_description = await self._translate_text(
+                        description,
+                        source_lang,
+                        target_lang
+                    )
                     
                     results[target_lang] = {
                         "title": translated_title,
