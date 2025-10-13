@@ -9,14 +9,24 @@ LOG_LEVEL="${LOG_LEVEL:-info}"  # Default to lowercase 'info'
 
 echo "Starting container as user: $(whoami)"
 echo "LOG_LEVEL is set to: $LOG_LEVEL"
-echo "HF_HOME is set to: $HF_HOME (default HuggingFace cache)"
+echo "HF_HOME is set to: $HF_HOME (pre-loaded models)"
 echo "Environment validation:"
 echo "  HF_HUB_OFFLINE: ${HF_HUB_OFFLINE:-not_set}"
 echo "  TRUST_REMOTE_CODE: ${TRUST_REMOTE_CODE:-not_set}"
 echo "  TRANSFORMERS_CACHE: ${TRANSFORMERS_CACHE:-not_set}"
 
 if [ "$(id -u)" -eq 0 ]; then
-    echo "Running as root. Setting up HuggingFace cache directory for app user."
+    echo "Running as root. Setting up pre-loaded models for app user."
+
+    # Verify pre-loaded models exist
+    if [ -d "$HF_HOME" ] && [ "$(ls -A $HF_HOME)" ]; then
+        echo "✅ Pre-loaded models found in $HF_HOME"
+        echo "Model files:"
+        ls -la "$HF_HOME" | head -10
+    else
+        echo "⚠️  No pre-loaded models found in $HF_HOME"
+        echo "Models will be downloaded at runtime (slower startup)"
+    fi
 
     # Create app user's home directory and cache directory
     mkdir -p "/home/app"
@@ -25,7 +35,7 @@ if [ "$(id -u)" -eq 0 ]; then
         mkdir -p "$HF_HOME"
     fi
 
-    echo "Default HuggingFace cache directory ready: $HF_HOME"
+    echo "HuggingFace cache directory ready: $HF_HOME"
     
     # Set ownership and permissions of the cache directory
     chown -R "$APP_USER":"$APP_USER" "$HF_HOME" || {
@@ -79,7 +89,7 @@ if [ "$(id -u)" -eq 0 ]; then
 
     echo "Switching to user $APP_USER and starting uvicorn..."
     echo "About to execute: su $APP_USER -c 'cd /app && uvicorn app.main:app --host 0.0.0.0 --port 8080 --log-level $LOG_LEVEL'"
-    exec su "$APP_USER" -c "cd /app && echo 'Starting uvicorn...' && uvicorn app.main:app --host 0.0.0.0 --port 8080 --log-level $LOG_LEVEL"
+    exec su "$APP_USER" -c "cd /app && echo 'Starting uvicorn with pre-loaded models...' && uvicorn app.main:app --host 0.0.0.0 --port 8080 --log-level $LOG_LEVEL"
 
 fi
 
