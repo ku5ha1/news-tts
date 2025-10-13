@@ -14,7 +14,6 @@ env:
   # Non-sensitive defaults
   HF_HOME: /home/app/.cache/huggingface
   HF_HUB_CACHE: /home/app/.cache/huggingface/hub
-  TRANSFORMERS_CACHE: /home/app/.cache/huggingface/transformers
   HF_HUB_OFFLINE: 0
   TRUST_REMOTE_CODE: 1
   TRANSLATION_PER_CALL_TIMEOUT: 90
@@ -85,7 +84,6 @@ jobs:
           docker run -d -p 8080:8080 --name news-tts-container --user root \
             -e HF_HOME="$HF_HOME" \
             -e HF_HUB_CACHE="$HF_HUB_CACHE" \
-            -e TRANSFORMERS_CACHE="$TRANSFORMERS_CACHE" \
             -e HF_HUB_OFFLINE="$HF_HUB_OFFLINE" \
             -e TRUST_REMOTE_CODE="$TRUST_REMOTE_CODE" \
             -e LOG_LEVEL="$LOG_LEVEL" \

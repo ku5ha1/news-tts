@@ -30,16 +30,12 @@ RUN pip install --no-cache-dir \
 # Create cache directory and download models
 RUN mkdir -p /models/cache && \
     export HF_HOME=/models/cache && \
-    export TRANSFORMERS_CACHE=/models/cache && \
     python -c "\
 import torch; \
-from transformers import AutoTokenizer, AutoModelForSeq2SeqLM; \
-from indictranstoolkit import IndicTransToolkit; \
+from IndicTransToolkit import IndicProcessor; \
 print('Downloading IndicTrans2 models...'); \
-en_indic_tokenizer = AutoTokenizer.from_pretrained('ai4bharat/indictrans2-en-indic-dist-200M', trust_remote_code=True); \
-en_indic_model = AutoModelForSeq2SeqLM.from_pretrained('ai4bharat/indictrans2-en-indic-dist-200M', trust_remote_code=True); \
-indic_en_tokenizer = AutoTokenizer.from_pretrained('ai4bharat/indictrans2-indic-en-dist-200M', trust_remote_code=True); \
-indic_en_model = AutoModelForSeq2SeqLM.from_pretrained('ai4bharat/indictrans2-indic-en-dist-200M', trust_remote_code=True); \
+processor = IndicProcessor(inference_mode='en-indic', model_id='ai4bharat/indictrans2-en-indic-dist-200M'); \
+processor_en = IndicProcessor(inference_mode='indic-en', model_id='ai4bharat/indictrans2-indic-en-dist-200M'); \
 print('Models downloaded successfully!')"
 
 # Stage 2: Production Image
