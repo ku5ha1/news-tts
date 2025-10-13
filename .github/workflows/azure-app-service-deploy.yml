@@ -30,6 +30,7 @@ env:
   FIREBASE_STORAGE_BUCKET: ${{ secrets.FIREBASE_STORAGE_BUCKET }}
   MONGO_URI: ${{ secrets.MONGO_URI }}
   CORS_ORIGIN: ${{ secrets.CORS_ORIGIN }}
+  JWT_SECRET: ${{ secrets.JWT_SECRET }}
   
   # Azure Blob Storage
   AZURE_STORAGE_ACCOUNT_NAME: ${{ secrets.AZURE_STORAGE_ACCOUNT_NAME }}
