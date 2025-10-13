@@ -67,16 +67,16 @@ def get_db_service():
             )
     return db_service
 
-def get_translation_service():
-    """Lazy import of translation service to avoid module-level failures."""
+def get_google_translate_service():
+    """Lazy import of Google Translate service to avoid module-level failures."""
     try:
-        from app.services.translation_service import translation_service
-        return translation_service
+        from app.services.google_translate_service import google_translate_service
+        return google_translate_service
     except Exception as e:
-        logger.error(f"Failed to import translation service: {e}")
+        logger.error(f"Failed to import Google Translate service: {e}")
         raise HTTPException(
             status_code=503, 
-            detail=f"Translation service unavailable: {str(e)}"
+            detail=f"Google Translate service unavailable: {str(e)}"
         )
 
 def _to_extended_json(document: dict) -> dict:
@@ -216,20 +216,20 @@ async def create_news(payload: NewsCreateRequest, background_tasks: BackgroundTa
             timeout_sec = 90.0
 
         try:
-            translation_service = get_translation_service()
+            google_translate_service = get_google_translate_service()
             translations = await asyncio.wait_for(
-                translation_service.translate_to_all_async(payload.title, payload.description, source_lang),
+                google_translate_service.translate_to_all_async(payload.title, payload.description, source_lang),
                 timeout=timeout_sec
             )
-            logger.info(f"[CREATE] translation.done langs={list(translations.keys())} doc={document_id}")
+            logger.info(f"[CREATE] Google Translate done langs={list(translations.keys())} doc={document_id}")
         except asyncio.TimeoutError:
-            logger.error(f"[CREATE] translation timed out after {timeout_sec}s for doc={document_id}")
+            logger.error(f"[CREATE] Google Translate timed out after {timeout_sec}s for doc={document_id}")
             raise HTTPException(status_code=504, detail="Translation timed out")
         except Exception as e:
-            logger.error(f"[CREATE] translation failed for doc={document_id}: {e}")
-            # Add specific guidance for IndicTrans2 errors
-            if "IndicTrans2" in str(e) or "Model" in str(e):
-                logger.error("This appears to be an IndicTrans2 model loading issue")
+            logger.error(f"[CREATE] Google Translate failed for doc={document_id}: {e}")
+            # Add specific guidance for Google Translate errors
+            if "GOOGLE_TRANSLATE_API_KEY" in str(e):
+                logger.error("This appears to be a Google Translate API key issue")
             raise
 
         # Create news document

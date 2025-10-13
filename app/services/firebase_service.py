@@ -4,7 +4,7 @@ import json
 import base64
 import logging
 from firebase_admin import credentials, initialize_app, storage
-from app.config.settings import Settings
+from app.config.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +18,7 @@ def normalize_bucket_name(name: str) -> str:
 
 class FirebaseService:
     def __init__(self):
-        self.settings = Settings()
+        self.settings = settings
         self.bucket_name = normalize_bucket_name(self.settings.FIREBASE_STORAGE_BUCKET or "")
 
         try:

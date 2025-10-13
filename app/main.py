@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api import news
-from app.config.settings import Settings
+from app.config.settings import settings
 import asyncio
 import logging
 import os
@@ -9,8 +9,6 @@ from contextlib import asynccontextmanager
 from fastapi.responses import JSONResponse
 from time import perf_counter
 from pathlib import Path
-
-settings = Settings()
 
 logging.basicConfig(
     level=os.getenv("LOG_LEVEL", "info").upper(),
@@ -21,75 +19,57 @@ log = logging.getLogger("news-tts-service")
 _is_ready = False
 _model_err: str | None = None
 
-async def background_model_preload():
-    """Background task to preload translation models without blocking startup."""
+async def background_google_translate_test():
+    """Background task to test Google Translate API availability."""
     global _is_ready, _model_err
     
     try:
-        log.info("Starting background model preloading...")
+        log.info("Testing Google Cloud Translate API...")
         
-        # Check if HF_HOME is accessible (graceful degradation)
-        hf_home = os.getenv("HF_HOME", "/home/app/.cache/huggingface")
-        if not os.path.exists(hf_home):
-            log.warning(f"HF_HOME directory {hf_home} does not exist - models may not be available")
-            # Don't fail - allow app to start and show error in health check
-        else:
-            log.info(f"HF_HOME {hf_home} exists - checking accessibility")
-            # Check if we can read the cache directory
-            try:
-                test_file = os.path.join(hf_home, "test_read.tmp")
-                with open(test_file, "w") as f:
-                    f.write("test")
-                os.remove(test_file)
-                log.info(f"HF_HOME {hf_home} is accessible")
-            except Exception as e:
-                log.warning(f"Cannot access HF_HOME {hf_home}: {e} - models may not work")
-                # Don't fail - allow app to start
-        
-        # Try to initialize translation service lazily
+        # Test Google Translate service
         try:
-            from app.services.translation_service import translation_service
+            from app.services.google_translate_service import google_translate_service
             
-            # Test translation to ensure models work using translate_to_all_async
-            log.info("Testing translation service with sample text...")
-            test_result = await translation_service.translate_to_all_async(
+            # Test translation to ensure API works
+            log.info("Testing Google Translate service with sample text...")
+            test_result = await google_translate_service.translate_to_all_async(
                 title="Hello world",
                 description="This is a test",
                 source_lang="english"
             )
             
-            log.info(f"Background model preloading completed successfully: 'Hello world' -> {test_result}")
+            log.info(f"Google Translate API test completed successfully: 'Hello world' -> {test_result}")
             _is_ready = True
             _model_err = None
             
         except Exception as e:
-            log.warning(f"Translation service test failed: {e}")
+            log.warning(f"Google Translate API test failed: {e}")
             # Don't fail - allow app to start in degraded mode
             _is_ready = False
-            _model_err = f"Translation service unavailable: {str(e)}"
+            _model_err = f"Google Translate API unavailable: {str(e)}"
             log.info("Application will start in degraded mode - translation features may not work")
     
     except Exception as e:
-        log.error(f"Background model preloading failed: {e}")
+        log.error(f"Google Translate API test failed: {e}")
         _is_ready = False
-        _model_err = f"Model preloading failed: {str(e)}"
+        _model_err = f"Google Translate API test failed: {str(e)}"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     task = None  # ✅ define upfront to avoid unbound reference
     try:
         log.info("Starting services...")
-        log.info(f"Environment: HF_HOME={os.getenv('HF_HOME')}, TRANSFORMERS_CACHE={os.getenv('TRANSFORMERS_CACHE')}")
-        log.info(f"Offline mode: HF_HUB_OFFLINE={os.getenv('HF_HUB_OFFLINE')}")
+        log.info("Using Google Cloud Translate API for translation (no local models)")
+        log.info(f"Google Translate API Key: {'SET' if os.getenv('GOOGLE_TRANSLATE_API_KEY') else 'NOT SET'}")
 
-        # Skip background model preloading for faster startup
-        # Models will be downloaded on first use
-        log.info("Skipping background model preload - models will download on first use")
+        # Start Google Translate API test in background (non-blocking)
+        log.info("Starting Google Translate API test in background...")
+        task = asyncio.create_task(background_google_translate_test())
+        
+        # Mark as ready immediately for fast startup
         global _is_ready, _model_err
-        _is_ready = True  # Mark as ready immediately
-
-        log.info("ElevenLabs TTS service ready - no warmup needed")
-        # _is_ready remains False until models are loaded
+        _is_ready = True
+        log.info("Application ready - Google Translate API test running in background")
 
     except Exception as e:
         log.exception(f"Service initialization failed: {e}")
@@ -105,7 +85,7 @@ async def lifespan(app: FastAPI):
         try:
             await task
         except Exception as e:
-            log.exception(f"Background model preloading task failed: {e}")
+            log.exception(f"Background Google Translate test task failed: {e}")
 
     
 
@@ -121,8 +101,8 @@ def _parse_cors(origins_env: str | None) -> list[str]:
 
 app = FastAPI(
     title="news translation api",
-    description="using indic trans 2 dist 200M and elevenlabs",
-    version="2.0.0",  
+    description="using Google Cloud Translate API and ElevenLabs TTS",
+    version="2.0.0-dev",  
     lifespan=lifespan,
 )
 
@@ -147,45 +127,29 @@ async def health():
     if _model_err:
         status = "error"
     
-    # Additional diagnostics
-    hf_home = os.getenv("HF_HOME", "/mnt/models")  # Fixed default
-    hf_home_exists = os.path.exists(hf_home)
-    hf_home_writable = False
-    
-    if hf_home_exists:
-        try:
-            test_file = os.path.join(hf_home, "health_check.tmp")
-            with open(test_file, "w") as f:
-                f.write("health_check")
-            os.remove(test_file)
-            hf_home_writable = True
-        except Exception:
-            hf_home_writable = False
-    
     return {
         "status": status, 
         "service": "news-tts", 
-        "version": "2.0.0",
-        "translation": "IndicTrans2 200M",
+        "version": "2.0.0-dev",
+        "translation": "Google Cloud Translate API",
         "tts": "ElevenLabs API",
         "ready": _is_ready,
         "error": _model_err,
         "diagnostics": {
-            "hf_home": hf_home,
-            "hf_home_exists": hf_home_exists,
-            "hf_home_writable": hf_home_writable,
-            "hf_hub_offline": os.getenv("HF_HUB_OFFLINE", "not_set"),
-            "trust_remote_code": os.getenv("TRUST_REMOTE_CODE", "not_set"),
-            "transformers_cache": os.getenv("TRANSFORMERS_CACHE", "not_set")
+            "google_translate_api_key": "SET" if os.getenv("GOOGLE_TRANSLATE_API_KEY") else "NOT SET",
+            "branch": "develop (Google Translate)",
+            "startup_mode": "fast (no model loading)"
         }
     }
 
 @app.get("/")
 async def root():
     return {
-        "message": "Lightweight Translation & TTS", 
-        "translation": "IndicTrans2 1B",
+        "message": "Lightweight Translation & TTS (Develop Branch)", 
+        "translation": "Google Cloud Translate API",
         "tts": "ElevenLabs API",
+        "branch": "develop",
+        "startup": "fast (no model loading)",
         "docs": "/docs", 
         "health": "/health"
     }

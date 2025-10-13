@@ -1,14 +1,14 @@
 import logging
 from motor.motor_asyncio import AsyncIOMotorClient
 from bson import ObjectId
-from app.config.settings import Settings
+from app.config.settings import settings
 import asyncio
 
 logger = logging.getLogger(__name__)
 
 class DBService:
     def __init__(self):
-        self.settings = Settings()
+        self.settings = settings
         self.connected = False
         self.client = None
         self.db = None
