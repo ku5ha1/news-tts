@@ -3,17 +3,16 @@ import uuid
 import logging
 from typing import Optional
 from azure.storage.blob import BlobServiceClient, BlobClient
-from app.config.settings import Settings
+from app.config.settings import settings
 
 logger = logging.getLogger(__name__)
 
 class AzureBlobService:
     def __init__(self):
-        self.settings = Settings()
-        self.account_name = self.settings.AZURE_STORAGE_ACCOUNT_NAME
-        self.connection_string = self.settings.AZURE_STORAGE_CONNECTION_STRING
-        self.access_key = self.settings.AZURE_STORAGE_ACCESS_KEY
-        self.container_name = self.settings.AZURE_STORAGE_AUDIOFIELD_CONTAINER
+        self.account_name = settings.AZURE_STORAGE_ACCOUNT_NAME
+        self.connection_string = settings.AZURE_STORAGE_CONNECTION_STRING
+        self.access_key = settings.AZURE_STORAGE_ACCESS_KEY
+        self.container_name = settings.AZURE_STORAGE_AUDIOFIELD_CONTAINER
 
         try:
             if not self.account_name or not self.container_name:

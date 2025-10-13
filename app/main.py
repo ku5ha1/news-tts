@@ -79,8 +79,37 @@ async def lifespan(app: FastAPI):
     task = None  # ✅ define upfront to avoid unbound reference
     try:
         log.info("Starting services...")
+        
+        # Comprehensive environment variable logging
+        log.info("=== ENVIRONMENT VARIABLES DEBUG ===")
+        critical_env_vars = [
+            "DATABASE_NAME", "MONGO_URI", "ELEVENLABS_API_KEY", "ELEVENLABS_VOICE_ID",
+            "AZURE_STORAGE_ACCOUNT_NAME", "AZURE_STORAGE_CONNECTION_STRING", 
+            "AZURE_STORAGE_ACCESS_KEY", "AZURE_STORAGE_AUDIOFIELD_CONTAINER",
+            "CORS_ORIGIN", "HF_HOME", "HF_HUB_OFFLINE", "TRUST_REMOTE_CODE"
+        ]
+        
+        for var in critical_env_vars:
+            value = os.getenv(var)
+            if value:
+                # Mask sensitive values
+                if any(sensitive in var.upper() for sensitive in ["KEY", "PASSWORD", "SECRET", "TOKEN", "CONNECTION"]):
+                    masked_value = f"{value[:8]}...{value[-4:]}" if len(value) > 12 else "***"
+                    log.info(f"  {var}: {masked_value}")
+                else:
+                    log.info(f"  {var}: {value}")
+            else:
+                log.warning(f"  {var}: NOT SET")
+        
         log.info(f"Environment: HF_HOME={os.getenv('HF_HOME')}, TRANSFORMERS_CACHE={os.getenv('TRANSFORMERS_CACHE')}")
         log.info(f"Offline mode: HF_HUB_OFFLINE={os.getenv('HF_HUB_OFFLINE')}")
+        
+        # Test settings instance
+        log.info("=== SETTINGS INSTANCE DEBUG ===")
+        log.info(f"Settings DATABASE_NAME: {getattr(settings, 'DATABASE_NAME', 'NOT_FOUND')}")
+        log.info(f"Settings MONGO_URI: {'SET' if getattr(settings, 'MONGO_URI', None) else 'NOT_SET'}")
+        log.info(f"Settings AZURE_STORAGE_ACCOUNT_NAME: {'SET' if getattr(settings, 'AZURE_STORAGE_ACCOUNT_NAME', None) else 'NOT_SET'}")
+        log.info("=== END DEBUG ===")
 
         # Skip background model preloading for faster startup
         # Models will be downloaded on first use
