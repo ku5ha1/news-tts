@@ -1,4 +1,5 @@
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from datetime import datetime
 from bson import ObjectId
 import asyncio
@@ -12,6 +13,7 @@ from app.models.news import (
 from app.services.tts_service import TTSService
 from app.services.azure_blob_service import AzureBlobService
 from app.services.db_service import DBService
+from app.services.auth_service import auth_service
 from app.utils.language_detection import detect_language
 import logging 
 
@@ -32,6 +34,64 @@ router = APIRouter()
 tts_service = None
 azure_blob_service = None
 db_service = None
+
+# Authentication setup
+security = HTTPBearer()
+
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Authentication dependency to verify JWT token and user role."""
+    try:
+        # Extract Bearer token
+        token = credentials.credentials
+        
+        # Authenticate user (verify token + validate role)
+        user = await auth_service.authenticate_user(token)
+        
+        logger.info(f"[AUTH] User authenticated: {user.get('email', 'unknown')} with role: {user.get('role', 'unknown')}")
+        return user
+        
+    except ValueError as e:
+        error_msg = str(e)
+        if "expired" in error_msg.lower():
+            logger.warning(f"[AUTH] Token expired: {error_msg}")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token has expired",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        elif "invalid" in error_msg.lower():
+            logger.warning(f"[AUTH] Invalid token: {error_msg}")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        elif "not found" in error_msg.lower():
+            logger.warning(f"[AUTH] User not found: {error_msg}")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User not found",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        elif "permissions" in error_msg.lower():
+            logger.warning(f"[AUTH] Insufficient permissions: {error_msg}")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient permissions. Only admin and moderator roles can create news.",
+            )
+        else:
+            logger.error(f"[AUTH] Authentication error: {error_msg}")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication failed",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+    except Exception as e:
+        logger.error(f"[AUTH] Unexpected authentication error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Authentication service error",
+        )
 
 def get_tts_service():
     """Lazy import of TTS service to avoid module-level failures."""
@@ -287,10 +347,14 @@ async def _generate_and_attach_audio(document_id: ObjectId, payload: NewsCreateR
 
 
 @router.post("/create", response_model=NewsResponse)
-async def create_news(payload: NewsCreateRequest, background_tasks: BackgroundTasks):
+async def create_news(
+    payload: NewsCreateRequest, 
+    background_tasks: BackgroundTasks,
+    current_user: dict = Depends(get_current_user)
+):
     """Create news doc; translation synchronous, TTS runs in background."""
     document_id = ObjectId()
-    logger.info(f"[CREATE] start doc={document_id}")
+    logger.info(f"[CREATE] start doc={document_id} user={current_user.get('email', 'unknown')}")
 
     try:
         source_lang = detect_language(payload.title + " " + payload.description)

@@ -92,6 +92,24 @@ class DBService:
             self.connected = False
             return False
 
+    async def get_user_by_id(self, user_id: ObjectId, collection_name: str = "users"):
+        """Get user by ID from specified collection"""
+        if not self.connected or not self.client:
+            logger.error("[MongoDB] Cannot get user - not connected")
+            return None
+        try:
+            logger.info(f"[MongoDB] Fetching user: {user_id} from {collection_name}")
+            collection = self.db[collection_name]
+            result = await collection.find_one({"_id": user_id})
+            if result:
+                logger.info(f"[MongoDB] User found: {user_id}")
+            else:
+                logger.warning(f"[MongoDB] User not found: {user_id}")
+            return result
+        except Exception as e:
+            logger.error(f"[MongoDB] Error getting user {user_id}: {str(e)}")
+            return None
+
     async def get_news_by_id(self, news_id: str):
         """Get news by ID"""
         if not self.connected or not self.client:

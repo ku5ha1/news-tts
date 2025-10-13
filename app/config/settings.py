@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     ELEVENLABS_API_KEY: Optional[str] = None
     ELEVENLABS_VOICE_ID: Optional[str] = None
     
+    # Authentication
+    JWT_SECRET: Optional[str] = None
+    
     # Logging
     LOG_LEVEL: Optional[str] = None
 
