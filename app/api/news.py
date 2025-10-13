@@ -171,7 +171,8 @@ async def _generate_and_attach_audio(document_id: ObjectId, payload: NewsCreateR
             return
 
         updates = {"last_updated": datetime.utcnow()}
-        lang_map = {"hi": "hindi", "kn": "kannada", "en": "English"}
+        lang_map = {"en": "English", "hi": "hindi", "kn": "kannada"}
+        translation_keys = {"en": "english", "hi": "hindi", "kn": "kannada"}
         any_success = False
 
         # Process languages sequentially
@@ -180,8 +181,9 @@ async def _generate_and_attach_audio(document_id: ObjectId, payload: NewsCreateR
                 if lang == source_lang:
                     text = f"{payload.title}. {payload.description}"
                 else:
-                    text = f"{translations.get(lang, {}).get('title', payload.title)}. " \
-                           f"{translations.get(lang, {}).get('description', payload.description)}"
+                    translation_key = translation_keys[lang]
+                    text = f"{translations.get(translation_key, {}).get('title', payload.title)}. " \
+                           f"{translations.get(translation_key, {}).get('description', payload.description)}"
 
                 text = text[:1200]  # truncate
 
@@ -290,18 +292,18 @@ async def create_news(payload: NewsCreateRequest, background_tasks: BackgroundTa
             "createdTime": datetime.utcnow(),
             "last_updated": datetime.utcnow(),
             "hindi": {
-                "title": translations.get("hi", {}).get("title", payload.title),
-                "description": translations.get("hi", {}).get("description", payload.description),
+                "title": translations.get("hindi", {}).get("title", payload.title),
+                "description": translations.get("hindi", {}).get("description", payload.description),
                 "audio_description": "",
             },
             "kannada": {
-                "title": translations.get("kn", {}).get("title", payload.title),
-                "description": translations.get("kn", {}).get("description", payload.description),
+                "title": translations.get("kannada", {}).get("title", payload.title),
+                "description": translations.get("kannada", {}).get("description", payload.description),
                 "audio_description": "",
             },
             "English": {
-                "title": translations.get("en", {}).get("title", payload.title),
-                "description": translations.get("en", {}).get("description", payload.description),
+                "title": translations.get("english", {}).get("title", payload.title),
+                "description": translations.get("english", {}).get("description", payload.description),
                 "audio_description": "",
             },
         }
