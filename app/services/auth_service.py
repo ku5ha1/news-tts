@@ -5,7 +5,7 @@ import hashlib
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 from bson import ObjectId
-from app.services.db_service import get_db_service
+from app.services.db_service import DBService
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +22,7 @@ class AuthService:
         if not self.jwt_secret:
             raise RuntimeError("JWT_SECRET environment variable not set")
         
-        self.db_service = get_db_service()
+        self.db_service = DBService()
         logger.info("[Auth] AuthService initialized")
     
     def verify_jwt_token(self, token: str) -> Dict[str, Any]:
