@@ -22,9 +22,14 @@ class Settings(BaseSettings):
     # AI Models
     AI4BHARAT_MODELS_PATH: Optional[str] = None
     ELEVENLABS_API_KEY: Optional[str] = None
+    ELEVENLABS_VOICE_ID: Optional[str] = None
     
     # Logging
     LOG_LEVEL: Optional[str] = None
 
     class Config:
         env_file = ".env"
+        extra = "ignore"
+
+# Create global settings instance
+settings = Settings()
