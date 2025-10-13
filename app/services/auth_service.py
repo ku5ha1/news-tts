@@ -1,6 +1,8 @@
 import os
 import jwt
 import logging
+import hashlib
+from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 from bson import ObjectId
 from app.services.db_service import get_db_service
@@ -80,6 +82,88 @@ class AuthService:
             logger.error(f"[Auth] Role validation error for {user_id}: {e}")
             return False
     
+    def hash_password(self, password: str) -> str:
+        """Hash password using SHA-256 (simple hashing for testing)"""
+        return hashlib.sha256(password.encode()).hexdigest()
+    
+    async def authenticate_user_credentials(self, email: str, password: str) -> Optional[Dict[str, Any]]:
+        """Authenticate user with email and password."""
+        try:
+            logger.info(f"[Auth] Attempting login for email: {email}")
+            
+            # Hash the provided password
+            hashed_password = self.hash_password(password)
+            
+            # Query users collection for email and password
+            collection = self.db_service.db[self.USERS_COLLECTION]
+            user = await collection.find_one({
+                "email": email,
+                "password": hashed_password
+            })
+            
+            if user:
+                logger.info(f"[Auth] Login successful for: {email} with role: {user.get('role', 'unknown')}")
+                return user
+            else:
+                logger.warning(f"[Auth] Login failed for: {email}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"[Auth] Login error for {email}: {e}")
+            return None
+    
+    def generate_jwt_token(self, user: Dict[str, Any]) -> str:
+        """Generate JWT token for authenticated user."""
+        try:
+            # Create payload with user information
+            payload = {
+                "user_id": str(user["_id"]),
+                "email": user["email"],
+                "role": user.get("role", "user"),
+                "iat": datetime.utcnow(),  # Issued at
+                "exp": datetime.utcnow() + timedelta(hours=24)  # Expires in 24 hours
+            }
+            
+            # Generate JWT token
+            token = jwt.encode(payload, self.jwt_secret, algorithm="HS256")
+            
+            logger.info(f"[Auth] JWT token generated for user: {user['email']}")
+            return token
+            
+        except Exception as e:
+            logger.error(f"[Auth] JWT generation error: {e}")
+            raise ValueError("Token generation failed")
+    
+    async def login_user(self, email: str, password: str) -> Dict[str, Any]:
+        """Complete login flow: authenticate credentials and generate token."""
+        try:
+            # Step 1: Authenticate credentials
+            user = await self.authenticate_user_credentials(email, password)
+            if not user:
+                raise ValueError("Invalid email or password")
+            
+            # Step 2: Generate JWT token
+            token = self.generate_jwt_token(user)
+            
+            # Step 3: Return user data and token
+            return {
+                "token": token,
+                "user": {
+                    "user_id": str(user["_id"]),
+                    "email": user["email"],
+                    "displayName": user.get("displayName"),
+                    "role": user.get("role", "user"),
+                    "profileImage": user.get("profileImage")
+                }
+            }
+            
+        except ValueError as e:
+            logger.warning(f"[Auth] Login failed: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"[Auth] Login error: {e}")
+            raise ValueError("Login failed")
+
     async def authenticate_user(self, token: str) -> Dict[str, Any]:
         """Complete authentication flow: verify token and validate role."""
         try:
