@@ -34,6 +34,9 @@ class TranslationService:
                 logger.info("Initializing IndicTransToolkit components...")
                 self.ip = IndicProcessor(inference=True)
                 logger.info("IndicTransToolkit components initialized successfully")
+            except ImportError as e:
+                logger.error(f"Failed to import IndicTransToolkit components: {e}")
+                raise RuntimeError(f"IndicTransToolkit import failed: {e}")
             except Exception as e:
                 logger.error(f"Failed to initialize IndicTransToolkit components: {e}")
                 raise RuntimeError(f"IndicTransToolkit initialization failed: {e}")
@@ -52,6 +55,12 @@ class TranslationService:
                 ).to(self.device)
                 self.en_indic_model.eval()
                 logger.info("EN->Indic model loaded successfully")
+            except ImportError as e:
+                logger.error(f"Failed to import EN->Indic model: {e}")
+                raise RuntimeError(f"EN->Indic model import failed: {e}")
+            except OSError as e:
+                logger.error(f"Failed to load EN->Indic model from disk: {e}")
+                raise RuntimeError(f"EN->Indic model loading failed: {e}")
             except Exception as e:
                 logger.error(f"Failed to load EN->Indic model: {e}")
                 raise RuntimeError(f"EN->Indic model loading failed: {e}")
@@ -68,6 +77,12 @@ class TranslationService:
                 ).to(self.device)
                 self.indic_en_model.eval()
                 logger.info("Indic->EN model loaded successfully")
+            except ImportError as e:
+                logger.error(f"Failed to import Indic->EN model: {e}")
+                raise RuntimeError(f"Indic->EN model import failed: {e}")
+            except OSError as e:
+                logger.error(f"Failed to load Indic->EN model from disk: {e}")
+                raise RuntimeError(f"Indic->EN model loading failed: {e}")
             except Exception as e:
                 logger.error(f"Failed to load Indic->EN model: {e}")
                 raise RuntimeError(f"Indic->EN model loading failed: {e}")

@@ -39,6 +39,12 @@ class AzureBlobService:
             self.connected = True
             logger.info(f"Azure Blob Storage initialized with account: {self.account_name}, container: {self.container_name}")
 
+        except ImportError as e:
+            logger.error(f"Azure Storage SDK import error: {str(e)}", exc_info=True)
+            self.connected = False
+        except ConnectionError as e:
+            logger.error(f"Azure Storage connection error: {str(e)}", exc_info=True)
+            self.connected = False
         except Exception as e:
             logger.error(f"Azure Blob Storage initialization error: {str(e)}", exc_info=True)
             self.connected = False
@@ -78,6 +84,12 @@ class AzureBlobService:
             logger.info(f"[AzureBlob] Upload.complete url={public_url}")
             return public_url
             
+        except FileNotFoundError as e:
+            logger.error(f"[AzureBlob] File not found: {str(e)}", exc_info=True)
+            raise RuntimeError(f"Audio file not found: {str(e)}")
+        except ConnectionError as e:
+            logger.error(f"[AzureBlob] Connection error during upload: {str(e)}", exc_info=True)
+            raise RuntimeError(f"Azure Storage connection failed: {str(e)}")
         except Exception as e:
             logger.error(f"[AzureBlob] Upload.failed path={file_path} lang={language} error={e}", exc_info=True)
             raise RuntimeError(f"Azure Blob upload failed: {e}")
