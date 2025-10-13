@@ -10,7 +10,7 @@ from app.models.news import (
 )
 # REMOVED: Module-level import of translation_service - will import lazily
 from app.services.tts_service import TTSService
-from app.services.firebase_service import FirebaseService
+from app.services.azure_blob_service import AzureBlobService
 from app.services.db_service import DBService
 from app.utils.language_detection import detect_language
 import logging 
@@ -22,7 +22,7 @@ router = APIRouter()
 # Initialize services that are safe to import at module level
 # Use lazy initialization to avoid module-level failures
 tts_service = None
-firebase_service = None
+azure_blob_service = None
 db_service = None
 
 def get_tts_service():
@@ -39,19 +39,19 @@ def get_tts_service():
             )
     return tts_service
 
-def get_firebase_service():
-    """Lazy import of Firebase service to avoid module-level failures."""
-    global firebase_service
-    if firebase_service is None:
+def get_azure_blob_service():
+    """Lazy import of Azure Blob service to avoid module-level failures."""
+    global azure_blob_service
+    if azure_blob_service is None:
         try:
-            firebase_service = FirebaseService()
+            azure_blob_service = AzureBlobService()
         except Exception as e:
-            logger.error(f"Failed to initialize Firebase service: {e}")
+            logger.error(f"Failed to initialize Azure Blob service: {e}")
             raise HTTPException(
                 status_code=503, 
-                detail=f"Firebase service unavailable: {str(e)}"
+                detail=f"Azure Blob service unavailable: {str(e)}"
             )
-    return firebase_service
+    return azure_blob_service
 
 def get_db_service():
     """Lazy import of DB service to avoid module-level failures."""
@@ -133,9 +133,9 @@ async def _generate_and_attach_audio(document_id: ObjectId, payload: NewsCreateR
 
                 logger.info(f"[BG-TTS] Generating audio for {lang} (doc={document_id})")
 
-                # Run blocking TTS & Firebase calls in separate threads
+                # Run blocking TTS & Azure Blob calls in separate threads
                 audio_file = await asyncio.to_thread(get_tts_service().generate_audio, text, lang)
-                audio_url = await asyncio.to_thread(get_firebase_service().upload_audio, audio_file, lang, str(document_id))
+                audio_url = await asyncio.to_thread(get_azure_blob_service().upload_audio, audio_file, lang, str(document_id))
 
                 # Update DB fields
                 field = f"{lang_map[lang]}.audio_description"
@@ -367,7 +367,7 @@ async def generate_tts(payload: TTSRequest):
     """Generate TTS audio"""
     try:
         audio_file = await asyncio.to_thread(get_tts_service().generate_audio, payload.text, payload.language)
-        audio_url = await asyncio.to_thread(get_firebase_service().upload_audio, audio_file, payload.language) 
+        audio_url = await asyncio.to_thread(get_azure_blob_service().upload_audio, audio_file, payload.language) 
         duration = get_tts_service().get_audio_duration(audio_file)
         file_size = get_tts_service().get_file_size(audio_file)
 
@@ -392,7 +392,7 @@ async def health_check():
         status="healthy",
         models_loaded=True, # type: ignore
         database_connected=await get_db_service().is_connected(),
-        firebase_connected=get_firebase_service().is_connected(),
+        azure_blob_connected=get_azure_blob_service().is_connected(),
         timestamp=datetime.utcnow(),
         version="1.0.0"
     )

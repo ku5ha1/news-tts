@@ -43,6 +43,6 @@ class HealthResponse(BaseModel):
     status: str
     models_loaded: bool
     database_connected: bool
-    firebase_connected: bool
+    azure_blob_connected: bool
     timestamp: datetime
     version: str

@@ -133,11 +133,14 @@ async def health():
         "version": "2.0.0-dev",
         "translation": "Google Cloud Translate API",
         "tts": "ElevenLabs API",
+        "storage": "Azure Blob Storage",
         "ready": _is_ready,
         "error": _model_err,
         "diagnostics": {
             "google_translate_api_key": "SET" if os.getenv("GOOGLE_TRANSLATE_API_KEY") else "NOT SET",
-            "branch": "develop (Google Translate)",
+            "azure_storage_account": "SET" if os.getenv("AZURE_STORAGE_ACCOUNT_NAME") else "NOT SET",
+            "azure_storage_container": "SET" if os.getenv("AZURE_STORAGE_AUDIOFIELD_CONTAINER") else "NOT SET",
+            "branch": "develop (Google Translate + Azure Blob)",
             "startup_mode": "fast (no model loading)"
         }
     }
