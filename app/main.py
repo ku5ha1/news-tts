@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api import news
-from app.config.settings import Settings
+from app.config.settings import settings
 import asyncio
 import logging
 import os
@@ -9,8 +9,6 @@ from contextlib import asynccontextmanager
 from fastapi.responses import JSONResponse
 from time import perf_counter
 from pathlib import Path
-
-settings = Settings()
 
 logging.basicConfig(
     level=os.getenv("LOG_LEVEL", "info").upper(),
