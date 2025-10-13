@@ -168,6 +168,7 @@ async def health():
         "version": "2.0.0",
         "translation": "IndicTrans2 200M",
         "tts": "ElevenLabs API",
+        "storage": "Azure Blob Storage",
         "ready": _is_ready,
         "error": _model_err,
         "diagnostics": {
@@ -176,7 +177,9 @@ async def health():
             "hf_home_writable": hf_home_writable,
             "hf_hub_offline": os.getenv("HF_HUB_OFFLINE", "not_set"),
             "trust_remote_code": os.getenv("TRUST_REMOTE_CODE", "not_set"),
-            "transformers_cache": os.getenv("TRANSFORMERS_CACHE", "not_set")
+            "transformers_cache": os.getenv("TRANSFORMERS_CACHE", "not_set"),
+            "azure_storage_account": "SET" if os.getenv("AZURE_STORAGE_ACCOUNT_NAME") else "NOT SET",
+            "azure_storage_container": "SET" if os.getenv("AZURE_STORAGE_AUDIOFIELD_CONTAINER") else "NOT SET"
         }
     }
 
