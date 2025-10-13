@@ -6,6 +6,9 @@ import asyncio
 
 logger = logging.getLogger(__name__)
 
+# Configuration constants
+MAX_RETRIES = 2
+
 class DBService:
     def __init__(self):
         self.connected = False
@@ -26,6 +29,10 @@ class DBService:
             self.collection = self.db["news"]
             self.connected = True
             logger.info("[MongoDB] Initialized successfully")
+        except ImportError as e:
+            logger.error(f"[MongoDB] Import error: {str(e)}", exc_info=True)
+        except ConnectionError as e:
+            logger.error(f"[MongoDB] Connection error: {str(e)}", exc_info=True)
         except Exception as e:
             logger.error(f"[MongoDB] Initialization error: {str(e)}", exc_info=True)
 
@@ -39,11 +46,14 @@ class DBService:
             result = await self.collection.insert_one(data)
             logger.info(f"[MongoDB] Insert.done id={result.inserted_id}")
             return result.inserted_id
+        except ConnectionError as e:
+            logger.error(f"[MongoDB] Insert connection error: {str(e)}", exc_info=True)
+            raise RuntimeError(f"Database connection failed: {str(e)}")
         except Exception as e:
             logger.error(f"[MongoDB] Insert.failed error={str(e)}", exc_info=True)
             raise RuntimeError(f"Database insert failed: {str(e)}")
 
-    async def update_news_fields(self, news_id: str | ObjectId, updates: dict, retries: int = 2) -> bool:
+    async def update_news_fields(self, news_id: str | ObjectId, updates: dict, retries: int = MAX_RETRIES) -> bool:
         """Update specific fields on a news document with optional retries."""
         if not self.connected or not self.client:
             logger.error("[MongoDB] Cannot update - not connected")

@@ -34,6 +34,9 @@ class TranslationService:
                 logger.info("Initializing IndicTransToolkit components...")
                 self.ip = IndicProcessor(inference=True)
                 logger.info("IndicTransToolkit components initialized successfully")
+            except ImportError as e:
+                logger.error(f"Failed to import IndicTransToolkit components: {e}")
+                raise RuntimeError(f"IndicTransToolkit import failed: {e}")
             except Exception as e:
                 logger.error(f"Failed to initialize IndicTransToolkit components: {e}")
                 raise RuntimeError(f"IndicTransToolkit initialization failed: {e}")
@@ -52,6 +55,12 @@ class TranslationService:
                 ).to(self.device)
                 self.en_indic_model.eval()
                 logger.info("EN->Indic model loaded successfully")
+            except ImportError as e:
+                logger.error(f"Failed to import EN->Indic model: {e}")
+                raise RuntimeError(f"EN->Indic model import failed: {e}")
+            except OSError as e:
+                logger.error(f"Failed to load EN->Indic model from disk: {e}")
+                raise RuntimeError(f"EN->Indic model loading failed: {e}")
             except Exception as e:
                 logger.error(f"Failed to load EN->Indic model: {e}")
                 raise RuntimeError(f"EN->Indic model loading failed: {e}")
@@ -68,6 +77,12 @@ class TranslationService:
                 ).to(self.device)
                 self.indic_en_model.eval()
                 logger.info("Indic->EN model loaded successfully")
+            except ImportError as e:
+                logger.error(f"Failed to import Indic->EN model: {e}")
+                raise RuntimeError(f"Indic->EN model import failed: {e}")
+            except OSError as e:
+                logger.error(f"Failed to load Indic->EN model from disk: {e}")
+                raise RuntimeError(f"Indic->EN model loading failed: {e}")
             except Exception as e:
                 logger.error(f"Failed to load Indic->EN model: {e}")
                 raise RuntimeError(f"Indic->EN model loading failed: {e}")
@@ -217,52 +232,82 @@ class TranslationService:
             else:
                 target_languages = ["english", "hindi"]
             
-            # Combine title and description
-            combined_text = f"{title}. {description}"
-            
             # Run translations in executor to avoid blocking
             loop = asyncio.get_event_loop()
-            results = {}
+            translations = {}
             
             if source_lang == "english":
-                # Translate to both Hindi and Kannada
+                # Translate title and description separately for better accuracy
                 for target_lang in target_languages:
-                    result = await loop.run_in_executor(
+                    logger.info(f"Translating to {target_lang}: title='{title[:50]}...', description='{description[:50]}...'")
+                    
+                    # Translate title separately
+                    translated_title = await loop.run_in_executor(
                         None,
                         self._translate_en_to_indic,
-                        combined_text,
+                        title,
                         target_lang
                     )
-                    results[target_lang] = result
+                    
+                    # Translate description separately
+                    translated_description = await loop.run_in_executor(
+                        None,
+                        self._translate_en_to_indic,
+                        description,
+                        target_lang
+                    )
+                    
+                    translations[target_lang] = {
+                        "title": translated_title,
+                        "description": translated_description
+                    }
+                    
+                    logger.info(f"Translated {target_lang}: title='{translated_title[:50]}...', description='{translated_description[:50]}...'")
             else:
                 # First translate to English
-                english_text = await loop.run_in_executor(
+                english_title = await loop.run_in_executor(
                     None,
                     self._translate_indic_to_en,
-                    combined_text,
+                    title,
                     source_lang
                 )
-                results["english"] = english_text
+                english_description = await loop.run_in_executor(
+                    None,
+                    self._translate_indic_to_en,
+                    description,
+                    source_lang
+                )
+                
+                translations["english"] = {
+                    "title": english_title,
+                    "description": english_description
+                }
                 
                 # Then translate English to other languages
                 for target_lang in target_languages:
                     if target_lang != "english":
-                        result = await loop.run_in_executor(
+                        logger.info(f"Translating English to {target_lang}: title='{english_title[:50]}...', description='{english_description[:50]}...'")
+                        
+                        translated_title = await loop.run_in_executor(
                             None,
                             self._translate_en_to_indic,
-                            english_text,
+                            english_title,
                             target_lang
                         )
-                        results[target_lang] = result
-            
-            # Split back into title and description
-            translations = {}
-            for lang, translated_text in results.items():
-                parts = translated_text.split('. ', 1)
-                translations[lang] = {
-                    "title": parts[0] if parts else translated_text,
-                    "description": parts[1] if len(parts) > 1 else translated_text
-                }
+                        
+                        translated_description = await loop.run_in_executor(
+                            None,
+                            self._translate_en_to_indic,
+                            english_description,
+                            target_lang
+                        )
+                        
+                        translations[target_lang] = {
+                            "title": translated_title,
+                            "description": translated_description
+                        }
+                        
+                        logger.info(f"Translated {target_lang}: title='{translated_title[:50]}...', description='{translated_description[:50]}...'")
             
             logger.info(f"Translation completed: {list(translations.keys())}")
             return translations

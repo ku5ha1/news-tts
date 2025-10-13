@@ -17,6 +17,12 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Configuration constants
+DEFAULT_TRANSLATION_TIMEOUT = 90.0
+DEFAULT_TTS_TIMEOUT = 30.0
+MAX_RETRIES = 2
+DEFAULT_PAGE_SIZE = 20
+
 router = APIRouter()
 
 # Initialize services that are safe to import at module level
@@ -31,6 +37,18 @@ def get_tts_service():
     if tts_service is None:
         try:
             tts_service = TTSService()
+        except ImportError as e:
+            logger.error(f"Failed to import TTS service: {e}")
+            raise HTTPException(
+                status_code=503, 
+                detail=f"TTS service import failed: {str(e)}"
+            )
+        except RuntimeError as e:
+            logger.error(f"TTS service runtime error: {e}")
+            raise HTTPException(
+                status_code=503, 
+                detail=f"TTS service unavailable: {str(e)}"
+            )
         except Exception as e:
             logger.error(f"Failed to initialize TTS service: {e}")
             raise HTTPException(
@@ -45,6 +63,18 @@ def get_azure_blob_service():
     if azure_blob_service is None:
         try:
             azure_blob_service = AzureBlobService()
+        except ImportError as e:
+            logger.error(f"Failed to import Azure Blob service: {e}")
+            raise HTTPException(
+                status_code=503, 
+                detail=f"Azure Blob service import failed: {str(e)}"
+            )
+        except RuntimeError as e:
+            logger.error(f"Azure Blob service runtime error: {e}")
+            raise HTTPException(
+                status_code=503, 
+                detail=f"Azure Blob service unavailable: {str(e)}"
+            )
         except Exception as e:
             logger.error(f"Failed to initialize Azure Blob service: {e}")
             raise HTTPException(
@@ -59,6 +89,18 @@ def get_db_service():
     if db_service is None:
         try:
             db_service = DBService()
+        except ImportError as e:
+            logger.error(f"Failed to import DB service: {e}")
+            raise HTTPException(
+                status_code=503, 
+                detail=f"Database service import failed: {str(e)}"
+            )
+        except RuntimeError as e:
+            logger.error(f"DB service runtime error: {e}")
+            raise HTTPException(
+                status_code=503, 
+                detail=f"Database service unavailable: {str(e)}"
+            )
         except Exception as e:
             logger.error(f"Failed to initialize DB service: {e}")
             raise HTTPException(
@@ -72,6 +114,18 @@ def get_translation_service():
     try:
         from app.services.translation_service import translation_service
         return translation_service
+    except ImportError as e:
+        logger.error(f"Failed to import translation service: {e}")
+        raise HTTPException(
+            status_code=503, 
+            detail=f"Translation service import failed: {str(e)}"
+        )
+    except RuntimeError as e:
+        logger.error(f"Translation service runtime error: {e}")
+        raise HTTPException(
+            status_code=503, 
+            detail=f"Translation service unavailable: {str(e)}"
+        )
     except Exception as e:
         logger.error(f"Failed to import translation service: {e}")
         raise HTTPException(
@@ -182,21 +236,6 @@ async def _generate_and_attach_audio(document_id: ObjectId, payload: NewsCreateR
 
 #         try:
 #             await db_service.update_news_fields(document_id, updates)
-#         except Exception as e:
-#             logger.error(f"[BG] Mongo update (translations) failed for doc={document_id}: {e}")
-
-#         # proceed to audio generation
-#         await _generate_and_attach_audio(document_id, payload, translations, source_lang)
-#     except Exception as e:
-#         logger.error(f"[BG] translate+tts failed for doc={document_id}: {e}")
-
-
-# def run_in_thread(coro):
-#     """Run an async coroutine in a new event loop inside a thread."""
-#     try:
-#         asyncio.run(coro)
-#     except Exception as e:
-#         logger.error(f"[BG_TASK] error in background task: {e}")
 
 
 @router.post("/create", response_model=NewsResponse)
@@ -211,9 +250,9 @@ async def create_news(payload: NewsCreateRequest, background_tasks: BackgroundTa
 
         # Translation with timeout (no fallback)
         try:
-            timeout_sec = float(os.getenv("TRANSLATION_PER_CALL_TIMEOUT", "90"))
-        except Exception:
-            timeout_sec = 90.0
+            timeout_sec = float(os.getenv("TRANSLATION_PER_CALL_TIMEOUT", str(DEFAULT_TRANSLATION_TIMEOUT)))
+        except (ValueError, TypeError):
+            timeout_sec = DEFAULT_TRANSLATION_TIMEOUT
 
         try:
             translation_service = get_translation_service()

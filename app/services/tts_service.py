@@ -68,6 +68,12 @@ class TTSService:
             
             return str(temp_path)
             
+        except ImportError as e:
+            logger.error(f"[TTS] ElevenLabs SDK import error: {str(e)}", exc_info=True)
+            raise RuntimeError(f"ElevenLabs SDK not available: {str(e)}")
+        except ConnectionError as e:
+            logger.error(f"[TTS] ElevenLabs API connection error: {str(e)}", exc_info=True)
+            raise RuntimeError(f"ElevenLabs API connection failed: {str(e)}")
         except Exception as e:
             logger.error(f"[TTS] ElevenLabs generation failed for {language}: {str(e)}", exc_info=True)
             raise RuntimeError(f"TTS generation failed for {language}: {str(e)}")
