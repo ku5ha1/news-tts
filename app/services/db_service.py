@@ -1,28 +1,27 @@
 import logging
 from motor.motor_asyncio import AsyncIOMotorClient
 from bson import ObjectId
-from app.config.settings import Settings
+from app.config.settings import settings
 import asyncio
 
 logger = logging.getLogger(__name__)
 
 class DBService:
     def __init__(self):
-        self.settings = Settings()
         self.connected = False
         self.client = None
         self.db = None
         self.collection = None
 
         try:
-            if not self.settings.DATABASE_NAME:
+            if not settings.DATABASE_NAME:
                 logger.error("DATABASE_NAME is missing - cannot connect to database")
                 return
             else:
-                database_name = self.settings.DATABASE_NAME
+                database_name = settings.DATABASE_NAME
 
             logger.info(f"[MongoDB] Connecting to database: {database_name}")
-            self.client = AsyncIOMotorClient(self.settings.MONGO_URI)
+            self.client = AsyncIOMotorClient(settings.MONGO_URI)
             self.db = self.client[database_name]
             self.collection = self.db["news"]
             self.connected = True

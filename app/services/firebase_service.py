@@ -4,7 +4,7 @@ import json
 import base64
 import logging
 from firebase_admin import credentials, initialize_app, storage
-from app.config.settings import Settings
+from app.config.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -18,17 +18,16 @@ def normalize_bucket_name(name: str) -> str:
 
 class FirebaseService:
     def __init__(self):
-        self.settings = Settings()
-        self.bucket_name = normalize_bucket_name(self.settings.FIREBASE_STORAGE_BUCKET or "")
+        self.bucket_name = normalize_bucket_name(settings.FIREBASE_STORAGE_BUCKET or "")
 
         try:
-            if not self.settings.FIREBASE_SERVICE_ACCOUNT_BASE64:
+            if not settings.FIREBASE_SERVICE_ACCOUNT_BASE64:
                 logger.warning("FIREBASE_SERVICE_ACCOUNT_BASE64 is missing - Firebase will be disabled")
                 self.connected = False
                 return
 
             service_account_info = json.loads(
-                base64.b64decode(self.settings.FIREBASE_SERVICE_ACCOUNT_BASE64).decode("utf-8")
+                base64.b64decode(settings.FIREBASE_SERVICE_ACCOUNT_BASE64).decode("utf-8")
             )
 
             cred = credentials.Certificate(service_account_info)
