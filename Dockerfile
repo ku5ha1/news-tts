@@ -31,22 +31,16 @@ RUN pip install --no-cache-dir \
 RUN mkdir -p /models/cache && \
     export HF_HOME=/models/cache && \
     export TRANSFORMERS_CACHE=/models/cache && \
-    python -c "
-import torch
-from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
-from indictranstoolkit import IndicTransToolkit
-
-print('Downloading IndicTrans2 models...')
-# Download EN->Indic model
-en_indic_tokenizer = AutoTokenizer.from_pretrained('ai4bharat/indictrans2-en-indic-dist-200M', trust_remote_code=True)
-en_indic_model = AutoModelForSeq2SeqLM.from_pretrained('ai4bharat/indictrans2-en-indic-dist-200M', trust_remote_code=True)
-
-# Download Indic->EN model  
-indic_en_tokenizer = AutoTokenizer.from_pretrained('ai4bharat/indictrans2-indic-en-dist-200M', trust_remote_code=True)
-indic_en_model = AutoModelForSeq2SeqLM.from_pretrained('ai4bharat/indictrans2-indic-en-dist-200M', trust_remote_code=True)
-
-print('Models downloaded successfully!')
-"
+    python -c "\
+import torch; \
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM; \
+from indictranstoolkit import IndicTransToolkit; \
+print('Downloading IndicTrans2 models...'); \
+en_indic_tokenizer = AutoTokenizer.from_pretrained('ai4bharat/indictrans2-en-indic-dist-200M', trust_remote_code=True); \
+en_indic_model = AutoModelForSeq2SeqLM.from_pretrained('ai4bharat/indictrans2-en-indic-dist-200M', trust_remote_code=True); \
+indic_en_tokenizer = AutoTokenizer.from_pretrained('ai4bharat/indictrans2-indic-en-dist-200M', trust_remote_code=True); \
+indic_en_model = AutoModelForSeq2SeqLM.from_pretrained('ai4bharat/indictrans2-indic-en-dist-200M', trust_remote_code=True); \
+print('Models downloaded successfully!')"
 
 # Stage 2: Production Image
 FROM python:3.11-slim
