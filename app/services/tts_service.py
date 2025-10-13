@@ -4,6 +4,7 @@ import uuid
 from pathlib import Path
 from typing import Dict
 import logging
+import asyncio
 from dotenv import load_dotenv
 from elevenlabs.client import ElevenLabs
 
@@ -45,13 +46,20 @@ class TTSService:
             voice_id = self.voice_mapping.get(language, self.voice_mapping["en"])
             logger.info(f"[TTS] Using voice ID: {voice_id} for language: {language}")
             
-            # Generate audio using ElevenLabs
-            audio = TTSService._elevenlabs_client.text_to_speech.convert(
-                text=text,
-                voice_id=voice_id,
-                model_id="eleven_v3", 
-                output_format="mp3_44100_128",
-            )
+            # Generate audio using ElevenLabs with timeout
+            try:
+                audio = TTSService._elevenlabs_client.text_to_speech.convert(
+                    text=text,
+                    voice_id=voice_id,
+                    model_id="eleven_v3", 
+                    output_format="mp3_44100_128",
+                )
+            except Exception as e:
+                if "timeout" in str(e).lower() or "read timeout" in str(e).lower():
+                    logger.error(f"[TTS] ElevenLabs timeout for {language}: {e}")
+                    raise RuntimeError(f"TTS generation timeout for {language}: {str(e)}")
+                else:
+                    raise
             
             # Create temporary file
             temp_dir = "/tmp" if os.path.exists("/tmp") else "/app/tmp"

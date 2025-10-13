@@ -20,6 +20,8 @@ logger = logging.getLogger(__name__)
 # Configuration constants
 DEFAULT_TRANSLATION_TIMEOUT = 90.0
 DEFAULT_TTS_TIMEOUT = 30.0
+TTS_RETRY_TIMEOUT = 60.0  # 60 seconds for retry attempts
+MAX_TTS_RETRIES = 2  # Maximum retry attempts for TTS
 MAX_RETRIES = 2
 DEFAULT_PAGE_SIZE = 20
 
@@ -161,6 +163,42 @@ def _to_extended_json(document: dict) -> dict:
     return doc
 
 
+async def _generate_audio_with_retry(text: str, language: str, max_retries: int = MAX_TTS_RETRIES) -> str:
+    """Generate audio with timeout and retry logic."""
+    for attempt in range(max_retries + 1):
+        try:
+            logger.info(f"[TTS-RETRY] Attempt {attempt + 1}/{max_retries + 1} for {language}")
+            
+            # Use timeout for TTS generation
+            audio_file = await asyncio.wait_for(
+                asyncio.to_thread(get_tts_service().generate_audio, text, language),
+                timeout=TTS_RETRY_TIMEOUT
+            )
+            
+            logger.info(f"[TTS-RETRY] Success on attempt {attempt + 1} for {language}")
+            return audio_file
+            
+        except asyncio.TimeoutError:
+            logger.warning(f"[TTS-RETRY] Timeout on attempt {attempt + 1} for {language}")
+            if attempt < max_retries:
+                wait_time = (attempt + 1) * 5  # Exponential backoff: 5s, 10s, 15s
+                logger.info(f"[TTS-RETRY] Waiting {wait_time}s before retry for {language}")
+                await asyncio.sleep(wait_time)
+            else:
+                logger.error(f"[TTS-RETRY] All attempts failed for {language}")
+                raise RuntimeError(f"TTS generation failed after {max_retries + 1} attempts for {language}")
+        
+        except Exception as e:
+            logger.warning(f"[TTS-RETRY] Error on attempt {attempt + 1} for {language}: {e}")
+            if attempt < max_retries:
+                wait_time = (attempt + 1) * 3  # Shorter backoff for other errors: 3s, 6s, 9s
+                logger.info(f"[TTS-RETRY] Waiting {wait_time}s before retry for {language}")
+                await asyncio.sleep(wait_time)
+            else:
+                logger.error(f"[TTS-RETRY] All attempts failed for {language}")
+                raise RuntimeError(f"TTS generation failed after {max_retries + 1} attempts for {language}: {str(e)}")
+
+
 async def _generate_and_attach_audio(document_id: ObjectId, payload: NewsCreateRequest, translations: dict, source_lang: str):
     """Background job: generate TTS sequentially, upload to Firebase, update Mongo doc."""
     try:
@@ -189,9 +227,14 @@ async def _generate_and_attach_audio(document_id: ObjectId, payload: NewsCreateR
 
                 logger.info(f"[BG-TTS] Generating audio for {lang} (doc={document_id})")
 
-                # Run blocking TTS & Azure Blob calls in separate threads
-                audio_file = await asyncio.to_thread(get_tts_service().generate_audio, text, lang)
-                audio_url = await asyncio.to_thread(get_azure_blob_service().upload_audio, audio_file, lang, str(document_id))
+                # Generate audio with retry logic and timeout
+                audio_file = await _generate_audio_with_retry(text, lang)
+                
+                # Upload to Azure Blob with timeout
+                audio_url = await asyncio.wait_for(
+                    asyncio.to_thread(get_azure_blob_service().upload_audio, audio_file, lang, str(document_id)),
+                    timeout=30.0  # 30 second timeout for upload
+                )
 
                 # Update DB fields
                 field = f"{lang_map[lang]}.audio_description"
@@ -201,6 +244,9 @@ async def _generate_and_attach_audio(document_id: ObjectId, payload: NewsCreateR
 
                 await asyncio.sleep(2)  # slight delay between langs
 
+            except asyncio.TimeoutError as e:
+                logger.error(f"[BG-TTS] Timeout for {lang} (doc={document_id}): {e}")
+                continue
             except Exception as e:
                 logger.error(f"[BG-TTS] Failed audio for {lang} (doc={document_id}): {e}")
                 continue
