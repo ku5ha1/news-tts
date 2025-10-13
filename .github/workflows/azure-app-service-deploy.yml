@@ -102,9 +102,8 @@ jobs:
             -e AZURE_STORAGE_AUDIOFIELD_CONTAINER="$AZURE_STORAGE_AUDIOFIELD_CONTAINER" \
             news-tts
           
-          # Wait for container to start and models to load
-          echo "Waiting for container to start and models to load..."
-          sleep 30
+          # Wait for container to start
+          sleep 10
           
           # Debug container status
           echo "=== Container Status ==="
@@ -114,23 +113,10 @@ jobs:
           echo "=== Container Processes ==="
           docker exec news-tts-container ps aux || echo "Cannot exec into container"
           
-          # Wait for health endpoint with retries
-          echo "Checking health endpoint with retries..."
-          for i in {1..10}; do
-            echo "Health check attempt $i/10..."
-            if curl -f http://localhost:8080/health; then
-              echo "Health check passed!"
-              break
-            else
-              echo "Health check failed, waiting 15 seconds..."
-              sleep 15
-            fi
-          done
-          
-          # Final health check
+          # Check health
           curl -f http://localhost:8080/health || {
-            echo "Final health check failed - checking container logs"
-            docker logs news-tts-container --tail 100
+            echo "Health check failed - checking container logs"
+            docker logs news-tts-container --tail 50
             exit 1
           }
           
