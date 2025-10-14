@@ -413,7 +413,7 @@ async def create_news(
             "likedBy": [],
             "createdTime": datetime.utcnow(),
             "last_updated": datetime.utcnow(),
-            "createdBy": ObjectId(current_user.get("id")) if current_user.get("id") else None,
+            "createdBy": ObjectId(current_user.get("_id")) if current_user.get("_id") else None,
             "status": status,
             "hindi": {
                 "title": translations.get("hindi", {}).get("title", payload.title),

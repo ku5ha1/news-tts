@@ -250,7 +250,7 @@ async def create_long_video(
             "Total_views": 0,
             "Comments": [],
             "status": status,
-            "createdBy": ObjectId(current_user.get("id")) if current_user.get("id") else None,
+            "createdBy": ObjectId(current_user.get("_id")) if current_user.get("_id") else None,
             "createdAt": datetime.utcnow(),
             "hindi": {
                 "title": translations.get("hindi", {}).get("title", payload.title),
