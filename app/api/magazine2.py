@@ -210,13 +210,32 @@ async def create_magazine2(
                 logger.error("This appears to be an IndicTrans2 model loading issue")
             raise HTTPException(status_code=500, detail=f"Translation failed - required for magazine2 creation: {str(e)}")
 
-        # Handle English source language case - use original text as English translation
+        # Handle bidirectional translation - ensure all three languages are present
+        # Source language can be either English or Kannada, we need all three languages
+        
+        # If source is English, add original text as English translation
         if source_lang == "en":
             translations["english"] = {
                 "title": payload.title,
                 "description": payload.description
             }
             logger.info(f"[MAGAZINE2-CREATE] added original text as English translation for source=en")
+        
+        # If source is Kannada, add original text as Kannada translation  
+        elif source_lang == "kn":
+            translations["kannada"] = {
+                "title": payload.title,
+                "description": payload.description
+            }
+            logger.info(f"[MAGAZINE2-CREATE] added original text as Kannada translation for source=kn")
+        
+        # If source is Hindi, add original text as Hindi translation
+        elif source_lang == "hi":
+            translations["hindi"] = {
+                "title": payload.title,
+                "description": payload.description
+            }
+            logger.info(f"[MAGAZINE2-CREATE] added original text as Hindi translation for source=hi")
 
         # Validate translation results - CRITICAL: All translation fields are required
         hindi_title = translations.get("hindi", {}).get("title", "")
