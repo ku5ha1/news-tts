@@ -755,3 +755,86 @@ class DBService:
         except Exception as e:
             logger.error(f"[MongoDB] Delete magazine2 error for {magazine2_id}: {str(e)}", exc_info=True)
             return False
+
+    # StaticPage methods
+    async def insert_staticpage(self, staticpage_document: dict) -> bool:
+        """Insert a new static page document."""
+        try:
+            collection = self.db["staticpages"]
+            result = await collection.insert_one(staticpage_document)
+            logger.info(f"[MongoDB] StaticPage inserted: {result.inserted_id}")
+            return True
+        except Exception as e:
+            logger.error(f"[MongoDB] Insert staticpage error: {str(e)}", exc_info=True)
+            return False
+
+    async def get_staticpage_by_id(self, staticpage_id: ObjectId) -> Optional[dict]:
+        """Get a static page by ID."""
+        try:
+            collection = self.db["staticpages"]
+            staticpage = await collection.find_one({"_id": staticpage_id})
+            if staticpage:
+                logger.info(f"[MongoDB] StaticPage found: {staticpage_id}")
+                return staticpage
+            else:
+                logger.warning(f"[MongoDB] StaticPage not found: {staticpage_id}")
+                return None
+        except Exception as e:
+            logger.error(f"[MongoDB] Get staticpage error for {staticpage_id}: {str(e)}", exc_info=True)
+            return None
+
+    async def get_staticpages_paginated(self, skip: int = 0, limit: int = 20, status_filter: str = None) -> tuple[List[dict], int]:
+        """Get paginated static pages with optional status filter."""
+        try:
+            collection = self.db["staticpages"]
+            
+            # Build filter
+            filter_dict = {}
+            if status_filter:
+                filter_dict["status"] = status_filter
+            
+            # Get total count
+            total = await collection.count_documents(filter_dict)
+            
+            # Get paginated results
+            cursor = collection.find(filter_dict).sort("createdTime", -1).skip(skip).limit(limit)
+            staticpages = await cursor.to_list(length=limit)
+            
+            logger.info(f"[MongoDB] StaticPages paginated: {len(staticpages)}/{total} (skip={skip}, limit={limit}, status={status_filter})")
+            return staticpages, total
+        except Exception as e:
+            logger.error(f"[MongoDB] Get staticpages paginated error: {str(e)}", exc_info=True)
+            return [], 0
+
+    async def update_staticpage_fields(self, staticpage_id: ObjectId, updates: dict) -> bool:
+        """Update specific fields of a static page."""
+        try:
+            collection = self.db["staticpages"]
+            result = await collection.update_one(
+                {"_id": staticpage_id},
+                {"$set": updates}
+            )
+            if result.modified_count > 0:
+                logger.info(f"[MongoDB] StaticPage updated: {staticpage_id}")
+                return True
+            else:
+                logger.warning(f"[MongoDB] StaticPage not found for update: {staticpage_id}")
+                return False
+        except Exception as e:
+            logger.error(f"[MongoDB] Update staticpage error for {staticpage_id}: {str(e)}", exc_info=True)
+            return False
+
+    async def delete_staticpage(self, staticpage_id: ObjectId) -> bool:
+        """Delete a static page."""
+        try:
+            collection = self.db["staticpages"]
+            result = await collection.delete_one({"_id": staticpage_id})
+            if result.deleted_count > 0:
+                logger.info(f"[MongoDB] StaticPage deleted: {staticpage_id}")
+                return True
+            else:
+                logger.warning(f"[MongoDB] StaticPage not found for deletion: {staticpage_id}")
+                return False
+        except Exception as e:
+            logger.error(f"[MongoDB] Delete staticpage error for {staticpage_id}: {str(e)}", exc_info=True)
+            return False
