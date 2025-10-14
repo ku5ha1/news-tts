@@ -12,6 +12,7 @@ pydantic-settings==2.1.0
 
 # Authentication
 PyJWT==2.8.0
+bcrypt==4.1.2
 
 # HTTP and async support
 httpx==0.25.2

@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import news, auth
+from app.api import news
 from app.config.settings import settings
 import asyncio
 import logging
@@ -165,7 +165,6 @@ app.add_middleware(
 )
 
 app.include_router(news.router, prefix="/api", tags=["news"])
-app.include_router(auth.router, prefix="/api/auth", tags=["authentication"])
 
 @app.get("/health")
 async def health():
