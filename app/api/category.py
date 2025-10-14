@@ -304,8 +304,75 @@ async def update_category(
         # Prepare update fields
         updates = {"last_updated": datetime.utcnow()}
         
+        # Handle name update with translation
         if payload.name is not None:
             updates["name"] = payload.name
+            
+            # Re-translate the name if it's being updated
+            try:
+                # Detect source language
+                source_lang = detect_language(payload.name)
+                logger.info(f"[CATEGORY-UPDATE] detected_language={source_lang} for name update")
+                
+                # Translation with timeout
+                try:
+                    timeout_sec = float(os.getenv("TRANSLATION_PER_CALL_TIMEOUT", str(DEFAULT_TRANSLATION_TIMEOUT)))
+                except (ValueError, TypeError):
+                    timeout_sec = DEFAULT_TRANSLATION_TIMEOUT
+                
+                try:
+                    translation_service = get_translation_service()
+                    translations = await asyncio.wait_for(
+                        translation_service.translate_to_all_async(payload.name, "", source_lang),
+                        timeout=timeout_sec
+                    )
+                    logger.info(f"[CATEGORY-UPDATE] translation.done langs={list(translations.keys())} for name update")
+                except asyncio.TimeoutError:
+                    logger.error(f"[CATEGORY-UPDATE] translation timed out after {timeout_sec}s for name update")
+                    raise HTTPException(status_code=504, detail="Translation timed out")
+                except Exception as e:
+                    logger.error(f"[CATEGORY-UPDATE] translation failed for name update: {e}")
+                    if "IndicTrans2" in str(e) or "Model" in str(e):
+                        logger.error("This appears to be an IndicTrans2 model loading issue")
+                    raise
+                
+                # Handle bidirectional translation - ensure all three languages are present
+                # If source is English, add original text as English translation
+                if source_lang == "en":
+                    translations["english"] = {
+                        "title": payload.name,
+                        "description": ""
+                    }
+                    logger.info(f"[CATEGORY-UPDATE] added original text as English translation for source=en")
+                
+                # If source is Kannada, add original text as Kannada translation  
+                elif source_lang == "kn":
+                    translations["kannada"] = {
+                        "title": payload.name,
+                        "description": ""
+                    }
+                    logger.info(f"[CATEGORY-UPDATE] added original text as Kannada translation for source=kn")
+                
+                # If source is Hindi, add original text as Hindi translation
+                elif source_lang == "hi":
+                    translations["hindi"] = {
+                        "title": payload.name,
+                        "description": ""
+                    }
+                    logger.info(f"[CATEGORY-UPDATE] added original text as Hindi translation for source=hi")
+                
+                # Update translation fields
+                updates["hindi"] = translations.get("hindi", {}).get("title", payload.name)
+                updates["kannada"] = translations.get("kannada", {}).get("title", payload.name)
+                updates["English"] = translations.get("english", {}).get("title", payload.name)
+                
+                logger.info(f"[CATEGORY-UPDATE] updated translations: hindi='{updates['hindi'][:20]}...', kannada='{updates['kannada'][:20]}...', english='{updates['English'][:20]}...'")
+                
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error(f"[CATEGORY-UPDATE] translation error for name update: {e}")
+                raise HTTPException(status_code=500, detail=f"Translation failed for name update: {str(e)}")
             
         if payload.description is not None:
             updates["description"] = payload.description
