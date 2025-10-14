@@ -11,6 +11,7 @@ from app.models.longvideo import (
 from app.services.db_service import DBService
 from app.services.auth_service import auth_service
 from app.utils.language_detection import detect_language
+from app.utils.retry_utils import retry_translation_with_timeout
 import logging
 
 logger = logging.getLogger(__name__)
@@ -206,9 +207,13 @@ async def create_long_video(
 
         try:
             translation_service = get_translation_service()
-            translations = await asyncio.wait_for(
-                translation_service.translate_to_all_async(payload.title, payload.description, source_lang),
-                timeout=timeout_sec
+            translations = await retry_translation_with_timeout(
+                translation_service,
+                payload.title,
+                payload.description,
+                source_lang,
+                timeout=timeout_sec,
+                max_retries=3
             )
             logger.info(f"[LONGVIDEO-CREATE] translation.done langs={list(translations.keys())} video_id={video_id}")
         except asyncio.TimeoutError:
@@ -219,6 +224,15 @@ async def create_long_video(
             if "IndicTrans2" in str(e) or "Model" in str(e):
                 logger.error("This appears to be an IndicTrans2 model loading issue")
             raise
+
+        # Determine status based on user role
+        user_role = current_user.get("role", "")
+        if user_role == "admin":
+            status = "approved"
+            logger.info(f"[LONGVIDEO-CREATE] Admin user creating long video - status=approved video_id={video_id}")
+        else:
+            status = "pending"
+            logger.info(f"[LONGVIDEO-CREATE] Non-admin user creating long video - status=pending video_id={video_id}")
 
         # Create long video document
         long_video_document = {
@@ -235,7 +249,7 @@ async def create_long_video(
             "total_Likes": 0,
             "Total_views": 0,
             "Comments": [],
-            "status": "pending",
+            "status": status,
             "createdBy": ObjectId(current_user.get("id")) if current_user.get("id") else None,
             "createdAt": datetime.utcnow(),
             "hindi": {
@@ -374,9 +388,13 @@ async def update_long_video(
                 
                 try:
                     translation_service = get_translation_service()
-                    translations = await asyncio.wait_for(
-                        translation_service.translate_to_all_async(current_title, current_description, source_lang),
-                        timeout=timeout_sec
+                    translations = await retry_translation_with_timeout(
+                        translation_service,
+                        current_title,
+                        current_description,
+                        source_lang,
+                        timeout=timeout_sec,
+                        max_retries=3
                     )
                     logger.info(f"[LONGVIDEO-UPDATE] translation.done langs={list(translations.keys())} for title/description update")
                 except asyncio.TimeoutError:
@@ -462,8 +480,13 @@ async def update_long_video(
             else:
                 updates["Topics"] = None
             
+        # Handle status updates (admin/moderator only)
         if payload.status is not None:
-            updates["status"] = payload.status
+            user_role = current_user.get("role", "")
+            if user_role in ["admin", "moderator"]:
+                updates["status"] = payload.status
+            else:
+                logger.warning(f"[LONGVIDEO-UPDATE] Non-admin/moderator user tried to update status: {current_user.get('email')}")
         
         # Update in DB
         success = await get_db_service().update_longvideo_fields(ObjectId(video_id), updates)

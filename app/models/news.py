@@ -12,6 +12,17 @@ class NewsCreateRequest(BaseModel):
     magazineType: Literal["magazine", "magazine2"]
     newsType: Literal["statenews", "districtnews", "specialnews"]
 
+class NewsUpdateRequest(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    category: Optional[str] = None
+    author: Optional[str] = None
+    newsImage: Optional[str] = None
+    magazineType: Optional[Literal["magazine", "magazine2"]] = None
+    newsType: Optional[Literal["statenews", "districtnews", "specialnews"]] = None
+    status: Optional[Literal["pending", "approved", "rejected"]] = None
+    isLive: Optional[bool] = None
+
 class TranslationData(BaseModel):
     title: str
     description: str

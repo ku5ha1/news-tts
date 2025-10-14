@@ -11,6 +11,7 @@ from app.models.photo import (
 from app.services.db_service import DBService
 from app.services.auth_service import auth_service
 from app.utils.language_detection import detect_language
+from app.utils.retry_utils import retry_translation_with_timeout
 import logging
 
 logger = logging.getLogger(__name__)
@@ -185,9 +186,13 @@ async def create_photo(
 
         try:
             translation_service = get_translation_service()
-            translations = await asyncio.wait_for(
-                translation_service.translate_to_all_async(payload.title, "", source_lang),
-                timeout=timeout_sec
+            translations = await retry_translation_with_timeout(
+                translation_service,
+                payload.title,
+                "",
+                source_lang,
+                timeout=timeout_sec,
+                max_retries=3
             )
             logger.info(f"[PHOTO-CREATE] translation.done langs={list(translations.keys())} photo_id={photo_id}")
         except asyncio.TimeoutError:
@@ -199,13 +204,22 @@ async def create_photo(
                 logger.error("This appears to be an IndicTrans2 model loading issue")
             raise
 
+        # Determine status based on user role
+        user_role = current_user.get("role", "")
+        if user_role == "admin":
+            status = "approved"
+            logger.info(f"[PHOTO-CREATE] Admin user creating photo - status=approved photo_id={photo_id}")
+        else:
+            status = "pending"
+            logger.info(f"[PHOTO-CREATE] Non-admin user creating photo - status=pending photo_id={photo_id}")
+
         # Create photo document
         photo_document = {
             "_id": photo_id,
             "title": payload.title,
             "photoImage": payload.photoImage,
             "createdBy": ObjectId(current_user.get("id")) if current_user.get("id") else None,
-            "status": "pending",
+            "status": status,
             "createdTime": datetime.utcnow(),
             "hindi": translations.get("hindi", {}).get("title", payload.title),
             "kannada": translations.get("kannada", {}).get("title", payload.title),
@@ -323,9 +337,13 @@ async def update_photo(
                 
                 try:
                     translation_service = get_translation_service()
-                    translations = await asyncio.wait_for(
-                        translation_service.translate_to_all_async(payload.title, "", source_lang),
-                        timeout=timeout_sec
+                    translations = await retry_translation_with_timeout(
+                        translation_service,
+                        payload.title,
+                        "",
+                        source_lang,
+                        timeout=timeout_sec,
+                        max_retries=3
                     )
                     logger.info(f"[PHOTO-UPDATE] translation.done langs={list(translations.keys())} for title update")
                 except asyncio.TimeoutError:
@@ -378,8 +396,13 @@ async def update_photo(
         if payload.photoImage is not None:
             updates["photoImage"] = payload.photoImage
             
+        # Handle status updates (admin/moderator only)
         if payload.status is not None:
-            updates["status"] = payload.status
+            user_role = current_user.get("role", "")
+            if user_role in ["admin", "moderator"]:
+                updates["status"] = payload.status
+            else:
+                logger.warning(f"[PHOTO-UPDATE] Non-admin/moderator user tried to update status: {current_user.get('email')}")
         
         # Update in DB
         success = await get_db_service().update_photo_fields(ObjectId(photo_id), updates)

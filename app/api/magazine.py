@@ -11,6 +11,7 @@ from app.models.magazine import (
 from app.services.db_service import DBService
 from app.services.auth_service import auth_service
 from app.utils.language_detection import detect_language
+from app.utils.retry_utils import retry_translation_with_timeout
 import logging
 
 logger = logging.getLogger(__name__)
@@ -196,9 +197,13 @@ async def create_magazine(
 
         try:
             translation_service = get_translation_service()
-            translations = await asyncio.wait_for(
-                translation_service.translate_to_all_async(payload.title, payload.description, source_lang),
-                timeout=timeout_sec
+            translations = await retry_translation_with_timeout(
+                translation_service,
+                payload.title,
+                payload.description,
+                source_lang,
+                timeout=timeout_sec,
+                max_retries=3
             )
             logger.info(f"[MAGAZINE-CREATE] translation.done langs={list(translations.keys())} magazine_id={magazine_id}")
         except asyncio.TimeoutError:
@@ -212,7 +217,12 @@ async def create_magazine(
 
         # Determine status based on user role
         user_role = current_user.get("role", "")
-        status = "approved" if user_role == "admin" else "pending"
+        if user_role == "admin":
+            status = "approved"
+            logger.info(f"[MAGAZINE-CREATE] Admin user creating magazine - status=approved magazine_id={magazine_id}")
+        else:
+            status = "pending"
+            logger.info(f"[MAGAZINE-CREATE] Non-admin user creating magazine - status=pending magazine_id={magazine_id}")
 
         # Create magazine document
         magazine_document = {
@@ -362,9 +372,13 @@ async def update_magazine(
                 
                 try:
                     translation_service = get_translation_service()
-                    translations = await asyncio.wait_for(
-                        translation_service.translate_to_all_async(current_title, current_description, source_lang),
-                        timeout=timeout_sec
+                    translations = await retry_translation_with_timeout(
+                        translation_service,
+                        current_title,
+                        current_description,
+                        source_lang,
+                        timeout=timeout_sec,
+                        max_retries=3
                     )
                     logger.info(f"[MAGAZINE-UPDATE] translation.done langs={list(translations.keys())} for title/description update")
                 except asyncio.TimeoutError:
@@ -438,8 +452,13 @@ async def update_magazine(
         if payload.magazinePdf is not None:
             updates["magazinePdf"] = payload.magazinePdf
             
+        # Handle status updates (admin/moderator only)
         if payload.status is not None:
-            updates["status"] = payload.status
+            user_role = current_user.get("role", "")
+            if user_role in ["admin", "moderator"]:
+                updates["status"] = payload.status
+            else:
+                logger.warning(f"[MAGAZINE-UPDATE] Non-admin/moderator user tried to update status: {current_user.get('email')}")
         
         # Update in DB
         success = await get_db_service().update_magazine_fields(ObjectId(magazine_id), updates)

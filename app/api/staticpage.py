@@ -4,9 +4,9 @@ from datetime import datetime
 from bson import ObjectId
 import asyncio
 import os
-from app.models.category import (
-    CategoryCreateRequest, CategoryResponse,
-    CategoryUpdateRequest, CategoryListResponse
+from app.models.staticpage import (
+    StaticPageCreateRequest, StaticPageResponse,
+    StaticPageUpdateRequest, StaticPageListResponse
 )
 from app.services.db_service import DBService
 from app.services.auth_service import auth_service
@@ -65,7 +65,7 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
             logger.warning(f"[AUTH] Insufficient permissions: {error_msg}")
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Insufficient permissions. Only admin and moderator roles can create categories.",
+                detail="Insufficient permissions. Only admin and moderator roles can create static pages.",
             )
         else:
             logger.error(f"[AUTH] Authentication error: {error_msg}")
@@ -158,23 +158,27 @@ def _to_extended_json(document: dict) -> dict:
 
     return doc
 
-@router.post("/create", response_model=CategoryResponse)
-async def create_category(
-    payload: CategoryCreateRequest,
+@router.post("/create", response_model=StaticPageResponse)
+async def create_static_page(
+    payload: StaticPageCreateRequest,
     current_user: dict = Depends(get_current_user)
 ):
-    """Create category with translation to Hindi, Kannada, and English."""
-    category_id = ObjectId()
-    logger.info(f"[CATEGORY-CREATE] start category_id={category_id} user={current_user.get('email', 'unknown')}")
+    """Create static page with translation to Hindi, Kannada, and English."""
+    staticpage_id = ObjectId()
+    logger.info(f"[STATICPAGE-CREATE] start staticpage_id={staticpage_id} user={current_user.get('email', 'unknown')}")
 
     try:
         # Validate input
-        if not payload.name.strip():
-            raise HTTPException(status_code=400, detail="Category name cannot be empty")
+        if not payload.staticpageName.strip():
+            raise HTTPException(status_code=400, detail="Static page name cannot be empty")
+        if not payload.staticpageImage.strip():
+            raise HTTPException(status_code=400, detail="Static page image URL cannot be empty")
+        if not payload.staticpageLink.strip():
+            raise HTTPException(status_code=400, detail="Static page link cannot be empty")
 
-        # Detect source language
-        source_lang = detect_language(payload.name)
-        logger.info(f"[CATEGORY-CREATE] detected_language={source_lang} category_id={category_id}")
+        # Detect source language from staticpageName
+        source_lang = detect_language(payload.staticpageName)
+        logger.info(f"[STATICPAGE-CREATE] detected_language={source_lang} staticpage_id={staticpage_id}")
 
         # Translation with timeout
         try:
@@ -186,18 +190,18 @@ async def create_category(
             translation_service = get_translation_service()
             translations = await retry_translation_with_timeout(
                 translation_service,
-                payload.name,
+                payload.staticpageName,
                 "",
                 source_lang,
                 timeout=timeout_sec,
                 max_retries=3
             )
-            logger.info(f"[CATEGORY-CREATE] translation.done langs={list(translations.keys())} category_id={category_id}")
+            logger.info(f"[STATICPAGE-CREATE] translation.done langs={list(translations.keys())} staticpage_id={staticpage_id}")
         except asyncio.TimeoutError:
-            logger.error(f"[CATEGORY-CREATE] translation timed out after {timeout_sec}s for category_id={category_id}")
+            logger.error(f"[STATICPAGE-CREATE] translation timed out after {timeout_sec}s for staticpage_id={staticpage_id}")
             raise HTTPException(status_code=504, detail="Translation timed out")
         except Exception as e:
-            logger.error(f"[CATEGORY-CREATE] translation failed for category_id={category_id}: {e}")
+            logger.error(f"[STATICPAGE-CREATE] translation failed for staticpage_id={staticpage_id}: {e}")
             if "IndicTrans2" in str(e) or "Model" in str(e):
                 logger.error("This appears to be an IndicTrans2 model loading issue")
             raise
@@ -206,127 +210,128 @@ async def create_category(
         user_role = current_user.get("role", "")
         if user_role == "admin":
             status = "approved"
-            logger.info(f"[CATEGORY-CREATE] Admin user creating category - status=approved category_id={category_id}")
+            logger.info(f"[STATICPAGE-CREATE] Admin user creating static page - status=approved staticpage_id={staticpage_id}")
         else:
             status = "pending"
-            logger.info(f"[CATEGORY-CREATE] Non-admin user creating category - status=pending category_id={category_id}")
+            logger.info(f"[STATICPAGE-CREATE] Non-admin user creating static page - status=pending staticpage_id={staticpage_id}")
 
-        # Create category document
-        category_document = {
-            "_id": category_id,
-            "name": payload.name,
-            "description": payload.description or "",
-            "hindi": translations.get("hindi", {}).get("title", payload.name),
-            "kannada": translations.get("kannada", {}).get("title", payload.name),
-            "English": translations.get("english", {}).get("title", payload.name),
+        # Create static page document
+        staticpage_document = {
+            "_id": staticpage_id,
+            "staticpageName": payload.staticpageName,
+            "staticpageImage": payload.staticpageImage,
+            "staticpageLink": payload.staticpageLink,
             "createdBy": ObjectId(current_user.get("id")) if current_user.get("id") else None,
             "status": status,
             "createdTime": datetime.utcnow(),
             "last_updated": datetime.utcnow(),
+            "hindi": translations.get("hindi", {}).get("title", payload.staticpageName),
+            "kannada": translations.get("kannada", {}).get("title", payload.staticpageName),
+            "English": translations.get("english", {}).get("title", payload.staticpageName),
         }
 
         # Insert into DB
-        await asyncio.wait_for(get_db_service().insert_category(category_document), timeout=15.0)
+        await asyncio.wait_for(get_db_service().insert_staticpage(staticpage_document), timeout=15.0)
 
-        response_doc = _to_extended_json(category_document)
-        logger.info(f"[CATEGORY-CREATE] success category_id={category_id}")
-        return CategoryResponse(success=True, data=response_doc)
+        response_doc = _to_extended_json(staticpage_document)
+        logger.info(f"[STATICPAGE-CREATE] success staticpage_id={staticpage_id}")
+        return StaticPageResponse(success=True, data=response_doc)
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"[CATEGORY-CREATE] failed category_id={category_id} error={e}")
+        logger.error(f"[STATICPAGE-CREATE] failed staticpage_id={staticpage_id} error={e}")
         try:
-            await get_db_service().update_category_fields(category_id, {"_deleted_due_to_error": True})
+            await get_db_service().update_staticpage_fields(staticpage_id, {"_deleted_due_to_error": True})
         except:
             pass
-        raise HTTPException(status_code=500, detail=f"Error creating category: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error creating static page: {str(e)}")
 
-@router.get("/list", response_model=CategoryListResponse)
-async def list_categories(
+@router.get("/list", response_model=StaticPageListResponse)
+async def list_static_pages(
     page: int = 1,
     page_size: int = DEFAULT_PAGE_SIZE,
     status_filter: str = None,
     current_user: dict = Depends(get_current_user)
 ):
-    """List categories with pagination and optional status filter."""
+    """List static pages with pagination and optional status filter."""
     try:
-        logger.info(f"[CATEGORY-LIST] page={page} page_size={page_size} status={status_filter}")
+        logger.info(f"[STATICPAGE-LIST] page={page} page_size={page_size} status={status_filter}")
         
         # Calculate skip
         skip = (page - 1) * page_size
         
-        # Get categories from DB
-        categories, total = await get_db_service().get_categories_paginated(
+        # Get static pages from DB
+        staticpages, total = await get_db_service().get_staticpages_paginated(
             skip=skip, 
             limit=page_size, 
             status_filter=status_filter
         )
         
         # Format response
-        formatted_categories = [_to_extended_json(cat) for cat in categories]
+        formatted_staticpages = [_to_extended_json(staticpage) for staticpage in staticpages]
         
-        return CategoryListResponse(
+        return StaticPageListResponse(
             success=True,
-            data={"categories": formatted_categories},
+            data={"staticpages": formatted_staticpages},
             total=total,
             page=page,
             page_size=page_size
         )
         
     except Exception as e:
-        logger.error(f"[CATEGORY-LIST] error: {e}")
-        raise HTTPException(status_code=500, detail=f"Error listing categories: {str(e)}")
+        logger.error(f"[STATICPAGE-LIST] error: {e}")
+        raise HTTPException(status_code=500, detail=f"Error listing static pages: {str(e)}")
 
-@router.get("/{category_id}", response_model=CategoryResponse)
-async def get_category(
-    category_id: str,
+@router.get("/{staticpage_id}", response_model=StaticPageResponse)
+async def get_static_page(
+    staticpage_id: str,
     current_user: dict = Depends(get_current_user)
 ):
-    """Get a specific category by ID."""
+    """Get a specific static page by ID."""
     try:
-        logger.info(f"[CATEGORY-GET] category_id={category_id}")
+        logger.info(f"[STATICPAGE-GET] staticpage_id={staticpage_id}")
         
-        category = await get_db_service().get_category_by_id(ObjectId(category_id))
-        if not category:
-            raise HTTPException(status_code=404, detail="Category not found")
+        staticpage = await get_db_service().get_staticpage_by_id(ObjectId(staticpage_id))
+        if not staticpage:
+            raise HTTPException(status_code=404, detail="Static page not found")
         
-        response_doc = _to_extended_json(category)
-        return CategoryResponse(success=True, data=response_doc)
+        response_doc = _to_extended_json(staticpage)
+        return StaticPageResponse(success=True, data=response_doc)
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"[CATEGORY-GET] error: {e}")
-        raise HTTPException(status_code=500, detail=f"Error getting category: {str(e)}")
+        logger.error(f"[STATICPAGE-GET] error: {e}")
+        raise HTTPException(status_code=500, detail=f"Error getting static page: {str(e)}")
 
-@router.put("/{category_id}", response_model=CategoryResponse)
-async def update_category(
-    category_id: str,
-    payload: CategoryUpdateRequest,
+@router.put("/{staticpage_id}", response_model=StaticPageResponse)
+async def update_static_page(
+    staticpage_id: str,
+    payload: StaticPageUpdateRequest,
     current_user: dict = Depends(get_current_user)
 ):
-    """Update a category."""
+    """Update a static page."""
     try:
-        logger.info(f"[CATEGORY-UPDATE] category_id={category_id}")
+        logger.info(f"[STATICPAGE-UPDATE] staticpage_id={staticpage_id}")
         
-        # Check if category exists
-        existing_category = await get_db_service().get_category_by_id(ObjectId(category_id))
-        if not existing_category:
-            raise HTTPException(status_code=404, detail="Category not found")
+        # Check if static page exists
+        existing_staticpage = await get_db_service().get_staticpage_by_id(ObjectId(staticpage_id))
+        if not existing_staticpage:
+            raise HTTPException(status_code=404, detail="Static page not found")
         
         # Prepare update fields
-        updates = {"last_updated": datetime.utcnow()}
+        updates = {}
         
-        # Handle name update with translation
-        if payload.name is not None:
-            updates["name"] = payload.name
+        # Handle staticpageName update with translation
+        if payload.staticpageName is not None:
+            updates["staticpageName"] = payload.staticpageName
             
-            # Re-translate the name if it's being updated
+            # Re-translate the staticpageName if it's being updated
             try:
                 # Detect source language
-                source_lang = detect_language(payload.name)
-                logger.info(f"[CATEGORY-UPDATE] detected_language={source_lang} for name update")
+                source_lang = detect_language(payload.staticpageName)
+                logger.info(f"[STATICPAGE-UPDATE] detected_language={source_lang} for staticpageName update")
                 
                 # Translation with timeout
                 try:
@@ -338,18 +343,18 @@ async def update_category(
                     translation_service = get_translation_service()
                     translations = await retry_translation_with_timeout(
                         translation_service,
-                        payload.name,
+                        payload.staticpageName,
                         "",
                         source_lang,
                         timeout=timeout_sec,
                         max_retries=3
                     )
-                    logger.info(f"[CATEGORY-UPDATE] translation.done langs={list(translations.keys())} for name update")
+                    logger.info(f"[STATICPAGE-UPDATE] translation.done langs={list(translations.keys())} for staticpageName update")
                 except asyncio.TimeoutError:
-                    logger.error(f"[CATEGORY-UPDATE] translation timed out after {timeout_sec}s for name update")
+                    logger.error(f"[STATICPAGE-UPDATE] translation timed out after {timeout_sec}s for staticpageName update")
                     raise HTTPException(status_code=504, detail="Translation timed out")
                 except Exception as e:
-                    logger.error(f"[CATEGORY-UPDATE] translation failed for name update: {e}")
+                    logger.error(f"[STATICPAGE-UPDATE] translation failed for staticpageName update: {e}")
                     if "IndicTrans2" in str(e) or "Model" in str(e):
                         logger.error("This appears to be an IndicTrans2 model loading issue")
                     raise
@@ -358,42 +363,45 @@ async def update_category(
                 # If source is English, add original text as English translation
                 if source_lang == "en":
                     translations["english"] = {
-                        "title": payload.name,
+                        "title": payload.staticpageName,
                         "description": ""
                     }
-                    logger.info(f"[CATEGORY-UPDATE] added original text as English translation for source=en")
+                    logger.info(f"[STATICPAGE-UPDATE] added original text as English translation for source=en")
                 
                 # If source is Kannada, add original text as Kannada translation  
                 elif source_lang == "kn":
                     translations["kannada"] = {
-                        "title": payload.name,
+                        "title": payload.staticpageName,
                         "description": ""
                     }
-                    logger.info(f"[CATEGORY-UPDATE] added original text as Kannada translation for source=kn")
+                    logger.info(f"[STATICPAGE-UPDATE] added original text as Kannada translation for source=kn")
                 
                 # If source is Hindi, add original text as Hindi translation
                 elif source_lang == "hi":
                     translations["hindi"] = {
-                        "title": payload.name,
+                        "title": payload.staticpageName,
                         "description": ""
                     }
-                    logger.info(f"[CATEGORY-UPDATE] added original text as Hindi translation for source=hi")
+                    logger.info(f"[STATICPAGE-UPDATE] added original text as Hindi translation for source=hi")
                 
-                # Update translation fields
-                updates["hindi"] = translations.get("hindi", {}).get("title", payload.name)
-                updates["kannada"] = translations.get("kannada", {}).get("title", payload.name)
-                updates["English"] = translations.get("english", {}).get("title", payload.name)
+                # Update translation fields (static pages store translations as strings, not objects)
+                updates["hindi"] = translations.get("hindi", {}).get("title", payload.staticpageName)
+                updates["kannada"] = translations.get("kannada", {}).get("title", payload.staticpageName)
+                updates["English"] = translations.get("english", {}).get("title", payload.staticpageName)
                 
-                logger.info(f"[CATEGORY-UPDATE] updated translations: hindi='{updates['hindi'][:20]}...', kannada='{updates['kannada'][:20]}...', english='{updates['English'][:20]}...'")
+                logger.info(f"[STATICPAGE-UPDATE] updated translations: hindi='{updates['hindi'][:20]}...', kannada='{updates['kannada'][:20]}...', english='{updates['English'][:20]}...'")
                 
             except HTTPException:
                 raise
             except Exception as e:
-                logger.error(f"[CATEGORY-UPDATE] translation error for name update: {e}")
-                raise HTTPException(status_code=500, detail=f"Translation failed for name update: {str(e)}")
+                logger.error(f"[STATICPAGE-UPDATE] translation error for staticpageName update: {e}")
+                raise HTTPException(status_code=500, detail=f"Translation failed for staticpageName update: {str(e)}")
             
-        if payload.description is not None:
-            updates["description"] = payload.description
+        if payload.staticpageImage is not None:
+            updates["staticpageImage"] = payload.staticpageImage
+            
+        if payload.staticpageLink is not None:
+            updates["staticpageLink"] = payload.staticpageLink
             
         # Handle status updates (admin/moderator only)
         if payload.status is not None:
@@ -401,48 +409,51 @@ async def update_category(
             if user_role in ["admin", "moderator"]:
                 updates["status"] = payload.status
             else:
-                logger.warning(f"[CATEGORY-UPDATE] Non-admin/moderator user tried to update status: {current_user.get('email')}")
+                logger.warning(f"[STATICPAGE-UPDATE] Non-admin/moderator user tried to update status: {current_user.get('email')}")
+        
+        # Always update last_updated timestamp
+        updates["last_updated"] = datetime.utcnow()
         
         # Update in DB
-        success = await get_db_service().update_category_fields(ObjectId(category_id), updates)
+        success = await get_db_service().update_staticpage_fields(ObjectId(staticpage_id), updates)
         if not success:
-            raise HTTPException(status_code=500, detail="Failed to update category")
+            raise HTTPException(status_code=500, detail="Failed to update static page")
         
-        # Get updated category
-        updated_category = await get_db_service().get_category_by_id(ObjectId(category_id))
-        response_doc = _to_extended_json(updated_category)
+        # Get updated static page
+        updated_staticpage = await get_db_service().get_staticpage_by_id(ObjectId(staticpage_id))
+        response_doc = _to_extended_json(updated_staticpage)
         
-        return CategoryResponse(success=True, data=response_doc)
+        return StaticPageResponse(success=True, data=response_doc)
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"[CATEGORY-UPDATE] error: {e}")
-        raise HTTPException(status_code=500, detail=f"Error updating category: {str(e)}")
+        logger.error(f"[STATICPAGE-UPDATE] error: {e}")
+        raise HTTPException(status_code=500, detail=f"Error updating static page: {str(e)}")
 
-@router.delete("/{category_id}")
-async def delete_category(
-    category_id: str,
+@router.delete("/{staticpage_id}")
+async def delete_static_page(
+    staticpage_id: str,
     current_user: dict = Depends(get_current_user)
 ):
-    """Delete a category."""
+    """Delete a static page."""
     try:
-        logger.info(f"[CATEGORY-DELETE] category_id={category_id}")
+        logger.info(f"[STATICPAGE-DELETE] staticpage_id={staticpage_id}")
         
-        # Check if category exists
-        existing_category = await get_db_service().get_category_by_id(ObjectId(category_id))
-        if not existing_category:
-            raise HTTPException(status_code=404, detail="Category not found")
+        # Check if static page exists
+        existing_staticpage = await get_db_service().get_staticpage_by_id(ObjectId(staticpage_id))
+        if not existing_staticpage:
+            raise HTTPException(status_code=404, detail="Static page not found")
         
         # Delete from DB
-        success = await get_db_service().delete_category(ObjectId(category_id))
+        success = await get_db_service().delete_staticpage(ObjectId(staticpage_id))
         if not success:
-            raise HTTPException(status_code=500, detail="Failed to delete category")
+            raise HTTPException(status_code=500, detail="Failed to delete static page")
         
-        return {"success": True, "message": "Category deleted successfully"}
+        return {"success": True, "message": "Static page deleted successfully"}
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"[CATEGORY-DELETE] error: {e}")
-        raise HTTPException(status_code=500, detail=f"Error deleting category: {str(e)}")
+        logger.error(f"[STATICPAGE-DELETE] error: {e}")
+        raise HTTPException(status_code=500, detail=f"Error deleting static page: {str(e)}")
