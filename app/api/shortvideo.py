@@ -11,6 +11,7 @@ from app.models.shortvideo import (
 from app.services.db_service import DBService
 from app.services.auth_service import auth_service
 from app.utils.language_detection import detect_language
+from app.utils.retry_utils import retry_translation_with_timeout
 import logging
 
 logger = logging.getLogger(__name__)
@@ -198,9 +199,13 @@ async def create_short_video(
 
         try:
             translation_service = get_translation_service()
-            translations = await asyncio.wait_for(
-                translation_service.translate_to_all_async(payload.title, payload.description, source_lang),
-                timeout=timeout_sec
+            translations = await retry_translation_with_timeout(
+                translation_service,
+                payload.title,
+                payload.description,
+                source_lang,
+                timeout=timeout_sec,
+                max_retries=3
             )
             logger.info(f"[SHORTVIDEO-CREATE] translation.done langs={list(translations.keys())} video_id={video_id}")
         except asyncio.TimeoutError:
@@ -365,9 +370,13 @@ async def update_short_video(
                 
                 try:
                     translation_service = get_translation_service()
-                    translations = await asyncio.wait_for(
-                        translation_service.translate_to_all_async(current_title, current_description, source_lang),
-                        timeout=timeout_sec
+                    translations = await retry_translation_with_timeout(
+                        translation_service,
+                        current_title,
+                        current_description,
+                        source_lang,
+                        timeout=timeout_sec,
+                        max_retries=3
                     )
                     logger.info(f"[SHORTVIDEO-UPDATE] translation.done langs={list(translations.keys())} for title/description update")
                 except asyncio.TimeoutError:

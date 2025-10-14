@@ -11,6 +11,7 @@ from app.models.photo import (
 from app.services.db_service import DBService
 from app.services.auth_service import auth_service
 from app.utils.language_detection import detect_language
+from app.utils.retry_utils import retry_translation_with_timeout
 import logging
 
 logger = logging.getLogger(__name__)
@@ -185,9 +186,13 @@ async def create_photo(
 
         try:
             translation_service = get_translation_service()
-            translations = await asyncio.wait_for(
-                translation_service.translate_to_all_async(payload.title, "", source_lang),
-                timeout=timeout_sec
+            translations = await retry_translation_with_timeout(
+                translation_service,
+                payload.title,
+                "",
+                source_lang,
+                timeout=timeout_sec,
+                max_retries=3
             )
             logger.info(f"[PHOTO-CREATE] translation.done langs={list(translations.keys())} photo_id={photo_id}")
         except asyncio.TimeoutError:
@@ -323,9 +328,13 @@ async def update_photo(
                 
                 try:
                     translation_service = get_translation_service()
-                    translations = await asyncio.wait_for(
-                        translation_service.translate_to_all_async(payload.title, "", source_lang),
-                        timeout=timeout_sec
+                    translations = await retry_translation_with_timeout(
+                        translation_service,
+                        payload.title,
+                        "",
+                        source_lang,
+                        timeout=timeout_sec,
+                        max_retries=3
                     )
                     logger.info(f"[PHOTO-UPDATE] translation.done langs={list(translations.keys())} for title update")
                 except asyncio.TimeoutError:

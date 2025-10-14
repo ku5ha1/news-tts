@@ -11,6 +11,7 @@ from app.models.category import (
 from app.services.db_service import DBService
 from app.services.auth_service import auth_service
 from app.utils.language_detection import detect_language
+from app.utils.retry_utils import retry_translation_with_timeout
 import logging
 
 logger = logging.getLogger(__name__)
@@ -183,9 +184,13 @@ async def create_category(
 
         try:
             translation_service = get_translation_service()
-            translations = await asyncio.wait_for(
-                translation_service.translate_to_all_async(payload.name, "", source_lang),
-                timeout=timeout_sec
+            translations = await retry_translation_with_timeout(
+                translation_service,
+                payload.name,
+                "",
+                source_lang,
+                timeout=timeout_sec,
+                max_retries=3
             )
             logger.info(f"[CATEGORY-CREATE] translation.done langs={list(translations.keys())} category_id={category_id}")
         except asyncio.TimeoutError:
@@ -322,9 +327,13 @@ async def update_category(
                 
                 try:
                     translation_service = get_translation_service()
-                    translations = await asyncio.wait_for(
-                        translation_service.translate_to_all_async(payload.name, "", source_lang),
-                        timeout=timeout_sec
+                    translations = await retry_translation_with_timeout(
+                        translation_service,
+                        payload.name,
+                        "",
+                        source_lang,
+                        timeout=timeout_sec,
+                        max_retries=3
                     )
                     logger.info(f"[CATEGORY-UPDATE] translation.done langs={list(translations.keys())} for name update")
                 except asyncio.TimeoutError:
