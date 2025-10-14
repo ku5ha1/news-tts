@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import news
+from app.api import news, category, longvideo, shortvideo, photo, magazine, magazine2
 from app.config.settings import settings
 import asyncio
 import logging
@@ -74,7 +74,7 @@ async def background_model_preload():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    task = None  # ✅ define upfront to avoid unbound reference
+    task = None   
     try:
         log.info("Starting services...")
         
@@ -165,6 +165,12 @@ app.add_middleware(
 )
 
 app.include_router(news.router, prefix="/api", tags=["news"])
+app.include_router(category.router, prefix="/api/categories", tags=["categories"])
+app.include_router(longvideo.router, prefix="/api/longvideos", tags=["longvideos"])
+app.include_router(shortvideo.router, prefix="/api/shortvideos", tags=["shortvideos"])
+app.include_router(photo.router, prefix="/api/photos", tags=["photos"])
+app.include_router(magazine.router, prefix="/api/magazines", tags=["magazines"])
+app.include_router(magazine2.router, prefix="/api/magazine2", tags=["magazine2"])
 
 @app.get("/health")
 async def health():
