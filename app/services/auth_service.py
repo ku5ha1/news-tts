@@ -29,8 +29,6 @@ class AuthService:
             # Decode JWT token WITHOUT signature verification
             payload = jwt.decode(token, options={"verify_signature": False})
             
-            # Handle different token formats (MERN vs Python)
-            # MERN uses 'id' field, Python uses 'user_id' field
             if 'id' in payload and 'user_id' not in payload:
                 payload['user_id'] = payload['id']
             
@@ -73,9 +71,7 @@ class AuthService:
                 user = await self.get_user_by_id(user_id)
                 if user:
                     return user
-            
-            # If user not in database, create user object from token payload
-            # This handles external tokens (like MERN) where user might not exist in our DB
+
             logger.info(f"[Auth] Creating user object from token payload for external user: {payload.get('email', 'unknown')}")
             
             user_from_token = {
@@ -85,7 +81,7 @@ class AuthService:
                 "displayName": payload.get('displayName'),
                 "profileImage": payload.get('profileImage'),
                 "phone_Number": payload.get('phone_Number'),
-                "source": "external_token"  # Mark as external user
+                "source": "external_token" 
             }
             
             return user_from_token
@@ -97,7 +93,6 @@ class AuthService:
     async def authenticate_user(self, token: str) -> Dict[str, Any]:
         """Complete authentication flow: verify token and validate role."""
         try:
-            # Step 1: Get user from token (handles both DB users and external tokens)
             user = await self.get_user_from_token(token)
             if not user:
                 raise ValueError("User not found")
@@ -117,6 +112,4 @@ class AuthService:
             logger.error(f"[Auth] Authentication error: {e}")
             raise ValueError("Authentication failed")
 
-
-# Create singleton instance
 auth_service = AuthService()

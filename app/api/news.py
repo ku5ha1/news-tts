@@ -9,7 +9,6 @@ from app.models.news import (
     TranslationRequest, TranslationResponse,
     TTSRequest, TTSResponse, HealthResponse
 )
-# REMOVED: Module-level import of translation_service - will import lazily
 from app.services.tts_service import TTSService
 from app.services.azure_blob_service import AzureBlobService
 from app.services.db_service import DBService
@@ -19,7 +18,6 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# Configuration constants
 DEFAULT_TRANSLATION_TIMEOUT = 90.0
 DEFAULT_TTS_TIMEOUT = 30.0
 TTS_RETRY_TIMEOUT = 60.0  # 60 seconds for retry attempts
@@ -29,8 +27,6 @@ DEFAULT_PAGE_SIZE = 20
 
 router = APIRouter()
 
-# Initialize services that are safe to import at module level
-# Use lazy initialization to avoid module-level failures
 tts_service = None
 azure_blob_service = None
 db_service = None
