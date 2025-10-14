@@ -387,7 +387,7 @@ async def create_news(
             "newsImage": payload.newsImage,
             "category": ObjectId(payload.category) if isinstance(payload.category, str) and len(payload.category) == 24 else payload.category,
             "author": payload.author,
-            "publishedAt": payload.publishedAt,
+            "publishedAt": datetime.utcnow(),
             "magazineType": payload.magazineType,
             "newsType": payload.newsType,
             "isLive": False,
