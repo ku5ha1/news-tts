@@ -5,7 +5,7 @@ from bson import ObjectId
 import asyncio
 import os
 from app.models.news import (
-    NewsCreateRequest, NewsResponse,
+    NewsCreateRequest, NewsResponse, NewsUpdateRequest,
     TranslationRequest, TranslationResponse,
     TTSRequest, TTSResponse, HealthResponse
 )
@@ -452,6 +452,187 @@ async def create_news(
         except:
             pass
         raise HTTPException(status_code=500, detail=f"Error creating news: {str(e)}")
+
+
+@router.put("/{news_id}", response_model=NewsResponse)
+async def update_news(
+    news_id: str,
+    payload: NewsUpdateRequest,
+    background_tasks: BackgroundTasks,
+    current_user: dict = Depends(get_current_user)
+):
+    """Update a news article."""
+    try:
+        logger.info(f"[UPDATE] start news_id={news_id} user={current_user.get('email', 'unknown')}")
+        
+        # Check if news exists
+        existing_news = await get_db_service().get_news_by_id(ObjectId(news_id))
+        if not existing_news:
+            raise HTTPException(status_code=404, detail="News not found")
+        
+        # Check permissions
+        user_role = current_user.get("role", "")
+        user_id = current_user.get("id")
+        news_creator_id = existing_news.get("createdBy")
+        
+        # Admin can update any news, others can only update their own
+        if user_role != "admin" and (not user_id or not news_creator_id or str(news_creator_id) != str(user_id)):
+            raise HTTPException(status_code=403, detail="You can only update your own news articles")
+        
+        # Prepare update fields
+        updates = {}
+        
+        # Handle title and description updates with translation
+        if payload.title is not None or payload.description is not None:
+            # Get current values for fields that aren't being updated
+            current_title = payload.title if payload.title is not None else existing_news.get("title", "")
+            current_description = payload.description if payload.description is not None else existing_news.get("description", "")
+            
+            # Update the fields
+            if payload.title is not None:
+                updates["title"] = payload.title
+            if payload.description is not None:
+                updates["description"] = payload.description
+            
+            # Re-translate if title or description is being updated
+            try:
+                # Detect source language from combined title + description
+                combined_text = f"{current_title} {current_description}"
+                source_lang = detect_language(combined_text)
+                logger.info(f"[UPDATE] detected_language={source_lang} for title/description update")
+                
+                # Translation with timeout
+                try:
+                    timeout_sec = float(os.getenv("TRANSLATION_PER_CALL_TIMEOUT", str(DEFAULT_TRANSLATION_TIMEOUT)))
+                except (ValueError, TypeError):
+                    timeout_sec = DEFAULT_TRANSLATION_TIMEOUT
+                
+                try:
+                    translation_service = get_translation_service()
+                    translations = await retry_translation_with_timeout(
+                        translation_service,
+                        current_title,
+                        current_description,
+                        source_lang,
+                        timeout=timeout_sec,
+                        max_retries=3
+                    )
+                    logger.info(f"[UPDATE] translation.done langs={list(translations.keys())} for title/description update")
+                except asyncio.TimeoutError:
+                    logger.error(f"[UPDATE] translation timed out after {timeout_sec}s for title/description update")
+                    raise HTTPException(status_code=504, detail="Translation timed out")
+                except Exception as e:
+                    logger.error(f"[UPDATE] translation failed for title/description update: {e}")
+                    if "IndicTrans2" in str(e) or "Model" in str(e):
+                        logger.error("This appears to be an IndicTrans2 model loading issue")
+                    raise
+                
+                # Handle bidirectional translation - ensure all three languages are present
+                # If source is English, add original text as English translation
+                if source_lang == "en":
+                    translations["english"] = {
+                        "title": current_title,
+                        "description": current_description
+                    }
+                    logger.info(f"[UPDATE] added original text as English translation for source=en")
+                
+                # If source is Kannada, add original text as Kannada translation  
+                elif source_lang == "kn":
+                    translations["kannada"] = {
+                        "title": current_title,
+                        "description": current_description
+                    }
+                    logger.info(f"[UPDATE] added original text as Kannada translation for source=kn")
+                
+                # If source is Hindi, add original text as Hindi translation
+                elif source_lang == "hi":
+                    translations["hindi"] = {
+                        "title": current_title,
+                        "description": current_description
+                    }
+                    logger.info(f"[UPDATE] added original text as Hindi translation for source=hi")
+                
+                # Update translation fields
+                updates["hindi"] = {
+                    "title": translations.get("hindi", {}).get("title", current_title),
+                    "description": translations.get("hindi", {}).get("description", current_description),
+                    "audio_description": existing_news.get("hindi", {}).get("audio_description", "")
+                }
+                updates["kannada"] = {
+                    "title": translations.get("kannada", {}).get("title", current_title),
+                    "description": translations.get("kannada", {}).get("description", current_description),
+                    "audio_description": existing_news.get("kannada", {}).get("audio_description", "")
+                }
+                updates["English"] = {
+                    "title": translations.get("english", {}).get("title", current_title),
+                    "description": translations.get("english", {}).get("description", current_description),
+                    "audio_description": existing_news.get("English", {}).get("audio_description", "")
+                }
+                
+                logger.info(f"[UPDATE] updated translations for title/description update")
+                
+                # Schedule TTS regeneration in background if title/description changed
+                background_tasks.add_task(
+                    _generate_and_attach_audio, ObjectId(news_id), 
+                    type('obj', (object,), {'title': current_title, 'description': current_description})(),
+                    translations, source_lang
+                )
+                
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error(f"[UPDATE] translation error for title/description update: {e}")
+                raise HTTPException(status_code=500, detail=f"Translation failed for title/description update: {str(e)}")
+            
+        # Handle other field updates
+        if payload.category is not None:
+            updates["category"] = ObjectId(payload.category) if isinstance(payload.category, str) and len(payload.category) == 24 else payload.category
+            
+        if payload.author is not None:
+            updates["author"] = payload.author
+            
+        if payload.newsImage is not None:
+            updates["newsImage"] = payload.newsImage
+            
+        if payload.magazineType is not None:
+            updates["magazineType"] = payload.magazineType
+            
+        if payload.newsType is not None:
+            updates["newsType"] = payload.newsType
+            
+        # Handle status and isLive (admin/moderator only)
+        if payload.status is not None:
+            if user_role in ["admin", "moderator"]:
+                updates["status"] = payload.status
+            else:
+                logger.warning(f"[UPDATE] Non-admin/moderator user tried to update status: {current_user.get('email')}")
+                
+        if payload.isLive is not None:
+            if user_role in ["admin", "moderator"]:
+                updates["isLive"] = payload.isLive
+            else:
+                logger.warning(f"[UPDATE] Non-admin/moderator user tried to update isLive: {current_user.get('email')}")
+        
+        # Always update last_updated timestamp
+        updates["last_updated"] = datetime.utcnow()
+        
+        # Update in DB
+        success = await get_db_service().update_news_fields(ObjectId(news_id), updates)
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to update news")
+        
+        # Get updated news
+        updated_news = await get_db_service().get_news_by_id(ObjectId(news_id))
+        response_doc = _to_extended_json(updated_news)
+        
+        logger.info(f"[UPDATE] success news_id={news_id}")
+        return NewsResponse(success=True, data=response_doc)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[UPDATE] error: {e}")
+        raise HTTPException(status_code=500, detail=f"Error updating news: {str(e)}")
 
 
 @router.post("/translate", response_model=TranslationResponse)
