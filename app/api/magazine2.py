@@ -1,0 +1,419 @@
+from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from datetime import datetime
+from bson import ObjectId
+import asyncio
+import os
+from app.models.magazine2 import (
+    Magazine2CreateRequest, Magazine2Response,
+    Magazine2UpdateRequest, Magazine2ListResponse
+)
+from app.services.db_service import DBService
+from app.services.auth_service import auth_service
+from app.utils.language_detection import detect_language
+import logging
+
+logger = logging.getLogger(__name__)
+
+DEFAULT_TRANSLATION_TIMEOUT = 90.0
+DEFAULT_PAGE_SIZE = 20
+
+router = APIRouter()
+
+db_service = None
+
+# Authentication setup
+security = HTTPBearer()
+
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Authentication dependency to verify JWT token and user role."""
+    try:
+        # Extract Bearer token
+        token = credentials.credentials
+        
+        # Authenticate user (verify token + validate role)
+        user = await auth_service.authenticate_user(token)
+        
+        logger.info(f"[AUTH] User authenticated: {user.get('email', 'unknown')} with role: {user.get('role', 'unknown')}")
+        return user
+        
+    except ValueError as e:
+        error_msg = str(e)
+        if "expired" in error_msg.lower():
+            logger.warning(f"[AUTH] Token expired: {error_msg}")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token has expired",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        elif "invalid" in error_msg.lower():
+            logger.warning(f"[AUTH] Invalid token: {error_msg}")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        elif "not found" in error_msg.lower():
+            logger.warning(f"[AUTH] User not found: {error_msg}")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User not found",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        elif "permissions" in error_msg.lower():
+            logger.warning(f"[AUTH] Insufficient permissions: {error_msg}")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient permissions. Only admin and moderator roles can create magazine2.",
+            )
+        else:
+            logger.error(f"[AUTH] Authentication error: {error_msg}")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication failed",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+    except Exception as e:
+        logger.error(f"[AUTH] Unexpected authentication error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Authentication service error",
+        )
+
+def get_db_service():
+    """Lazy import of DB service to avoid module-level failures."""
+    global db_service
+    if db_service is None:
+        try:
+            db_service = DBService()
+        except ImportError as e:
+            logger.error(f"Failed to import DB service: {e}")
+            raise HTTPException(
+                status_code=503, 
+                detail=f"Database service import failed: {str(e)}"
+            )
+        except RuntimeError as e:
+            logger.error(f"DB service runtime error: {e}")
+            raise HTTPException(
+                status_code=503, 
+                detail=f"Database service unavailable: {str(e)}"
+            )
+        except Exception as e:
+            logger.error(f"Failed to initialize DB service: {e}")
+            raise HTTPException(
+                status_code=503, 
+                detail=f"Database service unavailable: {str(e)}"
+            )
+    return db_service
+
+def get_translation_service():
+    """Lazy import of translation service to avoid module-level failures."""
+    try:
+        from app.services.translation_service import translation_service
+        return translation_service
+    except ImportError as e:
+        logger.error(f"Failed to import translation service: {e}")
+        raise HTTPException(
+            status_code=503, 
+            detail=f"Translation service import failed: {str(e)}"
+        )
+    except RuntimeError as e:
+        logger.error(f"Translation service runtime error: {e}")
+        raise HTTPException(
+            status_code=503, 
+            detail=f"Translation service unavailable: {str(e)}"
+        )
+    except Exception as e:
+        logger.error(f"Failed to import translation service: {e}")
+        raise HTTPException(
+            status_code=503, 
+            detail=f"Translation service unavailable: {str(e)}"
+        )
+
+def _to_extended_json(document: dict) -> dict:
+    def oidify(value):
+        try:
+            return {"$oid": str(ObjectId(value))}
+        except Exception:
+            return {"$oid": str(value)} if isinstance(value, ObjectId) else value
+
+    def dateify(value: datetime):
+        return {"$date": value.replace(microsecond=0).isoformat() + "Z"}
+
+    # Shallow copy
+    doc = dict(document)
+
+    # ObjectId fields
+    for key in ["_id", "createdBy"]:
+        if key in doc:
+            val = doc[key]
+            if isinstance(val, ObjectId) or (isinstance(val, str) and len(val) == 24):
+                doc[key] = oidify(val)
+
+    # Date fields
+    for key in ["createdTime", "last_updated"]:
+        if key in doc and isinstance(doc[key], datetime):
+            doc[key] = dateify(doc[key])
+
+    return doc
+
+@router.post("/create", response_model=Magazine2Response)
+async def create_magazine2(
+    payload: Magazine2CreateRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Create magazine2 with translation to Hindi, Kannada, and English."""
+    magazine2_id = ObjectId()
+    logger.info(f"[MAGAZINE2-CREATE] start magazine2_id={magazine2_id} user={current_user.get('email', 'unknown')}")
+
+    try:
+        # Validate input
+        if not payload.title.strip():
+            raise HTTPException(status_code=400, detail="Title cannot be empty")
+        if not payload.description.strip():
+            raise HTTPException(status_code=400, detail="Description cannot be empty")
+        if not payload.editionNumber.strip():
+            raise HTTPException(status_code=400, detail="Edition number cannot be empty")
+        if not payload.publishedMonth.strip():
+            raise HTTPException(status_code=400, detail="Published month cannot be empty")
+        if not payload.publishedYear.strip():
+            raise HTTPException(status_code=400, detail="Published year cannot be empty")
+        if not payload.magazineThumbnail.strip():
+            raise HTTPException(status_code=400, detail="Magazine thumbnail URL cannot be empty")
+        if not payload.magazinePdf.strip():
+            raise HTTPException(status_code=400, detail="Magazine PDF URL cannot be empty")
+
+        # Detect source language from title + description
+        combined_text = f"{payload.title} {payload.description}"
+        source_lang = detect_language(combined_text)
+        logger.info(f"[MAGAZINE2-CREATE] detected_language={source_lang} magazine2_id={magazine2_id}")
+
+        # Translation with timeout - CRITICAL: Translation fields are required in schema
+        try:
+            timeout_sec = float(os.getenv("TRANSLATION_PER_CALL_TIMEOUT", str(DEFAULT_TRANSLATION_TIMEOUT)))
+        except (ValueError, TypeError):
+            timeout_sec = DEFAULT_TRANSLATION_TIMEOUT
+
+        try:
+            translation_service = get_translation_service()
+            translations = await asyncio.wait_for(
+                translation_service.translate_to_all_async(payload.title, payload.description, source_lang),
+                timeout=timeout_sec
+            )
+            logger.info(f"[MAGAZINE2-CREATE] translation.done langs={list(translations.keys())} magazine2_id={magazine2_id}")
+        except asyncio.TimeoutError:
+            logger.error(f"[MAGAZINE2-CREATE] translation timed out after {timeout_sec}s for magazine2_id={magazine2_id}")
+            raise HTTPException(status_code=504, detail="Translation timed out - required for magazine2 creation")
+        except Exception as e:
+            logger.error(f"[MAGAZINE2-CREATE] translation failed for magazine2_id={magazine2_id}: {e}")
+            if "IndicTrans2" in str(e) or "Model" in str(e):
+                logger.error("This appears to be an IndicTrans2 model loading issue")
+            raise HTTPException(status_code=500, detail=f"Translation failed - required for magazine2 creation: {str(e)}")
+
+        # Validate translation results - CRITICAL: All translation fields are required
+        hindi_title = translations.get("hindi", {}).get("title", "")
+        hindi_description = translations.get("hindi", {}).get("description", "")
+        kannada_title = translations.get("kannada", {}).get("title", "")
+        kannada_description = translations.get("kannada", {}).get("description", "")
+        english_title = translations.get("english", {}).get("title", "")
+        english_description = translations.get("english", {}).get("description", "")
+
+        if not hindi_title or not hindi_description:
+            raise HTTPException(status_code=500, detail="Hindi translation failed - required for magazine2")
+        if not kannada_title or not kannada_description:
+            raise HTTPException(status_code=500, detail="Kannada translation failed - required for magazine2")
+        if not english_title or not english_description:
+            raise HTTPException(status_code=500, detail="English translation failed - required for magazine2")
+
+        # Determine status based on user role
+        user_role = current_user.get("role", "")
+        status = "approved" if user_role == "admin" else "pending"
+
+        # Create magazine2 document
+        magazine2_document = {
+            "_id": magazine2_id,
+            "title": payload.title,
+            "description": payload.description,
+            "editionNumber": payload.editionNumber,
+            "publishedMonth": payload.publishedMonth,
+            "publishedYear": payload.publishedYear,
+            "magazineThumbnail": payload.magazineThumbnail,
+            "magazinePdf": payload.magazinePdf,
+            "createdBy": ObjectId(current_user.get("id")) if current_user.get("id") else None,
+            "status": status,
+            "createdTime": datetime.utcnow(),
+            "last_updated": datetime.utcnow(),
+            "hindi": {
+                "title": hindi_title,
+                "description": hindi_description,
+            },
+            "kannada": {
+                "title": kannada_title,
+                "description": kannada_description,
+            },
+            "english": {
+                "title": english_title,
+                "description": english_description,
+            },
+        }
+
+        # Insert into DB
+        await asyncio.wait_for(get_db_service().insert_magazine2(magazine2_document), timeout=15.0)
+
+        response_doc = _to_extended_json(magazine2_document)
+        logger.info(f"[MAGAZINE2-CREATE] success magazine2_id={magazine2_id}")
+        return Magazine2Response(success=True, data=response_doc)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[MAGAZINE2-CREATE] failed magazine2_id={magazine2_id} error={e}")
+        try:
+            await get_db_service().update_magazine2_fields(magazine2_id, {"_deleted_due_to_error": True})
+        except:
+            pass
+        raise HTTPException(status_code=500, detail=f"Error creating magazine2: {str(e)}")
+
+@router.get("/list", response_model=Magazine2ListResponse)
+async def list_magazine2s(
+    page: int = 1,
+    page_size: int = DEFAULT_PAGE_SIZE,
+    status_filter: str = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """List magazine2s with pagination and optional filters."""
+    try:
+        logger.info(f"[MAGAZINE2-LIST] page={page} page_size={page_size} status={status_filter}")
+        
+        # Calculate skip
+        skip = (page - 1) * page_size
+        
+        # Get magazine2s from DB
+        magazine2s, total = await get_db_service().get_magazine2s_paginated(
+            skip=skip, 
+            limit=page_size, 
+            status_filter=status_filter
+        )
+        
+        # Format response
+        formatted_magazine2s = [_to_extended_json(magazine2) for magazine2 in magazine2s]
+        
+        return Magazine2ListResponse(
+            success=True,
+            data={"magazine2s": formatted_magazine2s},
+            total=total,
+            page=page,
+            page_size=page_size
+        )
+        
+    except Exception as e:
+        logger.error(f"[MAGAZINE2-LIST] error: {e}")
+        raise HTTPException(status_code=500, detail=f"Error listing magazine2s: {str(e)}")
+
+@router.get("/{magazine2_id}", response_model=Magazine2Response)
+async def get_magazine2(
+    magazine2_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get a specific magazine2 by ID."""
+    try:
+        logger.info(f"[MAGAZINE2-GET] magazine2_id={magazine2_id}")
+        
+        magazine2 = await get_db_service().get_magazine2_by_id(ObjectId(magazine2_id))
+        if not magazine2:
+            raise HTTPException(status_code=404, detail="Magazine2 not found")
+        
+        response_doc = _to_extended_json(magazine2)
+        return Magazine2Response(success=True, data=response_doc)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[MAGAZINE2-GET] error: {e}")
+        raise HTTPException(status_code=500, detail=f"Error getting magazine2: {str(e)}")
+
+@router.put("/{magazine2_id}", response_model=Magazine2Response)
+async def update_magazine2(
+    magazine2_id: str,
+    payload: Magazine2UpdateRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Update a magazine2."""
+    try:
+        logger.info(f"[MAGAZINE2-UPDATE] magazine2_id={magazine2_id}")
+        
+        # Check if magazine2 exists
+        existing_magazine2 = await get_db_service().get_magazine2_by_id(ObjectId(magazine2_id))
+        if not existing_magazine2:
+            raise HTTPException(status_code=404, detail="Magazine2 not found")
+        
+        # Prepare update fields
+        updates = {}
+        
+        if payload.title is not None:
+            updates["title"] = payload.title
+            
+        if payload.description is not None:
+            updates["description"] = payload.description
+            
+        if payload.editionNumber is not None:
+            updates["editionNumber"] = payload.editionNumber
+            
+        if payload.publishedMonth is not None:
+            updates["publishedMonth"] = payload.publishedMonth
+            
+        if payload.publishedYear is not None:
+            updates["publishedYear"] = payload.publishedYear
+            
+        if payload.magazineThumbnail is not None:
+            updates["magazineThumbnail"] = payload.magazineThumbnail
+            
+        if payload.magazinePdf is not None:
+            updates["magazinePdf"] = payload.magazinePdf
+            
+        if payload.status is not None:
+            updates["status"] = payload.status
+        
+        # Update in DB
+        success = await get_db_service().update_magazine2_fields(ObjectId(magazine2_id), updates)
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to update magazine2")
+        
+        # Get updated magazine2
+        updated_magazine2 = await get_db_service().get_magazine2_by_id(ObjectId(magazine2_id))
+        response_doc = _to_extended_json(updated_magazine2)
+        
+        return Magazine2Response(success=True, data=response_doc)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[MAGAZINE2-UPDATE] error: {e}")
+        raise HTTPException(status_code=500, detail=f"Error updating magazine2: {str(e)}")
+
+@router.delete("/{magazine2_id}")
+async def delete_magazine2(
+    magazine2_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Delete a magazine2."""
+    try:
+        logger.info(f"[MAGAZINE2-DELETE] magazine2_id={magazine2_id}")
+        
+        # Check if magazine2 exists
+        existing_magazine2 = await get_db_service().get_magazine2_by_id(ObjectId(magazine2_id))
+        if not existing_magazine2:
+            raise HTTPException(status_code=404, detail="Magazine2 not found")
+        
+        # Delete from DB
+        success = await get_db_service().delete_magazine2(ObjectId(magazine2_id))
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to delete magazine2")
+        
+        return {"success": True, "message": "Magazine2 deleted successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[MAGAZINE2-DELETE] error: {e}")
+        raise HTTPException(status_code=500, detail=f"Error deleting magazine2: {str(e)}")
