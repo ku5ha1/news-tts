@@ -547,3 +547,107 @@ class DBService:
         except Exception as e:
             logger.error(f"[MongoDB] Delete photo error for {photo_id}: {str(e)}", exc_info=True)
             return False
+
+    # Magazine methods
+    async def insert_magazine(self, data: dict):
+        """Insert magazine document into MongoDB"""
+        if not self.connected or not self.client:
+            raise RuntimeError("Database not connected")
+        try:
+            logger.info(f"[MongoDB] Insert magazine start id={data.get('_id')}")
+            collection = self.db["magazines"]
+            result = await collection.insert_one(data)
+            logger.info(f"[MongoDB] Insert magazine done id={result.inserted_id}")
+            return result.inserted_id
+        except Exception as e:
+            logger.error(f"[MongoDB] Insert magazine failed error={str(e)}", exc_info=True)
+            raise RuntimeError(f"Database insert failed: {str(e)}")
+
+    async def get_magazine_by_id(self, magazine_id: str | ObjectId):
+        """Get magazine by ID"""
+        if not self.connected or not self.client:
+            logger.error("[MongoDB] Cannot get magazine - not connected")
+            return None
+        try:
+            oid = ObjectId(magazine_id) if not isinstance(magazine_id, ObjectId) else magazine_id
+            logger.info(f"[MongoDB] Fetching magazine: {oid}")
+            collection = self.db["magazines"]
+            result = await collection.find_one({"_id": oid})
+            if result:
+                logger.info(f"[MongoDB] Magazine found: {oid}")
+            else:
+                logger.warning(f"[MongoDB] Magazine not found: {oid}")
+            return result
+        except Exception as e:
+            logger.error(f"[MongoDB] Get magazine error for {magazine_id}: {str(e)}", exc_info=True)
+            return None
+
+    async def get_magazines_paginated(self, skip: int = 0, limit: int = 20, status_filter: str = None):
+        """Get magazines with pagination and optional status filter"""
+        if not self.connected or not self.client:
+            logger.error("[MongoDB] Cannot get magazines - not connected")
+            return [], 0
+        try:
+            collection = self.db["magazines"]
+            query = {}
+            if status_filter:
+                query["status"] = status_filter
+            
+            # Get total count
+            total = await collection.count_documents(query)
+            
+            # Get paginated results
+            cursor = collection.find(query).skip(skip).limit(limit)
+            magazines = await cursor.to_list(length=limit)
+            
+            logger.info(f"[MongoDB] Found {len(magazines)} magazines (total: {total})")
+            return magazines, total
+        except Exception as e:
+            logger.error(f"[MongoDB] Get magazines error: {str(e)}", exc_info=True)
+            return [], 0
+
+    async def update_magazine_fields(self, magazine_id: str | ObjectId, updates: dict, retries: int = MAX_RETRIES) -> bool:
+        """Update specific fields on a magazine document with optional retries."""
+        if not self.connected or not self.client:
+            logger.error("[MongoDB] Cannot update magazine - not connected")
+            return False
+
+        oid = ObjectId(magazine_id) if not isinstance(magazine_id, ObjectId) else magazine_id
+
+        for attempt in range(1, retries + 1):
+            try:
+                logger.info(f"[MongoDB] Update magazine start attempt={attempt} id={oid} fields={len(updates)}")
+                collection = self.db["magazines"]
+                result = await collection.update_one({"_id": oid}, {"$set": updates})
+                if result.modified_count > 0:
+                    logger.info(f"[MongoDB] Update magazine done id={oid} modified={result.modified_count}")
+                    return True
+                else:
+                    logger.warning(f"[MongoDB] Update magazine none id={oid}")
+                    return False
+            except Exception as e:
+                logger.error(f"[MongoDB] Update magazine failed attempt={attempt} id={magazine_id} error={str(e)}", exc_info=True)
+                if attempt < retries:
+                    await asyncio.sleep(1)
+                    continue
+                return False
+
+    async def delete_magazine(self, magazine_id: str | ObjectId) -> bool:
+        """Delete a magazine"""
+        if not self.connected or not self.client:
+            logger.error("[MongoDB] Cannot delete magazine - not connected")
+            return False
+        try:
+            oid = ObjectId(magazine_id) if not isinstance(magazine_id, ObjectId) else magazine_id
+            logger.info(f"[MongoDB] Deleting magazine: {oid}")
+            collection = self.db["magazines"]
+            result = await collection.delete_one({"_id": oid})
+            if result.deleted_count > 0:
+                logger.info(f"[MongoDB] Magazine deleted: {oid}")
+                return True
+            else:
+                logger.warning(f"[MongoDB] Magazine not found for deletion: {oid}")
+                return False
+        except Exception as e:
+            logger.error(f"[MongoDB] Delete magazine error for {magazine_id}: {str(e)}", exc_info=True)
+            return False
