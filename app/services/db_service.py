@@ -443,3 +443,107 @@ class DBService:
         except Exception as e:
             logger.error(f"[MongoDB] Delete shortvideo error for {video_id}: {str(e)}", exc_info=True)
             return False
+
+    # Photo methods
+    async def insert_photo(self, data: dict):
+        """Insert photo document into MongoDB"""
+        if not self.connected or not self.client:
+            raise RuntimeError("Database not connected")
+        try:
+            logger.info(f"[MongoDB] Insert photo start id={data.get('_id')}")
+            collection = self.db["photos"]
+            result = await collection.insert_one(data)
+            logger.info(f"[MongoDB] Insert photo done id={result.inserted_id}")
+            return result.inserted_id
+        except Exception as e:
+            logger.error(f"[MongoDB] Insert photo failed error={str(e)}", exc_info=True)
+            raise RuntimeError(f"Database insert failed: {str(e)}")
+
+    async def get_photo_by_id(self, photo_id: str | ObjectId):
+        """Get photo by ID"""
+        if not self.connected or not self.client:
+            logger.error("[MongoDB] Cannot get photo - not connected")
+            return None
+        try:
+            oid = ObjectId(photo_id) if not isinstance(photo_id, ObjectId) else photo_id
+            logger.info(f"[MongoDB] Fetching photo: {oid}")
+            collection = self.db["photos"]
+            result = await collection.find_one({"_id": oid})
+            if result:
+                logger.info(f"[MongoDB] Photo found: {oid}")
+            else:
+                logger.warning(f"[MongoDB] Photo not found: {oid}")
+            return result
+        except Exception as e:
+            logger.error(f"[MongoDB] Get photo error for {photo_id}: {str(e)}", exc_info=True)
+            return None
+
+    async def get_photos_paginated(self, skip: int = 0, limit: int = 20, status_filter: str = None):
+        """Get photos with pagination and optional status filter"""
+        if not self.connected or not self.client:
+            logger.error("[MongoDB] Cannot get photos - not connected")
+            return [], 0
+        try:
+            collection = self.db["photos"]
+            query = {}
+            if status_filter:
+                query["status"] = status_filter
+            
+            # Get total count
+            total = await collection.count_documents(query)
+            
+            # Get paginated results
+            cursor = collection.find(query).skip(skip).limit(limit)
+            photos = await cursor.to_list(length=limit)
+            
+            logger.info(f"[MongoDB] Found {len(photos)} photos (total: {total})")
+            return photos, total
+        except Exception as e:
+            logger.error(f"[MongoDB] Get photos error: {str(e)}", exc_info=True)
+            return [], 0
+
+    async def update_photo_fields(self, photo_id: str | ObjectId, updates: dict, retries: int = MAX_RETRIES) -> bool:
+        """Update specific fields on a photo document with optional retries."""
+        if not self.connected or not self.client:
+            logger.error("[MongoDB] Cannot update photo - not connected")
+            return False
+
+        oid = ObjectId(photo_id) if not isinstance(photo_id, ObjectId) else photo_id
+
+        for attempt in range(1, retries + 1):
+            try:
+                logger.info(f"[MongoDB] Update photo start attempt={attempt} id={oid} fields={len(updates)}")
+                collection = self.db["photos"]
+                result = await collection.update_one({"_id": oid}, {"$set": updates})
+                if result.modified_count > 0:
+                    logger.info(f"[MongoDB] Update photo done id={oid} modified={result.modified_count}")
+                    return True
+                else:
+                    logger.warning(f"[MongoDB] Update photo none id={oid}")
+                    return False
+            except Exception as e:
+                logger.error(f"[MongoDB] Update photo failed attempt={attempt} id={photo_id} error={str(e)}", exc_info=True)
+                if attempt < retries:
+                    await asyncio.sleep(1)
+                    continue
+                return False
+
+    async def delete_photo(self, photo_id: str | ObjectId) -> bool:
+        """Delete a photo"""
+        if not self.connected or not self.client:
+            logger.error("[MongoDB] Cannot delete photo - not connected")
+            return False
+        try:
+            oid = ObjectId(photo_id) if not isinstance(photo_id, ObjectId) else photo_id
+            logger.info(f"[MongoDB] Deleting photo: {oid}")
+            collection = self.db["photos"]
+            result = await collection.delete_one({"_id": oid})
+            if result.deleted_count > 0:
+                logger.info(f"[MongoDB] Photo deleted: {oid}")
+                return True
+            else:
+                logger.warning(f"[MongoDB] Photo not found for deletion: {oid}")
+                return False
+        except Exception as e:
+            logger.error(f"[MongoDB] Delete photo error for {photo_id}: {str(e)}", exc_info=True)
+            return False
