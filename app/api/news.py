@@ -14,7 +14,7 @@ from app.services.azure_blob_service import AzureBlobService
 from app.services.db_service import DBService
 from app.services.auth_service import auth_service
 from app.utils.language_detection import detect_language
-from app.utils.retry_utils import retry_translation_with_timeout
+from app.utils.retry_utils import retry_translation_with_timeout, retry_with_exponential_backoff
 import logging 
 
 logger = logging.getLogger(__name__)
@@ -663,20 +663,35 @@ async def translate_text(payload: TranslationRequest):
         start_time = datetime.utcnow()
         logger.info("Starting translation process...")
         
-        # Add timeout for translation (5 minutes for model loading)
+        # Add timeout for translation with retry logic
         try:
-            logger.info("Calling translation_service.translate...")
+            logger.info("Calling translation_service.translate with retry...")
             translation_service = get_translation_service()
-            translated_text = translation_service.translate(
-                payload.text, 
-                payload.source_language, 
-                payload.target_language
+            
+            # Use retry logic for direct translation
+            timeout_sec = float(os.getenv("TRANSLATION_PER_CALL_TIMEOUT", "90.0"))
+            translated_text = await retry_with_exponential_backoff(
+                lambda: asyncio.wait_for(
+                    asyncio.to_thread(
+                        translation_service.translate,
+                        payload.text,
+                        payload.source_language,
+                        payload.target_language
+                    ),
+                    timeout=timeout_sec
+                ),
+                max_retries=3,
+                base_delay=1.0,
+                max_delay=30.0
             )
             logger.info(f"Translation service returned: '{translated_text}'")
             
+        except asyncio.TimeoutError:
+            logger.error(f"Translation timed out after {timeout_sec}s")
+            raise HTTPException(status_code=504, detail="Translation timed out")
         except Exception as e:
             logger.error(f"Translation service threw exception: {str(e)}")
-            raise
+            raise HTTPException(status_code=500, detail=f"Translation failed: {str(e)}")
         
         translation_time = (datetime.utcnow() - start_time).total_seconds()
         

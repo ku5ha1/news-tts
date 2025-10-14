@@ -3,6 +3,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from bson import ObjectId
 from app.config.settings import settings
 import asyncio
+from typing import Optional, List
 
 logger = logging.getLogger(__name__)
 
