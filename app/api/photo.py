@@ -340,23 +340,32 @@ async def update_photo(
                 # Handle bidirectional translation - ensure all three languages are present
                 # If source is English, add original text as English translation
                 if source_lang == "en":
-                    translations["english"] = payload.title
+                    translations["english"] = {
+                        "title": payload.title,
+                        "description": ""
+                    }
                     logger.info(f"[PHOTO-UPDATE] added original text as English translation for source=en")
                 
                 # If source is Kannada, add original text as Kannada translation  
                 elif source_lang == "kn":
-                    translations["kannada"] = payload.title
+                    translations["kannada"] = {
+                        "title": payload.title,
+                        "description": ""
+                    }
                     logger.info(f"[PHOTO-UPDATE] added original text as Kannada translation for source=kn")
                 
                 # If source is Hindi, add original text as Hindi translation
                 elif source_lang == "hi":
-                    translations["hindi"] = payload.title
+                    translations["hindi"] = {
+                        "title": payload.title,
+                        "description": ""
+                    }
                     logger.info(f"[PHOTO-UPDATE] added original text as Hindi translation for source=hi")
                 
                 # Update translation fields (photos store translations as strings, not objects)
-                updates["hindi"] = translations.get("hindi", payload.title)
-                updates["kannada"] = translations.get("kannada", payload.title)
-                updates["english"] = translations.get("english", payload.title)
+                updates["hindi"] = translations.get("hindi", {}).get("title", payload.title)
+                updates["kannada"] = translations.get("kannada", {}).get("title", payload.title)
+                updates["english"] = translations.get("english", {}).get("title", payload.title)
                 
                 logger.info(f"[PHOTO-UPDATE] updated translations: hindi='{updates['hindi'][:20]}...', kannada='{updates['kannada'][:20]}...', english='{updates['english'][:20]}...'")
                 
