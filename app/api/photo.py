@@ -305,8 +305,66 @@ async def update_photo(
         # Prepare update fields
         updates = {}
         
+        # Handle title update with translation
         if payload.title is not None:
             updates["title"] = payload.title
+            
+            # Re-translate the title if it's being updated
+            try:
+                # Detect source language
+                source_lang = detect_language(payload.title)
+                logger.info(f"[PHOTO-UPDATE] detected_language={source_lang} for title update")
+                
+                # Translation with timeout
+                try:
+                    timeout_sec = float(os.getenv("TRANSLATION_PER_CALL_TIMEOUT", str(DEFAULT_TRANSLATION_TIMEOUT)))
+                except (ValueError, TypeError):
+                    timeout_sec = DEFAULT_TRANSLATION_TIMEOUT
+                
+                try:
+                    translation_service = get_translation_service()
+                    translations = await asyncio.wait_for(
+                        translation_service.translate_to_all_async(payload.title, "", source_lang),
+                        timeout=timeout_sec
+                    )
+                    logger.info(f"[PHOTO-UPDATE] translation.done langs={list(translations.keys())} for title update")
+                except asyncio.TimeoutError:
+                    logger.error(f"[PHOTO-UPDATE] translation timed out after {timeout_sec}s for title update")
+                    raise HTTPException(status_code=504, detail="Translation timed out")
+                except Exception as e:
+                    logger.error(f"[PHOTO-UPDATE] translation failed for title update: {e}")
+                    if "IndicTrans2" in str(e) or "Model" in str(e):
+                        logger.error("This appears to be an IndicTrans2 model loading issue")
+                    raise
+                
+                # Handle bidirectional translation - ensure all three languages are present
+                # If source is English, add original text as English translation
+                if source_lang == "en":
+                    translations["english"] = payload.title
+                    logger.info(f"[PHOTO-UPDATE] added original text as English translation for source=en")
+                
+                # If source is Kannada, add original text as Kannada translation  
+                elif source_lang == "kn":
+                    translations["kannada"] = payload.title
+                    logger.info(f"[PHOTO-UPDATE] added original text as Kannada translation for source=kn")
+                
+                # If source is Hindi, add original text as Hindi translation
+                elif source_lang == "hi":
+                    translations["hindi"] = payload.title
+                    logger.info(f"[PHOTO-UPDATE] added original text as Hindi translation for source=hi")
+                
+                # Update translation fields (photos store translations as strings, not objects)
+                updates["hindi"] = translations.get("hindi", payload.title)
+                updates["kannada"] = translations.get("kannada", payload.title)
+                updates["english"] = translations.get("english", payload.title)
+                
+                logger.info(f"[PHOTO-UPDATE] updated translations: hindi='{updates['hindi'][:20]}...', kannada='{updates['kannada'][:20]}...', english='{updates['english'][:20]}...'")
+                
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error(f"[PHOTO-UPDATE] translation error for title update: {e}")
+                raise HTTPException(status_code=500, detail=f"Translation failed for title update: {str(e)}")
             
         if payload.photoImage is not None:
             updates["photoImage"] = payload.photoImage

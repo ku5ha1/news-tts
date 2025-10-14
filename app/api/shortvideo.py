@@ -338,11 +338,93 @@ async def update_short_video(
         # Prepare update fields
         updates = {}
         
-        if payload.title is not None:
-            updates["title"] = payload.title
+        # Handle title and description updates with translation
+        if payload.title is not None or payload.description is not None:
+            # Get current values for fields that aren't being updated
+            current_title = payload.title if payload.title is not None else existing_video.get("title", "")
+            current_description = payload.description if payload.description is not None else existing_video.get("description", "")
             
-        if payload.description is not None:
-            updates["description"] = payload.description
+            # Update the fields
+            if payload.title is not None:
+                updates["title"] = payload.title
+            if payload.description is not None:
+                updates["description"] = payload.description
+            
+            # Re-translate if title or description is being updated
+            try:
+                # Detect source language from combined title + description
+                combined_text = f"{current_title} {current_description}"
+                source_lang = detect_language(combined_text)
+                logger.info(f"[SHORTVIDEO-UPDATE] detected_language={source_lang} for title/description update")
+                
+                # Translation with timeout
+                try:
+                    timeout_sec = float(os.getenv("TRANSLATION_PER_CALL_TIMEOUT", str(DEFAULT_TRANSLATION_TIMEOUT)))
+                except (ValueError, TypeError):
+                    timeout_sec = DEFAULT_TRANSLATION_TIMEOUT
+                
+                try:
+                    translation_service = get_translation_service()
+                    translations = await asyncio.wait_for(
+                        translation_service.translate_to_all_async(current_title, current_description, source_lang),
+                        timeout=timeout_sec
+                    )
+                    logger.info(f"[SHORTVIDEO-UPDATE] translation.done langs={list(translations.keys())} for title/description update")
+                except asyncio.TimeoutError:
+                    logger.error(f"[SHORTVIDEO-UPDATE] translation timed out after {timeout_sec}s for title/description update")
+                    raise HTTPException(status_code=504, detail="Translation timed out")
+                except Exception as e:
+                    logger.error(f"[SHORTVIDEO-UPDATE] translation failed for title/description update: {e}")
+                    if "IndicTrans2" in str(e) or "Model" in str(e):
+                        logger.error("This appears to be an IndicTrans2 model loading issue")
+                    raise
+                
+                # Handle bidirectional translation - ensure all three languages are present
+                # If source is English, add original text as English translation
+                if source_lang == "en":
+                    translations["english"] = {
+                        "title": current_title,
+                        "description": current_description
+                    }
+                    logger.info(f"[SHORTVIDEO-UPDATE] added original text as English translation for source=en")
+                
+                # If source is Kannada, add original text as Kannada translation  
+                elif source_lang == "kn":
+                    translations["kannada"] = {
+                        "title": current_title,
+                        "description": current_description
+                    }
+                    logger.info(f"[SHORTVIDEO-UPDATE] added original text as Kannada translation for source=kn")
+                
+                # If source is Hindi, add original text as Hindi translation
+                elif source_lang == "hi":
+                    translations["hindi"] = {
+                        "title": current_title,
+                        "description": current_description
+                    }
+                    logger.info(f"[SHORTVIDEO-UPDATE] added original text as Hindi translation for source=hi")
+                
+                # Update translation fields
+                updates["hindi"] = {
+                    "title": translations.get("hindi", {}).get("title", current_title),
+                    "description": translations.get("hindi", {}).get("description", current_description)
+                }
+                updates["kannada"] = {
+                    "title": translations.get("kannada", {}).get("title", current_title),
+                    "description": translations.get("kannada", {}).get("description", current_description)
+                }
+                updates["english"] = {
+                    "title": translations.get("english", {}).get("title", current_title),
+                    "description": translations.get("english", {}).get("description", current_description)
+                }
+                
+                logger.info(f"[SHORTVIDEO-UPDATE] updated translations for title/description update")
+                
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error(f"[SHORTVIDEO-UPDATE] translation error for title/description update: {e}")
+                raise HTTPException(status_code=500, detail=f"Translation failed for title/description update: {str(e)}")
             
         if payload.thumbnail is not None:
             updates["thumbnail"] = payload.thumbnail
