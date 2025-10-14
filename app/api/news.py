@@ -384,6 +384,17 @@ async def create_news(
                 logger.error("This appears to be an IndicTrans2 model loading issue")
             raise
 
+        # Determine status and isLive based on user role
+        user_role = current_user.get("role", "")
+        if user_role == "admin":
+            status = "approved"
+            isLive = True
+            logger.info(f"[CREATE] Admin user creating news - status=approved, isLive=True doc={document_id}")
+        else:
+            status = "pending"
+            isLive = False
+            logger.info(f"[CREATE] Non-admin user creating news - status=pending, isLive=False doc={document_id}")
+
         # Create news document
         news_document = {
             "_id": document_id,
@@ -395,13 +406,15 @@ async def create_news(
             "publishedAt": datetime.utcnow(),
             "magazineType": payload.magazineType,
             "newsType": payload.newsType,
-            "isLive": False,
+            "isLive": isLive,
             "views": 0,
             "total_Likes": 0,
             "comments": [],
             "likedBy": [],
             "createdTime": datetime.utcnow(),
             "last_updated": datetime.utcnow(),
+            "createdBy": ObjectId(current_user.get("id")) if current_user.get("id") else None,
+            "status": status,
             "hindi": {
                 "title": translations.get("hindi", {}).get("title", payload.title),
                 "description": translations.get("hindi", {}).get("description", payload.description),
