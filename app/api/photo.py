@@ -204,13 +204,22 @@ async def create_photo(
                 logger.error("This appears to be an IndicTrans2 model loading issue")
             raise
 
+        # Determine status based on user role
+        user_role = current_user.get("role", "")
+        if user_role == "admin":
+            status = "approved"
+            logger.info(f"[PHOTO-CREATE] Admin user creating photo - status=approved photo_id={photo_id}")
+        else:
+            status = "pending"
+            logger.info(f"[PHOTO-CREATE] Non-admin user creating photo - status=pending photo_id={photo_id}")
+
         # Create photo document
         photo_document = {
             "_id": photo_id,
             "title": payload.title,
             "photoImage": payload.photoImage,
             "createdBy": ObjectId(current_user.get("id")) if current_user.get("id") else None,
-            "status": "pending",
+            "status": status,
             "createdTime": datetime.utcnow(),
             "hindi": translations.get("hindi", {}).get("title", payload.title),
             "kannada": translations.get("kannada", {}).get("title", payload.title),
@@ -387,8 +396,13 @@ async def update_photo(
         if payload.photoImage is not None:
             updates["photoImage"] = payload.photoImage
             
+        # Handle status updates (admin/moderator only)
         if payload.status is not None:
-            updates["status"] = payload.status
+            user_role = current_user.get("role", "")
+            if user_role in ["admin", "moderator"]:
+                updates["status"] = payload.status
+            else:
+                logger.warning(f"[PHOTO-UPDATE] Non-admin/moderator user tried to update status: {current_user.get('email')}")
         
         # Update in DB
         success = await get_db_service().update_photo_fields(ObjectId(photo_id), updates)

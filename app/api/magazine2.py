@@ -259,7 +259,12 @@ async def create_magazine2(
 
         # Determine status based on user role
         user_role = current_user.get("role", "")
-        status = "approved" if user_role == "admin" else "pending"
+        if user_role == "admin":
+            status = "approved"
+            logger.info(f"[MAGAZINE2-CREATE] Admin user creating magazine2 - status=approved magazine2_id={magazine2_id}")
+        else:
+            status = "pending"
+            logger.info(f"[MAGAZINE2-CREATE] Non-admin user creating magazine2 - status=pending magazine2_id={magazine2_id}")
 
         # Create magazine2 document
         magazine2_document = {
@@ -489,8 +494,13 @@ async def update_magazine2(
         if payload.magazinePdf is not None:
             updates["magazinePdf"] = payload.magazinePdf
             
+        # Handle status updates (admin/moderator only)
         if payload.status is not None:
-            updates["status"] = payload.status
+            user_role = current_user.get("role", "")
+            if user_role in ["admin", "moderator"]:
+                updates["status"] = payload.status
+            else:
+                logger.warning(f"[MAGAZINE2-UPDATE] Non-admin/moderator user tried to update status: {current_user.get('email')}")
         
         # Update in DB
         success = await get_db_service().update_magazine2_fields(ObjectId(magazine2_id), updates)

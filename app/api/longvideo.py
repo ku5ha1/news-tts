@@ -225,6 +225,15 @@ async def create_long_video(
                 logger.error("This appears to be an IndicTrans2 model loading issue")
             raise
 
+        # Determine status based on user role
+        user_role = current_user.get("role", "")
+        if user_role == "admin":
+            status = "approved"
+            logger.info(f"[LONGVIDEO-CREATE] Admin user creating long video - status=approved video_id={video_id}")
+        else:
+            status = "pending"
+            logger.info(f"[LONGVIDEO-CREATE] Non-admin user creating long video - status=pending video_id={video_id}")
+
         # Create long video document
         long_video_document = {
             "_id": video_id,
@@ -240,7 +249,7 @@ async def create_long_video(
             "total_Likes": 0,
             "Total_views": 0,
             "Comments": [],
-            "status": "pending",
+            "status": status,
             "createdBy": ObjectId(current_user.get("id")) if current_user.get("id") else None,
             "createdAt": datetime.utcnow(),
             "hindi": {
@@ -471,8 +480,13 @@ async def update_long_video(
             else:
                 updates["Topics"] = None
             
+        # Handle status updates (admin/moderator only)
         if payload.status is not None:
-            updates["status"] = payload.status
+            user_role = current_user.get("role", "")
+            if user_role in ["admin", "moderator"]:
+                updates["status"] = payload.status
+            else:
+                logger.warning(f"[LONGVIDEO-UPDATE] Non-admin/moderator user tried to update status: {current_user.get('email')}")
         
         # Update in DB
         success = await get_db_service().update_longvideo_fields(ObjectId(video_id), updates)

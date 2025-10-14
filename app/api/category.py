@@ -202,6 +202,15 @@ async def create_category(
                 logger.error("This appears to be an IndicTrans2 model loading issue")
             raise
 
+        # Determine status based on user role
+        user_role = current_user.get("role", "")
+        if user_role == "admin":
+            status = "approved"
+            logger.info(f"[CATEGORY-CREATE] Admin user creating category - status=approved category_id={category_id}")
+        else:
+            status = "pending"
+            logger.info(f"[CATEGORY-CREATE] Non-admin user creating category - status=pending category_id={category_id}")
+
         # Create category document
         category_document = {
             "_id": category_id,
@@ -211,7 +220,7 @@ async def create_category(
             "kannada": translations.get("kannada", {}).get("title", payload.name),
             "English": translations.get("english", {}).get("title", payload.name),
             "createdBy": ObjectId(current_user.get("id")) if current_user.get("id") else None,
-            "status": "pending",
+            "status": status,
             "createdTime": datetime.utcnow(),
             "last_updated": datetime.utcnow(),
         }
@@ -386,8 +395,13 @@ async def update_category(
         if payload.description is not None:
             updates["description"] = payload.description
             
+        # Handle status updates (admin/moderator only)
         if payload.status is not None:
-            updates["status"] = payload.status
+            user_role = current_user.get("role", "")
+            if user_role in ["admin", "moderator"]:
+                updates["status"] = payload.status
+            else:
+                logger.warning(f"[CATEGORY-UPDATE] Non-admin/moderator user tried to update status: {current_user.get('email')}")
         
         # Update in DB
         success = await get_db_service().update_category_fields(ObjectId(category_id), updates)
