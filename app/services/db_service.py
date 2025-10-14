@@ -127,3 +127,213 @@ class DBService:
         except Exception as e:
             logger.error(f"[MongoDB] Get error for {news_id}: {str(e)}", exc_info=True)
             return None
+
+    # Category methods
+    async def insert_category(self, data: dict):
+        """Insert category document into MongoDB"""
+        if not self.connected or not self.client:
+            raise RuntimeError("Database not connected")
+        try:
+            logger.info(f"[MongoDB] Insert category start id={data.get('_id')}")
+            collection = self.db["categories"]
+            result = await collection.insert_one(data)
+            logger.info(f"[MongoDB] Insert category done id={result.inserted_id}")
+            return result.inserted_id
+        except Exception as e:
+            logger.error(f"[MongoDB] Insert category failed error={str(e)}", exc_info=True)
+            raise RuntimeError(f"Database insert failed: {str(e)}")
+
+    async def get_category_by_id(self, category_id: str | ObjectId):
+        """Get category by ID"""
+        if not self.connected or not self.client:
+            logger.error("[MongoDB] Cannot get category - not connected")
+            return None
+        try:
+            oid = ObjectId(category_id) if not isinstance(category_id, ObjectId) else category_id
+            logger.info(f"[MongoDB] Fetching category: {oid}")
+            collection = self.db["categories"]
+            result = await collection.find_one({"_id": oid})
+            if result:
+                logger.info(f"[MongoDB] Category found: {oid}")
+            else:
+                logger.warning(f"[MongoDB] Category not found: {oid}")
+            return result
+        except Exception as e:
+            logger.error(f"[MongoDB] Get category error for {category_id}: {str(e)}", exc_info=True)
+            return None
+
+    async def get_categories_paginated(self, skip: int = 0, limit: int = 20, status_filter: str = None):
+        """Get categories with pagination and optional status filter"""
+        if not self.connected or not self.client:
+            logger.error("[MongoDB] Cannot get categories - not connected")
+            return [], 0
+        try:
+            collection = self.db["categories"]
+            query = {}
+            if status_filter:
+                query["status"] = status_filter
+            
+            # Get total count
+            total = await collection.count_documents(query)
+            
+            # Get paginated results
+            cursor = collection.find(query).skip(skip).limit(limit)
+            categories = await cursor.to_list(length=limit)
+            
+            logger.info(f"[MongoDB] Found {len(categories)} categories (total: {total})")
+            return categories, total
+        except Exception as e:
+            logger.error(f"[MongoDB] Get categories error: {str(e)}", exc_info=True)
+            return [], 0
+
+    async def update_category_fields(self, category_id: str | ObjectId, updates: dict, retries: int = MAX_RETRIES) -> bool:
+        """Update specific fields on a category document with optional retries."""
+        if not self.connected or not self.client:
+            logger.error("[MongoDB] Cannot update category - not connected")
+            return False
+
+        oid = ObjectId(category_id) if not isinstance(category_id, ObjectId) else category_id
+
+        for attempt in range(1, retries + 1):
+            try:
+                logger.info(f"[MongoDB] Update category start attempt={attempt} id={oid} fields={len(updates)}")
+                collection = self.db["categories"]
+                result = await collection.update_one({"_id": oid}, {"$set": updates})
+                if result.modified_count > 0:
+                    logger.info(f"[MongoDB] Update category done id={oid} modified={result.modified_count}")
+                    return True
+                else:
+                    logger.warning(f"[MongoDB] Update category none id={oid}")
+                    return False
+            except Exception as e:
+                logger.error(f"[MongoDB] Update category failed attempt={attempt} id={category_id} error={str(e)}", exc_info=True)
+                if attempt < retries:
+                    await asyncio.sleep(1)
+                    continue
+                return False
+
+    async def delete_category(self, category_id: str | ObjectId) -> bool:
+        """Delete a category"""
+        if not self.connected or not self.client:
+            logger.error("[MongoDB] Cannot delete category - not connected")
+            return False
+        try:
+            oid = ObjectId(category_id) if not isinstance(category_id, ObjectId) else category_id
+            logger.info(f"[MongoDB] Deleting category: {oid}")
+            collection = self.db["categories"]
+            result = await collection.delete_one({"_id": oid})
+            if result.deleted_count > 0:
+                logger.info(f"[MongoDB] Category deleted: {oid}")
+                return True
+            else:
+                logger.warning(f"[MongoDB] Category not found for deletion: {oid}")
+                return False
+        except Exception as e:
+            logger.error(f"[MongoDB] Delete category error for {category_id}: {str(e)}", exc_info=True)
+            return False
+
+    # Long Video methods
+    async def insert_longvideo(self, data: dict):
+        """Insert long video document into MongoDB"""
+        if not self.connected or not self.client:
+            raise RuntimeError("Database not connected")
+        try:
+            logger.info(f"[MongoDB] Insert longvideo start id={data.get('_id')}")
+            collection = self.db["longvideos"]
+            result = await collection.insert_one(data)
+            logger.info(f"[MongoDB] Insert longvideo done id={result.inserted_id}")
+            return result.inserted_id
+        except Exception as e:
+            logger.error(f"[MongoDB] Insert longvideo failed error={str(e)}", exc_info=True)
+            raise RuntimeError(f"Database insert failed: {str(e)}")
+
+    async def get_longvideo_by_id(self, video_id: str | ObjectId):
+        """Get long video by ID"""
+        if not self.connected or not self.client:
+            logger.error("[MongoDB] Cannot get longvideo - not connected")
+            return None
+        try:
+            oid = ObjectId(video_id) if not isinstance(video_id, ObjectId) else video_id
+            logger.info(f"[MongoDB] Fetching longvideo: {oid}")
+            collection = self.db["longvideos"]
+            result = await collection.find_one({"_id": oid})
+            if result:
+                logger.info(f"[MongoDB] Longvideo found: {oid}")
+            else:
+                logger.warning(f"[MongoDB] Longvideo not found: {oid}")
+            return result
+        except Exception as e:
+            logger.error(f"[MongoDB] Get longvideo error for {video_id}: {str(e)}", exc_info=True)
+            return None
+
+    async def get_longvideos_paginated(self, skip: int = 0, limit: int = 20, status_filter: str = None, category_filter: str = None):
+        """Get long videos with pagination and optional filters"""
+        if not self.connected or not self.client:
+            logger.error("[MongoDB] Cannot get longvideos - not connected")
+            return [], 0
+        try:
+            collection = self.db["longvideos"]
+            query = {}
+            if status_filter:
+                query["status"] = status_filter
+            if category_filter:
+                query["category"] = ObjectId(category_filter)
+            
+            # Get total count
+            total = await collection.count_documents(query)
+            
+            # Get paginated results
+            cursor = collection.find(query).skip(skip).limit(limit)
+            videos = await cursor.to_list(length=limit)
+            
+            logger.info(f"[MongoDB] Found {len(videos)} longvideos (total: {total})")
+            return videos, total
+        except Exception as e:
+            logger.error(f"[MongoDB] Get longvideos error: {str(e)}", exc_info=True)
+            return [], 0
+
+    async def update_longvideo_fields(self, video_id: str | ObjectId, updates: dict, retries: int = MAX_RETRIES) -> bool:
+        """Update specific fields on a long video document with optional retries."""
+        if not self.connected or not self.client:
+            logger.error("[MongoDB] Cannot update longvideo - not connected")
+            return False
+
+        oid = ObjectId(video_id) if not isinstance(video_id, ObjectId) else video_id
+
+        for attempt in range(1, retries + 1):
+            try:
+                logger.info(f"[MongoDB] Update longvideo start attempt={attempt} id={oid} fields={len(updates)}")
+                collection = self.db["longvideos"]
+                result = await collection.update_one({"_id": oid}, {"$set": updates})
+                if result.modified_count > 0:
+                    logger.info(f"[MongoDB] Update longvideo done id={oid} modified={result.modified_count}")
+                    return True
+                else:
+                    logger.warning(f"[MongoDB] Update longvideo none id={oid}")
+                    return False
+            except Exception as e:
+                logger.error(f"[MongoDB] Update longvideo failed attempt={attempt} id={video_id} error={str(e)}", exc_info=True)
+                if attempt < retries:
+                    await asyncio.sleep(1)
+                    continue
+                return False
+
+    async def delete_longvideo(self, video_id: str | ObjectId) -> bool:
+        """Delete a long video"""
+        if not self.connected or not self.client:
+            logger.error("[MongoDB] Cannot delete longvideo - not connected")
+            return False
+        try:
+            oid = ObjectId(video_id) if not isinstance(video_id, ObjectId) else video_id
+            logger.info(f"[MongoDB] Deleting longvideo: {oid}")
+            collection = self.db["longvideos"]
+            result = await collection.delete_one({"_id": oid})
+            if result.deleted_count > 0:
+                logger.info(f"[MongoDB] Longvideo deleted: {oid}")
+                return True
+            else:
+                logger.warning(f"[MongoDB] Longvideo not found for deletion: {oid}")
+                return False
+        except Exception as e:
+            logger.error(f"[MongoDB] Delete longvideo error for {video_id}: {str(e)}", exc_info=True)
+            return False
