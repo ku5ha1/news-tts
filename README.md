@@ -21,6 +21,7 @@ docker run --rm -p 8080:8080 news-tts
 - GET `/health` – liveness
 - GET `/ready` – readiness
 - GET `/docs` – Swagger UI
+- GET `/api/health` – model status
 - POST `/api/translate`
 - POST `/api/create`
 - POST `/api/tts/generate`
