@@ -234,7 +234,7 @@ async def create_magazine(
             "publishedYear": payload.publishedYear,
             "magazineThumbnail": payload.magazineThumbnail,
             "magazinePdf": payload.magazinePdf,
-            "createdBy": ObjectId(current_user.get("id")) if current_user.get("id") else None,
+            "createdBy": ObjectId(current_user.get("_id")) if current_user.get("_id") else None,
             "status": status,
             "createdTime": datetime.utcnow(),
             "last_updated": datetime.utcnow(),

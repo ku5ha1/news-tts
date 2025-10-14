@@ -218,7 +218,7 @@ async def create_photo(
             "_id": photo_id,
             "title": payload.title,
             "photoImage": payload.photoImage,
-            "createdBy": ObjectId(current_user.get("id")) if current_user.get("id") else None,
+            "createdBy": ObjectId(current_user.get("_id")) if current_user.get("_id") else None,
             "status": status,
             "createdTime": datetime.utcnow(),
             "hindi": translations.get("hindi", {}).get("title", payload.title),

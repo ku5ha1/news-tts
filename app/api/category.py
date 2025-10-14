@@ -219,7 +219,7 @@ async def create_category(
             "hindi": translations.get("hindi", {}).get("title", payload.name),
             "kannada": translations.get("kannada", {}).get("title", payload.name),
             "English": translations.get("english", {}).get("title", payload.name),
-            "createdBy": ObjectId(current_user.get("id")) if current_user.get("id") else None,
+            "createdBy": ObjectId(current_user.get("_id")) if current_user.get("_id") else None,
             "status": status,
             "createdTime": datetime.utcnow(),
             "last_updated": datetime.utcnow(),
