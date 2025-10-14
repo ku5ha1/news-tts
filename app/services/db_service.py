@@ -337,3 +337,109 @@ class DBService:
         except Exception as e:
             logger.error(f"[MongoDB] Delete longvideo error for {video_id}: {str(e)}", exc_info=True)
             return False
+
+    # Short Video methods
+    async def insert_shortvideo(self, data: dict):
+        """Insert short video document into MongoDB"""
+        if not self.connected or not self.client:
+            raise RuntimeError("Database not connected")
+        try:
+            logger.info(f"[MongoDB] Insert shortvideo start id={data.get('_id')}")
+            collection = self.db["videos"]
+            result = await collection.insert_one(data)
+            logger.info(f"[MongoDB] Insert shortvideo done id={result.inserted_id}")
+            return result.inserted_id
+        except Exception as e:
+            logger.error(f"[MongoDB] Insert shortvideo failed error={str(e)}", exc_info=True)
+            raise RuntimeError(f"Database insert failed: {str(e)}")
+
+    async def get_shortvideo_by_id(self, video_id: str | ObjectId):
+        """Get short video by ID"""
+        if not self.connected or not self.client:
+            logger.error("[MongoDB] Cannot get shortvideo - not connected")
+            return None
+        try:
+            oid = ObjectId(video_id) if not isinstance(video_id, ObjectId) else video_id
+            logger.info(f"[MongoDB] Fetching shortvideo: {oid}")
+            collection = self.db["videos"]
+            result = await collection.find_one({"_id": oid})
+            if result:
+                logger.info(f"[MongoDB] Shortvideo found: {oid}")
+            else:
+                logger.warning(f"[MongoDB] Shortvideo not found: {oid}")
+            return result
+        except Exception as e:
+            logger.error(f"[MongoDB] Get shortvideo error for {video_id}: {str(e)}", exc_info=True)
+            return None
+
+    async def get_shortvideos_paginated(self, skip: int = 0, limit: int = 20, status_filter: str = None, category_filter: str = None):
+        """Get short videos with pagination and optional filters"""
+        if not self.connected or not self.client:
+            logger.error("[MongoDB] Cannot get shortvideos - not connected")
+            return [], 0
+        try:
+            collection = self.db["videos"]
+            query = {}
+            if status_filter:
+                query["status"] = status_filter
+            if category_filter:
+                query["category"] = ObjectId(category_filter)
+            
+            # Get total count
+            total = await collection.count_documents(query)
+            
+            # Get paginated results
+            cursor = collection.find(query).skip(skip).limit(limit)
+            videos = await cursor.to_list(length=limit)
+            
+            logger.info(f"[MongoDB] Found {len(videos)} shortvideos (total: {total})")
+            return videos, total
+        except Exception as e:
+            logger.error(f"[MongoDB] Get shortvideos error: {str(e)}", exc_info=True)
+            return [], 0
+
+    async def update_shortvideo_fields(self, video_id: str | ObjectId, updates: dict, retries: int = MAX_RETRIES) -> bool:
+        """Update specific fields on a short video document with optional retries."""
+        if not self.connected or not self.client:
+            logger.error("[MongoDB] Cannot update shortvideo - not connected")
+            return False
+
+        oid = ObjectId(video_id) if not isinstance(video_id, ObjectId) else video_id
+
+        for attempt in range(1, retries + 1):
+            try:
+                logger.info(f"[MongoDB] Update shortvideo start attempt={attempt} id={oid} fields={len(updates)}")
+                collection = self.db["videos"]
+                result = await collection.update_one({"_id": oid}, {"$set": updates})
+                if result.modified_count > 0:
+                    logger.info(f"[MongoDB] Update shortvideo done id={oid} modified={result.modified_count}")
+                    return True
+                else:
+                    logger.warning(f"[MongoDB] Update shortvideo none id={oid}")
+                    return False
+            except Exception as e:
+                logger.error(f"[MongoDB] Update shortvideo failed attempt={attempt} id={video_id} error={str(e)}", exc_info=True)
+                if attempt < retries:
+                    await asyncio.sleep(1)
+                    continue
+                return False
+
+    async def delete_shortvideo(self, video_id: str | ObjectId) -> bool:
+        """Delete a short video"""
+        if not self.connected or not self.client:
+            logger.error("[MongoDB] Cannot delete shortvideo - not connected")
+            return False
+        try:
+            oid = ObjectId(video_id) if not isinstance(video_id, ObjectId) else video_id
+            logger.info(f"[MongoDB] Deleting shortvideo: {oid}")
+            collection = self.db["videos"]
+            result = await collection.delete_one({"_id": oid})
+            if result.deleted_count > 0:
+                logger.info(f"[MongoDB] Shortvideo deleted: {oid}")
+                return True
+            else:
+                logger.warning(f"[MongoDB] Shortvideo not found for deletion: {oid}")
+                return False
+        except Exception as e:
+            logger.error(f"[MongoDB] Delete shortvideo error for {video_id}: {str(e)}", exc_info=True)
+            return False
