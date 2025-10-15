@@ -2,7 +2,7 @@ import os
 import uuid
 import logging
 from typing import Optional
-from azure.storage.blob import BlobServiceClient, BlobClient
+from azure.storage.blob import BlobServiceClient, BlobClient, ContentSettings
 from fastapi import UploadFile
 from app.config.settings import settings
 
@@ -157,7 +157,13 @@ class AzureBlobService:
             
             # Read file content and upload
             file_content = file.file.read()
-            blob_client.upload_blob(file_content, overwrite=True)
+            
+            # Set content disposition for PDF files to display inline
+            content_settings = None
+            if file_type == 'pdf':
+                content_settings = ContentSettings(content_disposition='inline')
+            
+            blob_client.upload_blob(file_content, overwrite=True, content_settings=content_settings)
             
             logger.info(f"[AzureBlob] Magazine {file_type} upload done: {blob_name}")
 
@@ -239,7 +245,13 @@ class AzureBlobService:
             
             # Read file content and upload
             file_content = file.file.read()
-            blob_client.upload_blob(file_content, overwrite=True)
+            
+            # Set content disposition for PDF files to display inline
+            content_settings = None
+            if file_type == 'pdf':
+                content_settings = ContentSettings(content_disposition='inline')
+            
+            blob_client.upload_blob(file_content, overwrite=True, content_settings=content_settings)
             
             logger.info(f"[AzureBlob] Magazine2 {file_type} upload done: {blob_name}")
 
@@ -251,6 +263,35 @@ class AzureBlobService:
         except Exception as e:
             logger.error(f"[AzureBlob] Magazine2 {file_type} upload failed: {str(e)}", exc_info=True)
             raise RuntimeError(f"Magazine2 {file_type} upload failed: {e}")
+
+    def update_blob_content_disposition(self, container_name: str, blob_name: str, content_disposition: str = 'inline') -> bool:
+        """Update the content disposition of an existing blob."""
+        try:
+            if not self.connected:
+                logger.warning("Azure Blob Storage not connected")
+                return False
+                
+            container_client = self.blob_service_client.get_container_client(container_name)
+            blob_client = container_client.get_blob_client(blob_name)
+            
+            # Get existing blob properties
+            blob_properties = blob_client.get_blob_properties()
+            
+            # Update content settings with new disposition
+            content_settings = ContentSettings(
+                content_type=blob_properties.content_settings.content_type,
+                content_disposition=content_disposition
+            )
+            
+            # Set blob properties
+            blob_client.set_blob_properties(content_settings=content_settings)
+            
+            logger.info(f"[AzureBlob] Updated content disposition for {blob_name} to {content_disposition}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"[AzureBlob] Failed to update content disposition for {blob_name}: {str(e)}")
+            return False
 
     def delete_magazine2_file(self, file_url: str) -> bool:
         try:
