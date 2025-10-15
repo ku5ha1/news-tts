@@ -2,7 +2,7 @@ import os
 import uuid
 import logging
 from typing import Optional
-from azure.storage.blob import BlobServiceClient, BlobClient, ContentSettings, BlobHttpHeaders
+from azure.storage.blob import BlobServiceClient, BlobClient, ContentSettings
 from fastapi import UploadFile
 from app.config.settings import settings
 
@@ -161,11 +161,11 @@ class AzureBlobService:
             
             # Set HTTP headers for PDF files to display inline
             if file_type == 'pdf':
-                headers = BlobHttpHeaders(
+                content_settings = ContentSettings(
                     content_type="application/pdf",
                     content_disposition=f"inline; filename=\"{blob_name}\""
                 )
-                blob_client.set_blob_http_headers(headers)
+                blob_client.set_http_headers(content_settings=content_settings)
                 logger.info(f"[AzureBlob] Set PDF headers for inline display: {blob_name}")
             
             logger.info(f"[AzureBlob] Magazine {file_type} upload done: {blob_name}")
@@ -252,11 +252,11 @@ class AzureBlobService:
             
             # Set HTTP headers for PDF files to display inline
             if file_type == 'pdf':
-                headers = BlobHttpHeaders(
+                content_settings = ContentSettings(
                     content_type="application/pdf",
                     content_disposition=f"inline; filename=\"{blob_name}\""
                 )
-                blob_client.set_blob_http_headers(headers)
+                blob_client.set_http_headers(content_settings=content_settings)
                 logger.info(f"[AzureBlob] Set PDF headers for inline display: {blob_name}")
             
             logger.info(f"[AzureBlob] Magazine2 {file_type} upload done: {blob_name}")
@@ -284,13 +284,13 @@ class AzureBlobService:
             blob_properties = blob_client.get_blob_properties()
             
             # Set HTTP headers with new disposition
-            headers = BlobHttpHeaders(
+            content_settings = ContentSettings(
                 content_type=blob_properties.content_settings.content_type or "application/pdf",
                 content_disposition=f"{content_disposition}; filename=\"{blob_name}\""
             )
             
             # Set blob HTTP headers
-            blob_client.set_blob_http_headers(headers)
+            blob_client.set_http_headers(content_settings=content_settings)
             
             logger.info(f"[AzureBlob] Updated content disposition for {blob_name} to {content_disposition}")
             return True
