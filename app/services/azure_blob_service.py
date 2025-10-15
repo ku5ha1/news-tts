@@ -3,6 +3,7 @@ import uuid
 import logging
 from typing import Optional
 from azure.storage.blob import BlobServiceClient, BlobClient
+from fastapi import UploadFile
 from app.config.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -13,6 +14,8 @@ class AzureBlobService:
         self.connection_string = settings.AZURE_STORAGE_CONNECTION_STRING
         self.access_key = settings.AZURE_STORAGE_ACCESS_KEY
         self.container_name = settings.AZURE_STORAGE_AUDIOFIELD_CONTAINER
+        self.magazine_container_name = settings.AZURE_STORAGE_MAGAZINE_CONTAINER
+        self.magazine2_container_name = settings.AZURE_STORAGE_MAGAZINE2_CONTAINER
 
         try:
             if not self.account_name or not self.container_name:
@@ -36,8 +39,16 @@ class AzureBlobService:
             self.container_client = self.blob_service_client.get_container_client(self.container_name)
             self.container_client.get_container_properties()
             
+            # Initialize magazine container client
+            self.magazine_container_client = self.blob_service_client.get_container_client(self.magazine_container_name)
+            self.magazine_container_client.get_container_properties()
+            
+            # Initialize magazine2 container client
+            self.magazine2_container_client = self.blob_service_client.get_container_client(self.magazine2_container_name)
+            self.magazine2_container_client.get_container_properties()
+            
             self.connected = True
-            logger.info(f"Azure Blob Storage initialized with account: {self.account_name}, container: {self.container_name}")
+            logger.info(f"Azure Blob Storage initialized with account: {self.account_name}, containers: {self.container_name}, {self.magazine_container_name}, {self.magazine2_container_name}")
 
         except ImportError as e:
             logger.error(f"Azure Storage SDK import error: {str(e)}", exc_info=True)
@@ -119,8 +130,151 @@ class AzureBlobService:
     def is_connected(self) -> bool:
         return self.connected
 
+    def upload_magazine_file(self, file: UploadFile, published_year: str, published_month: str, magazine_id: str, file_type: str) -> str:
+        logger.info(f"[AzureBlob] Magazine upload start: {file_type} for magazine {magazine_id}")
+        
+        if not self.connected:
+            raise RuntimeError("Azure Blob Storage not connected")
+
+        if not file:
+            raise ValueError(f"No file provided for {file_type}")
+            
+        if file_type not in ['thumbnail', 'pdf']:
+            raise ValueError("file_type must be 'thumbnail' or 'pdf'")
+
+        # Generate blob name based on file type
+        if file_type == 'thumbnail':
+            # Get file extension
+            file_extension = os.path.splitext(file.filename)[1] if file.filename else '.jpg'
+            blob_name = f"{published_year}/{published_month}/{magazine_id}_thumbnail{file_extension}"
+        else:  # pdf
+            blob_name = f"{published_year}/{published_month}/{magazine_id}_{published_month}_{published_year}.pdf"
+
+        try:
+            blob_client = self.magazine_container_client.get_blob_client(blob_name)
+            
+            logger.info(f"[AzureBlob] Uploading magazine {file_type}: {blob_name}")
+            
+            # Read file content and upload
+            file_content = file.file.read()
+            blob_client.upload_blob(file_content, overwrite=True)
+            
+            logger.info(f"[AzureBlob] Magazine {file_type} upload done: {blob_name}")
+
+            # Generate public URL
+            public_url = f"https://{self.account_name}.blob.core.windows.net/{self.magazine_container_name}/{blob_name}"
+            logger.info(f"[AzureBlob] Magazine {file_type} upload complete: {public_url}")
+            return public_url
+            
+        except Exception as e:
+            logger.error(f"[AzureBlob] Magazine {file_type} upload failed: {str(e)}", exc_info=True)
+            raise RuntimeError(f"Magazine {file_type} upload failed: {e}")
+
+    def delete_magazine_file(self, file_url: str) -> bool:
+        """
+        Delete magazine file from Azure Blob Storage
+        
+        Args:
+            file_url: Public URL of the file to delete
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            if not self.connected:
+                logger.warning("[AzureBlob] Not connected - cannot delete magazine file")
+                return False
+
+            # Extract blob name from URL
+            if not file_url.startswith(f"https://{self.account_name}.blob.core.windows.net/{self.magazine_container_name}/"):
+                logger.error(f"[AzureBlob] Invalid magazine file URL format: {file_url}")
+                return False
+
+            blob_path = file_url.replace(f"https://{self.account_name}.blob.core.windows.net/{self.magazine_container_name}/", "")
+            blob_client = self.magazine_container_client.get_blob_client(blob_path)
+            blob_client.delete_blob()
+            logger.info(f"[AzureBlob] Deleted magazine file: {blob_path}")
+            return True
+
+        except Exception as e:
+            logger.error(f"[AzureBlob] Magazine file delete error: {str(e)}")
+            return False
+
     def get_container_url(self) -> str:
         """Get the base URL for the container"""
         if not self.connected:
             return ""
         return f"https://{self.account_name}.blob.core.windows.net/{self.container_name}"
+    
+    def get_magazine_container_url(self) -> str:
+        """Get the base URL for the magazine container"""
+        if not self.connected:
+            return ""
+        return f"https://{self.account_name}.blob.core.windows.net/{self.magazine_container_name}"
+
+    def upload_magazine2_file(self, file: UploadFile, published_year: str, published_month: str, magazine2_id: str, file_type: str) -> str:
+        logger.info(f"[AzureBlob] Magazine2 upload start: {file_type} for magazine2 {magazine2_id}")
+        
+        if not self.connected:
+            raise RuntimeError("Azure Blob Storage not connected")
+
+        if not file:
+            raise ValueError(f"No file provided for {file_type}")
+            
+        if file_type not in ['thumbnail', 'pdf']:
+            raise ValueError("file_type must be 'thumbnail' or 'pdf'")
+
+        # Generate blob name based on file type
+        if file_type == 'thumbnail':
+            # Get file extension
+            file_extension = os.path.splitext(file.filename)[1] if file.filename else '.jpg'
+            blob_name = f"{published_year}/{published_month}/{magazine2_id}_thumbnail{file_extension}"
+        else:  # pdf
+            blob_name = f"{published_year}/{published_month}/{magazine2_id}_{published_month}_{published_year}.pdf"
+
+        try:
+            blob_client = self.magazine2_container_client.get_blob_client(blob_name)
+            
+            logger.info(f"[AzureBlob] Uploading magazine2 {file_type}: {blob_name}")
+            
+            # Read file content and upload
+            file_content = file.file.read()
+            blob_client.upload_blob(file_content, overwrite=True)
+            
+            logger.info(f"[AzureBlob] Magazine2 {file_type} upload done: {blob_name}")
+
+            # Generate public URL
+            public_url = f"https://{self.account_name}.blob.core.windows.net/{self.magazine2_container_name}/{blob_name}"
+            logger.info(f"[AzureBlob] Magazine2 {file_type} upload complete: {public_url}")
+            return public_url
+            
+        except Exception as e:
+            logger.error(f"[AzureBlob] Magazine2 {file_type} upload failed: {str(e)}", exc_info=True)
+            raise RuntimeError(f"Magazine2 {file_type} upload failed: {e}")
+
+    def delete_magazine2_file(self, file_url: str) -> bool:
+        try:
+            if not self.connected:
+                logger.warning("[AzureBlob] Not connected - cannot delete magazine2 file")
+                return False
+
+            # Extract blob name from URL
+            if not file_url.startswith(f"https://{self.account_name}.blob.core.windows.net/{self.magazine2_container_name}/"):
+                logger.error(f"[AzureBlob] Invalid magazine2 file URL format: {file_url}")
+                return False
+
+            blob_path = file_url.replace(f"https://{self.account_name}.blob.core.windows.net/{self.magazine2_container_name}/", "")
+            blob_client = self.magazine2_container_client.get_blob_client(blob_path)
+            blob_client.delete_blob()
+            logger.info(f"[AzureBlob] Deleted magazine2 file: {blob_path}")
+            return True
+
+        except Exception as e:
+            logger.error(f"[AzureBlob] Magazine2 file delete error: {str(e)}")
+            return False
+
+    def get_magazine2_container_url(self) -> str:
+        """Get the base URL for the magazine2 container"""
+        if not self.connected:
+            return ""
+        return f"https://{self.account_name}.blob.core.windows.net/{self.magazine2_container_name}"

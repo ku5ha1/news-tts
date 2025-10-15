@@ -1,6 +1,7 @@
 from pydantic import BaseModel
 from typing import Optional, Dict
 from datetime import datetime
+from fastapi import UploadFile
 
 class MagazineCreateRequest(BaseModel):
     title: str
@@ -8,8 +9,8 @@ class MagazineCreateRequest(BaseModel):
     editionNumber: str
     publishedMonth: str
     publishedYear: str
-    magazineThumbnail: str
-    magazinePdf: str
+    magazineThumbnail: UploadFile
+    magazinePdf: UploadFile
 
 class MagazineResponse(BaseModel):
     success: bool

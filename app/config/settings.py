@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     AZURE_STORAGE_CONNECTION_STRING: Optional[str] = None
     AZURE_STORAGE_ACCESS_KEY: Optional[str] = None
     AZURE_STORAGE_AUDIOFIELD_CONTAINER: Optional[str] = None
+    AZURE_STORAGE_MAGAZINE_CONTAINER: Optional[str] = None
+    AZURE_STORAGE_MAGAZINE2_CONTAINER: Optional[str] = None
     
     # AI Models
     AI4BHARAT_MODELS_PATH: Optional[str] = None

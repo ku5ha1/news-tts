@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi import APIRouter, HTTPException, Depends, status, UploadFile, File, Form
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from datetime import datetime
 from bson import ObjectId
@@ -10,6 +10,7 @@ from app.models.magazine2 import (
 )
 from app.services.db_service import DBService
 from app.services.auth_service import auth_service
+from app.services.azure_blob_service import AzureBlobService
 from app.utils.language_detection import detect_language
 from app.utils.retry_utils import retry_translation_with_timeout
 import logging
@@ -18,6 +19,9 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_TRANSLATION_TIMEOUT = 90.0
 DEFAULT_PAGE_SIZE = 20
+MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
+ALLOWED_IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'}
+ALLOWED_PDF_EXTENSIONS = {'.pdf'}
 
 router = APIRouter()
 
@@ -131,6 +135,61 @@ def get_translation_service():
             detail=f"Translation service unavailable: {str(e)}"
         )
 
+def get_azure_blob_service():
+    """Lazy import of Azure blob service to avoid module-level failures."""
+    try:
+        return AzureBlobService()
+    except ImportError as e:
+        logger.error(f"Failed to import Azure blob service: {e}")
+        raise HTTPException(
+            status_code=503, 
+            detail=f"Azure blob service import failed: {str(e)}"
+        )
+    except RuntimeError as e:
+        logger.error(f"Azure blob service runtime error: {e}")
+        raise HTTPException(
+            status_code=503, 
+            detail=f"Azure blob service unavailable: {str(e)}"
+        )
+    except Exception as e:
+        logger.error(f"Failed to initialize Azure blob service: {e}")
+        raise HTTPException(
+            status_code=503, 
+            detail=f"Azure blob service unavailable: {str(e)}"
+        )
+
+def validate_file(file: UploadFile, file_type: str) -> None:
+    """Validate uploaded file for type and size."""
+    if not file or not file.filename:
+        raise HTTPException(status_code=400, detail=f"{file_type} file is required")
+    
+    # Check file size
+    file.file.seek(0, 2)  # Seek to end
+    file_size = file.file.tell()
+    file.file.seek(0)  # Reset to beginning
+    
+    if file_size > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"{file_type} file size exceeds maximum allowed size of {MAX_FILE_SIZE // (1024*1024)}MB"
+        )
+    
+    # Check file extension
+    file_extension = os.path.splitext(file.filename)[1].lower()
+    
+    if file_type == "thumbnail":
+        if file_extension not in ALLOWED_IMAGE_EXTENSIONS:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Invalid thumbnail file type. Allowed types: {', '.join(ALLOWED_IMAGE_EXTENSIONS)}"
+            )
+    elif file_type == "pdf":
+        if file_extension not in ALLOWED_PDF_EXTENSIONS:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Invalid PDF file type. Only PDF files are allowed."
+            )
+
 def _to_extended_json(document: dict) -> dict:
     def oidify(value):
         try:
@@ -160,32 +219,74 @@ def _to_extended_json(document: dict) -> dict:
 
 @router.post("/create", response_model=Magazine2Response)
 async def create_magazine2(
-    payload: Magazine2CreateRequest,
+    title: str = Form(...),
+    description: str = Form(...),
+    editionNumber: str = Form(...),
+    publishedMonth: str = Form(...),
+    publishedYear: str = Form(...),
+    magazineThumbnail: UploadFile = File(...),
+    magazinePdf: UploadFile = File(...),
     current_user: dict = Depends(get_current_user)
 ):
-    """Create magazine2 with translation to Hindi, Kannada, and English."""
+    """Create magazine2 with file uploads to Azure Blob Storage and translation to Hindi, Kannada, and English."""
     magazine2_id = ObjectId()
     logger.info(f"[MAGAZINE2-CREATE] start magazine2_id={magazine2_id} user={current_user.get('email', 'unknown')}")
 
+    uploaded_files = []  # Track uploaded files for cleanup on failure
+    
     try:
-        # Validate input
-        if not payload.title.strip():
+        # Validate input fields
+        if not title.strip():
             raise HTTPException(status_code=400, detail="Title cannot be empty")
-        if not payload.description.strip():
+        if not description.strip():
             raise HTTPException(status_code=400, detail="Description cannot be empty")
-        if not payload.editionNumber.strip():
+        if not editionNumber.strip():
             raise HTTPException(status_code=400, detail="Edition number cannot be empty")
-        if not payload.publishedMonth.strip():
+        if not publishedMonth.strip():
             raise HTTPException(status_code=400, detail="Published month cannot be empty")
-        if not payload.publishedYear.strip():
+        if not publishedYear.strip():
             raise HTTPException(status_code=400, detail="Published year cannot be empty")
-        if not payload.magazineThumbnail.strip():
-            raise HTTPException(status_code=400, detail="Magazine thumbnail URL cannot be empty")
-        if not payload.magazinePdf.strip():
-            raise HTTPException(status_code=400, detail="Magazine PDF URL cannot be empty")
+
+        # Validate uploaded files
+        validate_file(magazineThumbnail, "thumbnail")
+        validate_file(magazinePdf, "pdf")
+        
+        logger.info(f"[MAGAZINE2-CREATE] file validation passed magazine2_id={magazine2_id}")
+
+        # Upload files to Azure Blob Storage
+        try:
+            azure_service = get_azure_blob_service()
+            if not azure_service.is_connected():
+                raise HTTPException(status_code=503, detail="Azure Blob Storage is not available")
+            
+            # Upload thumbnail
+            thumbnail_url = azure_service.upload_magazine2_file(
+                magazineThumbnail, publishedYear, publishedMonth, str(magazine2_id), "thumbnail"
+            )
+            uploaded_files.append(("thumbnail", thumbnail_url))
+            logger.info(f"[MAGAZINE2-CREATE] thumbnail uploaded magazine2_id={magazine2_id}")
+            
+            # Upload PDF
+            pdf_url = azure_service.upload_magazine2_file(
+                magazinePdf, publishedYear, publishedMonth, str(magazine2_id), "pdf"
+            )
+            uploaded_files.append(("pdf", pdf_url))
+            logger.info(f"[MAGAZINE2-CREATE] PDF uploaded magazine2_id={magazine2_id}")
+            
+        except Exception as e:
+            logger.error(f"[MAGAZINE2-CREATE] file upload failed magazine2_id={magazine2_id}: {e}")
+            # Clean up any uploaded files
+            azure_service = get_azure_blob_service()
+            for file_type, url in uploaded_files:
+                try:
+                    azure_service.delete_magazine2_file(url)
+                    logger.info(f"[MAGAZINE2-CREATE] cleaned up {file_type} file")
+                except:
+                    pass
+            raise HTTPException(status_code=500, detail=f"File upload failed: {str(e)}")
 
         # Detect source language from title + description
-        combined_text = f"{payload.title} {payload.description}"
+        combined_text = f"{title} {description}"
         source_lang = detect_language(combined_text)
         logger.info(f"[MAGAZINE2-CREATE] detected_language={source_lang} magazine2_id={magazine2_id}")
 
@@ -199,8 +300,8 @@ async def create_magazine2(
             translation_service = get_translation_service()
             translations = await retry_translation_with_timeout(
                 translation_service,
-                payload.title,
-                payload.description,
+                title,
+                description,
                 source_lang,
                 timeout=timeout_sec,
                 max_retries=3
@@ -208,9 +309,23 @@ async def create_magazine2(
             logger.info(f"[MAGAZINE2-CREATE] translation.done langs={list(translations.keys())} magazine2_id={magazine2_id}")
         except asyncio.TimeoutError:
             logger.error(f"[MAGAZINE2-CREATE] translation timed out after {timeout_sec}s for magazine2_id={magazine2_id}")
+            # Clean up uploaded files
+            azure_service = get_azure_blob_service()
+            for file_type, url in uploaded_files:
+                try:
+                    azure_service.delete_magazine2_file(url)
+                except:
+                    pass
             raise HTTPException(status_code=504, detail="Translation timed out - required for magazine2 creation")
         except Exception as e:
             logger.error(f"[MAGAZINE2-CREATE] translation failed for magazine2_id={magazine2_id}: {e}")
+            # Clean up uploaded files
+            azure_service = get_azure_blob_service()
+            for file_type, url in uploaded_files:
+                try:
+                    azure_service.delete_magazine2_file(url)
+                except:
+                    pass
             if "IndicTrans2" in str(e) or "Model" in str(e):
                 logger.error("This appears to be an IndicTrans2 model loading issue")
             raise HTTPException(status_code=500, detail=f"Translation failed - required for magazine2 creation: {str(e)}")
@@ -221,24 +336,24 @@ async def create_magazine2(
         # If source is English, add original text as English translation
         if source_lang == "en":
             translations["english"] = {
-                "title": payload.title,
-                "description": payload.description
+                "title": title,
+                "description": description
             }
             logger.info(f"[MAGAZINE2-CREATE] added original text as English translation for source=en")
         
         # If source is Kannada, add original text as Kannada translation  
         elif source_lang == "kn":
             translations["kannada"] = {
-                "title": payload.title,
-                "description": payload.description
+                "title": title,
+                "description": description
             }
             logger.info(f"[MAGAZINE2-CREATE] added original text as Kannada translation for source=kn")
         
         # If source is Hindi, add original text as Hindi translation
         elif source_lang == "hi":
             translations["hindi"] = {
-                "title": payload.title,
-                "description": payload.description
+                "title": title,
+                "description": description
             }
             logger.info(f"[MAGAZINE2-CREATE] added original text as Hindi translation for source=hi")
 
@@ -269,13 +384,13 @@ async def create_magazine2(
         # Create magazine2 document
         magazine2_document = {
             "_id": magazine2_id,
-            "title": payload.title,
-            "description": payload.description,
-            "editionNumber": payload.editionNumber,
-            "publishedMonth": payload.publishedMonth,
-            "publishedYear": payload.publishedYear,
-            "magazineThumbnail": payload.magazineThumbnail,
-            "magazinePdf": payload.magazinePdf,
+            "title": title,
+            "description": description,
+            "editionNumber": editionNumber,
+            "publishedMonth": publishedMonth,
+            "publishedYear": publishedYear,
+            "magazineThumbnail": thumbnail_url,
+            "magazinePdf": pdf_url,
             "createdBy": ObjectId(current_user.get("_id")) if current_user.get("_id") else None,
             "status": status,
             "createdTime": datetime.utcnow(),
@@ -305,6 +420,17 @@ async def create_magazine2(
         raise
     except Exception as e:
         logger.error(f"[MAGAZINE2-CREATE] failed magazine2_id={magazine2_id} error={e}")
+        # Clean up uploaded files on any error
+        try:
+            azure_service = get_azure_blob_service()
+            for file_type, url in uploaded_files:
+                try:
+                    azure_service.delete_magazine2_file(url)
+                    logger.info(f"[MAGAZINE2-CREATE] cleaned up {file_type} file due to error")
+                except:
+                    pass
+        except:
+            pass
         try:
             await get_db_service().update_magazine2_fields(magazine2_id, {"_deleted_due_to_error": True})
         except:
