@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, status, UploadFile, File, Form
+from fastapi import APIRouter, HTTPException, Depends, status, UploadFile, File, Form, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from datetime import datetime
 from bson import ObjectId
@@ -219,70 +219,113 @@ def _to_extended_json(document: dict) -> dict:
 
 @router.post("/create", response_model=MagazineResponse)
 async def create_magazine(
-    title: str = Form(...),
-    description: str = Form(...),
-    editionNumber: str = Form(...),
-    publishedMonth: str = Form(...),
-    publishedYear: str = Form(...),
-    magazineThumbnail: UploadFile = File(...),
-    magazinePdf: UploadFile = File(...),
+    request: Request,
     current_user: dict = Depends(get_current_user)
 ):
+    """Create magazine with either file uploads or URL strings."""
     magazine_id = ObjectId()
     logger.info(f"[MAGAZINE-CREATE] start magazine_id={magazine_id} user={current_user.get('email', 'unknown')}")
 
     uploaded_files = []  # Track uploaded files for cleanup on failure
     
     try:
-        # Validate input fields
-        if not title.strip():
-            raise HTTPException(status_code=400, detail="Title cannot be empty")
-        if not description.strip():
-            raise HTTPException(status_code=400, detail="Description cannot be empty")
-        if not editionNumber.strip():
-            raise HTTPException(status_code=400, detail="Edition number cannot be empty")
-        if not publishedMonth.strip():
-            raise HTTPException(status_code=400, detail="Published month cannot be empty")
-        if not publishedYear.strip():
-            raise HTTPException(status_code=400, detail="Published year cannot be empty")
-
-        # Validate uploaded files
-        validate_file(magazineThumbnail, "thumbnail")
-        validate_file(magazinePdf, "pdf")
+        # Check content type to determine if it's JSON or multipart
+        content_type = request.headers.get("content-type", "")
         
-        logger.info(f"[MAGAZINE-CREATE] file validation passed magazine_id={magazine_id}")
+        if "application/json" in content_type:
+            # Handle JSON request (backward compatibility)
+            body = await request.json()
+            title = body.get("title", "").strip()
+            description = body.get("description", "").strip()
+            editionNumber = body.get("editionNumber", "").strip()
+            publishedMonth = body.get("publishedMonth", "").strip()
+            publishedYear = body.get("publishedYear", "").strip()
+            magazineThumbnail = body.get("magazineThumbnail", "").strip()
+            magazinePdf = body.get("magazinePdf", "").strip()
+            
+            # Validate input fields
+            if not title:
+                raise HTTPException(status_code=400, detail="Title cannot be empty")
+            if not description:
+                raise HTTPException(status_code=400, detail="Description cannot be empty")
+            if not editionNumber:
+                raise HTTPException(status_code=400, detail="Edition number cannot be empty")
+            if not publishedMonth:
+                raise HTTPException(status_code=400, detail="Published month cannot be empty")
+            if not publishedYear:
+                raise HTTPException(status_code=400, detail="Published year cannot be empty")
+            if not magazineThumbnail:
+                raise HTTPException(status_code=400, detail="Magazine thumbnail URL cannot be empty")
+            if not magazinePdf:
+                raise HTTPException(status_code=400, detail="Magazine PDF URL cannot be empty")
+            
+            # Use URLs directly (no file upload)
+            thumbnail_url = magazineThumbnail
+            pdf_url = magazinePdf
+            logger.info(f"[MAGAZINE-CREATE] JSON request - using provided URLs magazine_id={magazine_id}")
+            
+        elif "multipart/form-data" in content_type:
+            # Handle multipart request (file uploads)
+            form = await request.form()
+            title = form.get("title", "").strip()
+            description = form.get("description", "").strip()
+            editionNumber = form.get("editionNumber", "").strip()
+            publishedMonth = form.get("publishedMonth", "").strip()
+            publishedYear = form.get("publishedYear", "").strip()
+            magazineThumbnail = form.get("magazineThumbnail")
+            magazinePdf = form.get("magazinePdf")
+            
+            # Validate input fields
+            if not title:
+                raise HTTPException(status_code=400, detail="Title cannot be empty")
+            if not description:
+                raise HTTPException(status_code=400, detail="Description cannot be empty")
+            if not editionNumber:
+                raise HTTPException(status_code=400, detail="Edition number cannot be empty")
+            if not publishedMonth:
+                raise HTTPException(status_code=400, detail="Published month cannot be empty")
+            if not publishedYear:
+                raise HTTPException(status_code=400, detail="Published year cannot be empty")
 
-        # Upload files to Azure Blob Storage
-        try:
-            azure_service = get_azure_blob_service()
-            if not azure_service.is_connected():
-                raise HTTPException(status_code=503, detail="Azure Blob Storage is not available")
+            # Validate uploaded files
+            validate_file(magazineThumbnail, "thumbnail")
+            validate_file(magazinePdf, "pdf")
             
-            # Upload thumbnail
-            thumbnail_url = azure_service.upload_magazine_file(
-                magazineThumbnail, publishedYear, publishedMonth, str(magazine_id), "thumbnail"
-            )
-            uploaded_files.append(("thumbnail", thumbnail_url))
-            logger.info(f"[MAGAZINE-CREATE] thumbnail uploaded magazine_id={magazine_id}")
-            
-            # Upload PDF
-            pdf_url = azure_service.upload_magazine_file(
-                magazinePdf, publishedYear, publishedMonth, str(magazine_id), "pdf"
-            )
-            uploaded_files.append(("pdf", pdf_url))
-            logger.info(f"[MAGAZINE-CREATE] PDF uploaded magazine_id={magazine_id}")
-            
-        except Exception as e:
-            logger.error(f"[MAGAZINE-CREATE] file upload failed magazine_id={magazine_id}: {e}")
-            # Clean up any uploaded files
-            azure_service = get_azure_blob_service()
-            for file_type, url in uploaded_files:
-                try:
-                    azure_service.delete_magazine_file(url)
-                    logger.info(f"[MAGAZINE-CREATE] cleaned up {file_type} file")
-                except:
-                    pass
-            raise HTTPException(status_code=500, detail=f"File upload failed: {str(e)}")
+            logger.info(f"[MAGAZINE-CREATE] file validation passed magazine_id={magazine_id}")
+
+            # Upload files to Azure Blob Storage
+            try:
+                azure_service = get_azure_blob_service()
+                if not azure_service.is_connected():
+                    raise HTTPException(status_code=503, detail="Azure Blob Storage is not available")
+                
+                # Upload thumbnail
+                thumbnail_url = azure_service.upload_magazine_file(
+                    magazineThumbnail, publishedYear, publishedMonth, str(magazine_id), "thumbnail"
+                )
+                uploaded_files.append(("thumbnail", thumbnail_url))
+                logger.info(f"[MAGAZINE-CREATE] thumbnail uploaded magazine_id={magazine_id}")
+                
+                # Upload PDF
+                pdf_url = azure_service.upload_magazine_file(
+                    magazinePdf, publishedYear, publishedMonth, str(magazine_id), "pdf"
+                )
+                uploaded_files.append(("pdf", pdf_url))
+                logger.info(f"[MAGAZINE-CREATE] PDF uploaded magazine_id={magazine_id}")
+                
+            except Exception as e:
+                logger.error(f"[MAGAZINE-CREATE] file upload failed magazine_id={magazine_id}: {e}")
+                # Clean up any uploaded files
+                azure_service = get_azure_blob_service()
+                for file_type, url in uploaded_files:
+                    try:
+                        azure_service.delete_magazine_file(url)
+                        logger.info(f"[MAGAZINE-CREATE] cleaned up {file_type} file")
+                    except:
+                        pass
+                raise HTTPException(status_code=500, detail=f"File upload failed: {str(e)}")
+        else:
+            raise HTTPException(status_code=400, detail="Content-Type must be either application/json or multipart/form-data")
 
         # Detect source language from title + description
         combined_text = f"{title} {description}"
