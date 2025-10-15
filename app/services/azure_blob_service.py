@@ -2,7 +2,7 @@ import os
 import uuid
 import logging
 from typing import Optional
-from azure.storage.blob import BlobServiceClient, BlobClient, ContentSettings
+from azure.storage.blob import BlobServiceClient, BlobClient, ContentSettings, BlobHttpHeaders
 from fastapi import UploadFile
 from app.config.settings import settings
 
@@ -157,13 +157,16 @@ class AzureBlobService:
             
             # Read file content and upload
             file_content = file.file.read()
+            blob_client.upload_blob(file_content, overwrite=True)
             
-            # Set content disposition for PDF files to display inline
-            content_settings = None
+            # Set HTTP headers for PDF files to display inline
             if file_type == 'pdf':
-                content_settings = ContentSettings(content_disposition='inline')
-            
-            blob_client.upload_blob(file_content, overwrite=True, content_settings=content_settings)
+                headers = BlobHttpHeaders(
+                    content_type="application/pdf",
+                    content_disposition=f"inline; filename=\"{blob_name}\""
+                )
+                blob_client.set_blob_http_headers(headers)
+                logger.info(f"[AzureBlob] Set PDF headers for inline display: {blob_name}")
             
             logger.info(f"[AzureBlob] Magazine {file_type} upload done: {blob_name}")
 
@@ -245,13 +248,16 @@ class AzureBlobService:
             
             # Read file content and upload
             file_content = file.file.read()
+            blob_client.upload_blob(file_content, overwrite=True)
             
-            # Set content disposition for PDF files to display inline
-            content_settings = None
+            # Set HTTP headers for PDF files to display inline
             if file_type == 'pdf':
-                content_settings = ContentSettings(content_disposition='inline')
-            
-            blob_client.upload_blob(file_content, overwrite=True, content_settings=content_settings)
+                headers = BlobHttpHeaders(
+                    content_type="application/pdf",
+                    content_disposition=f"inline; filename=\"{blob_name}\""
+                )
+                blob_client.set_blob_http_headers(headers)
+                logger.info(f"[AzureBlob] Set PDF headers for inline display: {blob_name}")
             
             logger.info(f"[AzureBlob] Magazine2 {file_type} upload done: {blob_name}")
 
@@ -277,14 +283,14 @@ class AzureBlobService:
             # Get existing blob properties
             blob_properties = blob_client.get_blob_properties()
             
-            # Update content settings with new disposition
-            content_settings = ContentSettings(
-                content_type=blob_properties.content_settings.content_type,
-                content_disposition=content_disposition
+            # Set HTTP headers with new disposition
+            headers = BlobHttpHeaders(
+                content_type=blob_properties.content_settings.content_type or "application/pdf",
+                content_disposition=f"{content_disposition}; filename=\"{blob_name}\""
             )
             
-            # Set blob properties
-            blob_client.set_blob_properties(content_settings=content_settings)
+            # Set blob HTTP headers
+            blob_client.set_blob_http_headers(headers)
             
             logger.info(f"[AzureBlob] Updated content disposition for {blob_name} to {content_disposition}")
             return True
