@@ -66,10 +66,22 @@ jobs:
           # Setup SSL certificates
           echo "Setting up SSL certificates..."
           sudo mkdir -p /etc/letsencrypt/live/api.digi9.com.au/
-          echo "$SSL_CERT" | sudo tee /etc/letsencrypt/live/api.digi9.com.au/fullchain.pem > /dev/null
-          echo "$SSL_KEY" | sudo tee /etc/letsencrypt/live/api.digi9.com.au/privkey.pem > /dev/null
+          sudo mkdir -p /etc/letsencrypt/archive/api.digi9.com.au/
+          
+          # Write certificate files to archive directory
+          echo "$SSL_CERT" | sudo tee /etc/letsencrypt/archive/api.digi9.com.au/fullchain1.pem > /dev/null
+          echo "$SSL_KEY" | sudo tee /etc/letsencrypt/archive/api.digi9.com.au/privkey1.pem > /dev/null
+          
+          # Create symlinks
+          sudo ln -sf ../../archive/api.digi9.com.au/fullchain1.pem /etc/letsencrypt/live/api.digi9.com.au/fullchain.pem
+          sudo ln -sf ../../archive/api.digi9.com.au/privkey1.pem /etc/letsencrypt/live/api.digi9.com.au/privkey.pem
+          
+          # Set proper permissions
+          sudo chmod 600 /etc/letsencrypt/archive/api.digi9.com.au/privkey1.pem
+          sudo chmod 644 /etc/letsencrypt/archive/api.digi9.com.au/fullchain1.pem
           sudo chmod 600 /etc/letsencrypt/live/api.digi9.com.au/privkey.pem
           sudo chmod 644 /etc/letsencrypt/live/api.digi9.com.au/fullchain.pem
+          
           echo "SSL certificates setup complete!"
           
           # Stash local changes and pull latest changes
