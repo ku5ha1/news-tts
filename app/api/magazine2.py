@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, Depends, status, UploadFile, File, Form
+from typing import Optional
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from datetime import datetime
 from bson import ObjectId
@@ -498,146 +499,224 @@ async def get_magazine2(
 @router.put("/{magazine2_id}", response_model=Magazine2Response)
 async def update_magazine2(
     magazine2_id: str,
-    payload: Magazine2UpdateRequest,
+    title: Optional[str] = Form(None),
+    description: Optional[str] = Form(None),
+    editionNumber: Optional[str] = Form(None),
+    publishedMonth: Optional[str] = Form(None),
+    publishedYear: Optional[str] = Form(None),
+    magazineThumbnail: Optional[UploadFile] = File(None),
+    magazinePdf: Optional[UploadFile] = File(None),
+    status: Optional[str] = Form(None),
     current_user: dict = Depends(get_current_user)
 ):
-    """Update a magazine2."""
+    """Update a magazine2 with optional file uploads to Azure Blob Storage."""
     try:
-        logger.info(f"[MAGAZINE2-UPDATE] magazine2_id={magazine2_id}")
+        logger.info(f"[MAGAZINE2-UPDATE] start magazine2_id={magazine2_id} user={current_user.get('email', 'unknown')}")
         
         # Check if magazine2 exists
         existing_magazine2 = await get_db_service().get_magazine2_by_id(ObjectId(magazine2_id))
         if not existing_magazine2:
             raise HTTPException(status_code=404, detail="Magazine2 not found")
         
-        # Prepare update fields
-        updates = {}
+        uploaded_files = []  # Track uploaded files for cleanup on failure
+        old_files_to_delete = []  # Track old files to delete
         
-        # Handle title and description updates with translation
-        if payload.title is not None or payload.description is not None:
-            # Get current values for fields that aren't being updated
-            current_title = payload.title if payload.title is not None else existing_magazine2.get("title", "")
-            current_description = payload.description if payload.description is not None else existing_magazine2.get("description", "")
+        try:
+            # Prepare update fields
+            updates = {}
             
-            # Update the fields
-            if payload.title is not None:
-                updates["title"] = payload.title
-            if payload.description is not None:
-                updates["description"] = payload.description
+            # Handle file uploads first
+            azure_service = get_azure_blob_service()
+            if not azure_service.is_connected():
+                raise HTTPException(status_code=503, detail="Azure Blob Storage is not available")
             
-            # Re-translate if title or description is being updated
-            try:
-                # Detect source language from combined title + description
-                combined_text = f"{current_title} {current_description}"
-                source_lang = detect_language(combined_text)
-                logger.info(f"[MAGAZINE2-UPDATE] detected_language={source_lang} for title/description update")
+            # Get current values for file operations
+            current_published_year = publishedYear if publishedYear is not None else existing_magazine2.get("publishedYear", "")
+            current_published_month = publishedMonth if publishedMonth is not None else existing_magazine2.get("publishedMonth", "")
+            
+            # Handle thumbnail update
+            if magazineThumbnail is not None:
+                validate_file(magazineThumbnail, "thumbnail")
                 
-                # Translation with timeout
-                try:
-                    timeout_sec = float(os.getenv("TRANSLATION_PER_CALL_TIMEOUT", str(DEFAULT_TRANSLATION_TIMEOUT)))
-                except (ValueError, TypeError):
-                    timeout_sec = DEFAULT_TRANSLATION_TIMEOUT
+                # Store old thumbnail URL for deletion
+                old_thumbnail_url = existing_magazine2.get("magazineThumbnail")
+                if old_thumbnail_url:
+                    old_files_to_delete.append(("thumbnail", old_thumbnail_url))
                 
+                # Upload new thumbnail
+                thumbnail_url = azure_service.upload_magazine2_file(
+                    magazineThumbnail, current_published_year, current_published_month, magazine2_id, "thumbnail"
+                )
+                uploaded_files.append(("thumbnail", thumbnail_url))
+                updates["magazineThumbnail"] = thumbnail_url
+                logger.info(f"[MAGAZINE2-UPDATE] thumbnail uploaded magazine2_id={magazine2_id}")
+            
+            # Handle PDF update
+            if magazinePdf is not None:
+                validate_file(magazinePdf, "pdf")
+                
+                # Store old PDF URL for deletion
+                old_pdf_url = existing_magazine2.get("magazinePdf")
+                if old_pdf_url:
+                    old_files_to_delete.append(("pdf", old_pdf_url))
+                
+                # Upload new PDF
+                pdf_url = azure_service.upload_magazine2_file(
+                    magazinePdf, current_published_year, current_published_month, magazine2_id, "pdf"
+                )
+                uploaded_files.append(("pdf", pdf_url))
+                updates["magazinePdf"] = pdf_url
+                logger.info(f"[MAGAZINE2-UPDATE] PDF uploaded magazine2_id={magazine2_id}")
+            
+            # Handle title and description updates with translation
+            if title is not None or description is not None:
+                # Get current values for fields that aren't being updated
+                current_title = title if title is not None else existing_magazine2.get("title", "")
+                current_description = description if description is not None else existing_magazine2.get("description", "")
+                
+                # Update the fields
+                if title is not None:
+                    updates["title"] = title
+                if description is not None:
+                    updates["description"] = description
+                
+                # Re-translate if title or description is being updated
                 try:
-                    translation_service = get_translation_service()
-                    translations = await retry_translation_with_timeout(
-                        translation_service,
-                        current_title,
-                        current_description,
-                        source_lang,
-                        timeout=timeout_sec,
-                        max_retries=3
-                    )
-                    logger.info(f"[MAGAZINE2-UPDATE] translation.done langs={list(translations.keys())} for title/description update")
-                except asyncio.TimeoutError:
-                    logger.error(f"[MAGAZINE2-UPDATE] translation timed out after {timeout_sec}s for title/description update")
-                    raise HTTPException(status_code=504, detail="Translation timed out")
-                except Exception as e:
-                    logger.error(f"[MAGAZINE2-UPDATE] translation failed for title/description update: {e}")
-                    if "IndicTrans2" in str(e) or "Model" in str(e):
-                        logger.error("This appears to be an IndicTrans2 model loading issue")
+                    # Detect source language from combined title + description
+                    combined_text = f"{current_title} {current_description}"
+                    source_lang = detect_language(combined_text)
+                    logger.info(f"[MAGAZINE2-UPDATE] detected_language={source_lang} for title/description update")
+                    
+                    # Translation with timeout
+                    try:
+                        timeout_sec = float(os.getenv("TRANSLATION_PER_CALL_TIMEOUT", str(DEFAULT_TRANSLATION_TIMEOUT)))
+                    except (ValueError, TypeError):
+                        timeout_sec = DEFAULT_TRANSLATION_TIMEOUT
+                    
+                    try:
+                        translation_service = get_translation_service()
+                        translations = await retry_translation_with_timeout(
+                            translation_service,
+                            current_title,
+                            current_description,
+                            source_lang,
+                            timeout=timeout_sec,
+                            max_retries=3
+                        )
+                        logger.info(f"[MAGAZINE2-UPDATE] translation.done langs={list(translations.keys())} for title/description update")
+                    except asyncio.TimeoutError:
+                        logger.error(f"[MAGAZINE2-UPDATE] translation timed out after {timeout_sec}s for title/description update")
+                        raise HTTPException(status_code=504, detail="Translation timed out")
+                    except Exception as e:
+                        logger.error(f"[MAGAZINE2-UPDATE] translation failed for title/description update: {e}")
+                        if "IndicTrans2" in str(e) or "Model" in str(e):
+                            logger.error("This appears to be an IndicTrans2 model loading issue")
+                        raise
+                    
+                    # Handle bidirectional translation - ensure all three languages are present
+                    # If source is English, add original text as English translation
+                    if source_lang == "en":
+                        translations["english"] = {
+                            "title": current_title,
+                            "description": current_description
+                        }
+                        logger.info(f"[MAGAZINE2-UPDATE] added original text as English translation for source=en")
+                    
+                    # If source is Kannada, add original text as Kannada translation  
+                    elif source_lang == "kn":
+                        translations["kannada"] = {
+                            "title": current_title,
+                            "description": current_description
+                        }
+                        logger.info(f"[MAGAZINE2-UPDATE] added original text as Kannada translation for source=kn")
+                    
+                    # If source is Hindi, add original text as Hindi translation
+                    elif source_lang == "hi":
+                        translations["hindi"] = {
+                            "title": current_title,
+                            "description": current_description
+                        }
+                        logger.info(f"[MAGAZINE2-UPDATE] added original text as Hindi translation for source=hi")
+                    
+                    # Update translation fields
+                    updates["hindi"] = {
+                        "title": translations.get("hindi", {}).get("title", current_title),
+                        "description": translations.get("hindi", {}).get("description", current_description)
+                    }
+                    updates["kannada"] = {
+                        "title": translations.get("kannada", {}).get("title", current_title),
+                        "description": translations.get("kannada", {}).get("description", current_description)
+                    }
+                    updates["english"] = {
+                        "title": translations.get("english", {}).get("title", current_title),
+                        "description": translations.get("english", {}).get("description", current_description)
+                    }
+                    
+                    logger.info(f"[MAGAZINE2-UPDATE] updated translations for title/description update")
+                    
+                except HTTPException:
                     raise
+                except Exception as e:
+                    logger.error(f"[MAGAZINE2-UPDATE] translation error for title/description update: {e}")
+                    raise HTTPException(status_code=500, detail=f"Translation failed for title/description update: {str(e)}")
                 
-                # Handle bidirectional translation - ensure all three languages are present
-                # If source is English, add original text as English translation
-                if source_lang == "en":
-                    translations["english"] = {
-                        "title": current_title,
-                        "description": current_description
-                    }
-                    logger.info(f"[MAGAZINE2-UPDATE] added original text as English translation for source=en")
+            # Handle other field updates
+            if editionNumber is not None:
+                updates["editionNumber"] = editionNumber
                 
-                # If source is Kannada, add original text as Kannada translation  
-                elif source_lang == "kn":
-                    translations["kannada"] = {
-                        "title": current_title,
-                        "description": current_description
-                    }
-                    logger.info(f"[MAGAZINE2-UPDATE] added original text as Kannada translation for source=kn")
+            if publishedMonth is not None:
+                updates["publishedMonth"] = publishedMonth
                 
-                # If source is Hindi, add original text as Hindi translation
-                elif source_lang == "hi":
-                    translations["hindi"] = {
-                        "title": current_title,
-                        "description": current_description
-                    }
-                    logger.info(f"[MAGAZINE2-UPDATE] added original text as Hindi translation for source=hi")
+            if publishedYear is not None:
+                updates["publishedYear"] = publishedYear
                 
-                # Update translation fields
-                updates["hindi"] = {
-                    "title": translations.get("hindi", {}).get("title", current_title),
-                    "description": translations.get("hindi", {}).get("description", current_description)
-                }
-                updates["kannada"] = {
-                    "title": translations.get("kannada", {}).get("title", current_title),
-                    "description": translations.get("kannada", {}).get("description", current_description)
-                }
-                updates["english"] = {
-                    "title": translations.get("english", {}).get("title", current_title),
-                    "description": translations.get("english", {}).get("description", current_description)
-                }
-                
-                logger.info(f"[MAGAZINE2-UPDATE] updated translations for title/description update")
-                
-            except HTTPException:
-                raise
-            except Exception as e:
-                logger.error(f"[MAGAZINE2-UPDATE] translation error for title/description update: {e}")
-                raise HTTPException(status_code=500, detail=f"Translation failed for title/description update: {str(e)}")
+            # Handle status updates (admin/moderator only)
+            if status is not None:
+                user_role = current_user.get("role", "")
+                if user_role in ["admin", "moderator"]:
+                    updates["status"] = status
+                else:
+                    logger.warning(f"[MAGAZINE2-UPDATE] Non-admin/moderator user tried to update status: {current_user.get('email')}")
             
-        if payload.editionNumber is not None:
-            updates["editionNumber"] = payload.editionNumber
+            # Update last_updated timestamp
+            updates["last_updated"] = datetime.utcnow()
             
-        if payload.publishedMonth is not None:
-            updates["publishedMonth"] = payload.publishedMonth
+            # Update in DB
+            success = await get_db_service().update_magazine2_fields(ObjectId(magazine2_id), updates)
+            if not success:
+                raise HTTPException(status_code=500, detail="Failed to update magazine2")
             
-        if payload.publishedYear is not None:
-            updates["publishedYear"] = payload.publishedYear
+            # Delete old files after successful database update
+            for file_type, old_url in old_files_to_delete:
+                try:
+                    azure_service.delete_magazine2_file(old_url)
+                    logger.info(f"[MAGAZINE2-UPDATE] deleted old {file_type} file: {old_url}")
+                except Exception as e:
+                    logger.warning(f"[MAGAZINE2-UPDATE] failed to delete old {file_type} file: {e}")
             
-        if payload.magazineThumbnail is not None:
-            updates["magazineThumbnail"] = payload.magazineThumbnail
+            # Get updated magazine2
+            updated_magazine2 = await get_db_service().get_magazine2_by_id(ObjectId(magazine2_id))
+            response_doc = _to_extended_json(updated_magazine2)
             
-        if payload.magazinePdf is not None:
-            updates["magazinePdf"] = payload.magazinePdf
+            logger.info(f"[MAGAZINE2-UPDATE] success magazine2_id={magazine2_id}")
+            return Magazine2Response(success=True, data=response_doc)
             
-        # Handle status updates (admin/moderator only)
-        if payload.status is not None:
-            user_role = current_user.get("role", "")
-            if user_role in ["admin", "moderator"]:
-                updates["status"] = payload.status
-            else:
-                logger.warning(f"[MAGAZINE2-UPDATE] Non-admin/moderator user tried to update status: {current_user.get('email')}")
-        
-        # Update in DB
-        success = await get_db_service().update_magazine2_fields(ObjectId(magazine2_id), updates)
-        if not success:
-            raise HTTPException(status_code=500, detail="Failed to update magazine2")
-        
-        # Get updated magazine2
-        updated_magazine2 = await get_db_service().get_magazine2_by_id(ObjectId(magazine2_id))
-        response_doc = _to_extended_json(updated_magazine2)
-        
-        return Magazine2Response(success=True, data=response_doc)
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"[MAGAZINE2-UPDATE] failed magazine2_id={magazine2_id} error={e}")
+            # Clean up any uploaded files on error
+            try:
+                azure_service = get_azure_blob_service()
+                for file_type, url in uploaded_files:
+                    try:
+                        azure_service.delete_magazine2_file(url)
+                        logger.info(f"[MAGAZINE2-UPDATE] cleaned up {file_type} file due to error")
+                    except:
+                        pass
+            except:
+                pass
+            raise HTTPException(status_code=500, detail=f"Error updating magazine2: {str(e)}")
         
     except HTTPException:
         raise
