@@ -84,9 +84,8 @@ jobs:
           echo "Starting optimized Docker build..."
           docker build -t news-tts . --no-cache --pull
           
-          # Run new container with environment variables and SSL certificates
-          docker run -d -p 443:443 -p 8080:8080 --name news-tts-container --user root \
-            -v /etc/letsencrypt:/etc/letsencrypt:ro \
+          # Run new container with environment variables (HTTP only - Nginx handles HTTPS)
+          docker run -d -p 8080:8080 --name news-tts-container --user root \
             -e HF_HOME="$HF_HOME" \
             -e HF_HUB_CACHE="$HF_HUB_CACHE" \
             -e HF_HUB_OFFLINE="$HF_HUB_OFFLINE" \
@@ -122,19 +121,10 @@ jobs:
           docker exec news-tts-container ps aux || echo "Cannot exec into container"
           
           # Check health
-          echo "Testing HTTP health check..."
-          curl -f http://localhost:8080/health || echo "HTTP health check failed"
-          
-          echo "Testing HTTPS health check..."
-          curl -f https://localhost:443/health || echo "HTTPS health check failed"
-          
-          # Final health check - try both
-          if curl -f http://localhost:8080/health 2>/dev/null || curl -f https://localhost:443/health 2>/dev/null; then
-            echo "Health check passed!"
-          else
+          curl -f http://localhost:8080/health || {
             echo "Health check failed - checking container logs"
             docker logs news-tts-container --tail 50
             exit 1
-          fi
+          }
           
           echo "Deployment successful!"
