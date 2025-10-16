@@ -22,8 +22,8 @@ class MagazineUpdateRequest(BaseModel):
     editionNumber: Optional[str] = None
     publishedMonth: Optional[str] = None
     publishedYear: Optional[str] = None
-    magazineThumbnail: Optional[str] = None
-    magazinePdf: Optional[str] = None
+    magazineThumbnail: Optional[UploadFile] = None
+    magazinePdf: Optional[UploadFile] = None
     status: Optional[str] = None
 
 class MagazineListResponse(BaseModel):

@@ -31,3 +31,5 @@ env.yaml
 cloudbuild.yaml
 
 changes.md
+
+search/
