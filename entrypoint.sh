@@ -88,8 +88,8 @@ if [ "$(id -u)" -eq 0 ]; then
     echo "Application files are accessible."
 
     echo "Switching to user $APP_USER and starting uvicorn..."
-    echo "About to execute: su $APP_USER -c 'cd /app && uvicorn app.main:app --host 0.0.0.0 --port 8080 --log-level $LOG_LEVEL'"
-    exec su "$APP_USER" -c "cd /app && echo 'Starting uvicorn with pre-loaded models...' && uvicorn app.main:app --host 0.0.0.0 --port 8080 --log-level $LOG_LEVEL"
+    echo "About to execute: su $APP_USER -c 'cd /app && python app/main.py'"
+    exec su "$APP_USER" -c "cd /app && echo 'Starting uvicorn with SSL support...' && python app/main.py"
 
 fi
 
@@ -98,8 +98,8 @@ echo "Running as non-root user directly. Starting uvicorn."
 if [ -d "/app" ]; then
     echo "Using container directory /app"
     cd /app
-    exec uvicorn app.main:app --host 0.0.0.0 --port 8080 --log-level "$LOG_LEVEL"
+    exec python app/main.py
 else
     echo "Using current directory for local testing"
-    exec uvicorn app.main:app --host 0.0.0.0 --port 8080 --log-level "$LOG_LEVEL"
+    exec python app/main.py
 fi
