@@ -159,8 +159,8 @@ def get_azure_blob_service():
             detail=f"Azure blob service unavailable: {str(e)}"
         )
 
+
 def validate_file(file: UploadFile, file_type: str) -> None:
-    """Validate uploaded file for type and size."""
     if not file or not file.filename:
         raise HTTPException(status_code=400, detail=f"{file_type} file is required")
     
