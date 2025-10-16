@@ -229,4 +229,21 @@ async def root():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("app.main:app", host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
+    import os
+    
+    # Check if SSL certificates exist
+    ssl_cert_path = "/etc/letsencrypt/live/api.digi9.com.au/fullchain.pem"
+    ssl_key_path = "/etc/letsencrypt/live/api.digi9.com.au/privkey.pem"
+    
+    if os.path.exists(ssl_cert_path) and os.path.exists(ssl_key_path):
+        print("SSL certificates found, starting HTTPS server on port 443")
+        uvicorn.run(
+            "app.main:app", 
+            host="0.0.0.0", 
+            port=443,
+            ssl_keyfile=ssl_key_path,
+            ssl_certfile=ssl_cert_path
+        )
+    else:
+        print("SSL certificates not found, starting HTTP server on port 8080")
+        uvicorn.run("app.main:app", host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
