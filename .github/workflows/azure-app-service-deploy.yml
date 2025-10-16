@@ -39,6 +39,10 @@ env:
   AZURE_STORAGE_AUDIOFIELD_CONTAINER: ${{ secrets.AZURE_STORAGE_AUDIOFIELD_CONTAINER }}
   AZURE_STORAGE_MAGAZINE_CONTAINER: ${{ secrets.AZURE_STORAGE_MAGAZINE_CONTAINER }}
   AZURE_STORAGE_MAGAZINE2_CONTAINER: ${{ secrets.AZURE_STORAGE_MAGAZINE2_CONTAINER }}
+  
+  # SSL Certificates
+  SSL_CERT: ${{ secrets.SSL_CERT }}
+  SSL_KEY: ${{ secrets.SSL_KEY }}
 
 jobs:
   build-and-deploy:
@@ -54,10 +58,19 @@ jobs:
         host: ${{ secrets.VM_HOST }}
         username: ${{ secrets.VM_USERNAME }}
         key: ${{ secrets.VM_SSH_KEY }}
-        envs: DATABASE_NAME,ELEVENLABS_API_KEY,ELEVENLABS_VOICE_ID,FIREBASE_SERVICE_ACCOUNT_BASE64,FIREBASE_STORAGE_BUCKET,MONGO_URI,CORS_ORIGIN,AZURE_STORAGE_ACCOUNT_NAME,AZURE_STORAGE_CONNECTION_STRING,AZURE_STORAGE_ACCESS_KEY,AZURE_STORAGE_AUDIOFIELD_CONTAINER,AZURE_STORAGE_MAGAZINE_CONTAINER,AZURE_STORAGE_MAGAZINE2_CONTAINER,HF_HOME,HF_HUB_CACHE,HF_HUB_OFFLINE,TRUST_REMOTE_CODE,LOG_LEVEL,PORT,PYTHONUNBUFFERED,JWT_SECRET
+        envs: DATABASE_NAME,ELEVENLABS_API_KEY,ELEVENLABS_VOICE_ID,FIREBASE_SERVICE_ACCOUNT_BASE64,FIREBASE_STORAGE_BUCKET,MONGO_URI,CORS_ORIGIN,AZURE_STORAGE_ACCOUNT_NAME,AZURE_STORAGE_CONNECTION_STRING,AZURE_STORAGE_ACCESS_KEY,AZURE_STORAGE_AUDIOFIELD_CONTAINER,AZURE_STORAGE_MAGAZINE_CONTAINER,AZURE_STORAGE_MAGAZINE2_CONTAINER,HF_HOME,HF_HUB_CACHE,HF_HUB_OFFLINE,TRUST_REMOTE_CODE,LOG_LEVEL,PORT,PYTHONUNBUFFERED,JWT_SECRET,SSL_CERT,SSL_KEY
         script: |
           # Navigate to project directory
           cd ~/news-tts
+          
+          # Setup SSL certificates
+          echo "Setting up SSL certificates..."
+          sudo mkdir -p /etc/letsencrypt/live/api.digi9.com.au/
+          echo "$SSL_CERT" | sudo tee /etc/letsencrypt/live/api.digi9.com.au/fullchain.pem > /dev/null
+          echo "$SSL_KEY" | sudo tee /etc/letsencrypt/live/api.digi9.com.au/privkey.pem > /dev/null
+          sudo chmod 600 /etc/letsencrypt/live/api.digi9.com.au/privkey.pem
+          sudo chmod 644 /etc/letsencrypt/live/api.digi9.com.au/fullchain.pem
+          echo "SSL certificates setup complete!"
           
           # Stash local changes and pull latest changes
           git stash || true
@@ -84,8 +97,9 @@ jobs:
           echo "Starting optimized Docker build..."
           docker build -t news-tts . --no-cache --pull
           
-          # Run new container with environment variables
-          docker run -d -p 8080:8080 --name news-tts-container --user root \
+          # Run new container with environment variables and SSL certificates
+          docker run -d -p 443:443 -p 8080:8080 --name news-tts-container --user root \
+            -v /etc/letsencrypt:/etc/letsencrypt:ro \
             -e HF_HOME="$HF_HOME" \
             -e HF_HUB_CACHE="$HF_HUB_CACHE" \
             -e HF_HUB_OFFLINE="$HF_HUB_OFFLINE" \
@@ -121,12 +135,23 @@ jobs:
           docker exec news-tts-container ps aux || echo "Cannot exec into container"
           
           # Check health
-          curl -f http://localhost:8080/health || {
+          echo "Testing HTTP health check..."
+          curl -f http://localhost:8080/health || echo "HTTP health check failed"
+          
+          echo "Testing HTTPS health check..."
+          curl -f https://localhost:443/health || echo "HTTPS health check failed"
+          
+          # Final health check - try both
+          if curl -f http://localhost:8080/health 2>/dev/null || curl -f https://localhost:443/health 2>/dev/null; then
+            echo "Health check passed!"
+          else
             echo "Health check failed - checking container logs"
             docker logs news-tts-container --tail 50
             exit 1
-          }
+          fi
           
           echo "Deployment successful!"
-          echo "App URL: http://${{ secrets.VM_HOST }}:8080"
-          echo "Health Check: http://${{ secrets.VM_HOST }}:8080/health"
+          echo "HTTP App URL: http://${{ secrets.VM_HOST }}:8080"
+          echo "HTTPS App URL: https://api.digi9.com.au"
+          echo "HTTP Health Check: http://${{ secrets.VM_HOST }}:8080/health"
+          echo "HTTPS Health Check: https://api.digi9.com.au/health"
