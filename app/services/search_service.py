@@ -255,7 +255,7 @@ class SearchService:
     def process_magazine2_pdf(self, magazine_data: Dict[str, Any]) -> bool:
         """Process a single Magazine2 PDF through the complete pipeline"""
         try:
-            magazine_id = magazine_data["_id"]
+            magazine_id = str(magazine_data["_id"])  # Convert ObjectId to string
             pdf_url = magazine_data["magazinePdf"]
             
             # Extract blob name from URL (preserve full path including folders)
