@@ -334,12 +334,14 @@ class SearchService:
                 search_documents.append(doc)
             
             # Step 6: Upload to search index
-            # Debug: Log the first document to see the structure
+            # Debug: Log the complete document structure to identify array fields
             if search_documents:
                 import json
-                logger.info(f"Sample document structure: {json.dumps(search_documents[0], indent=2)[:1000]}...")
-                logger.info(f"ContentVector type: {type(search_documents[0]['contentVector'])}")
-                logger.info(f"ContentVector length: {len(search_documents[0]['contentVector']) if isinstance(search_documents[0]['contentVector'], list) else 'Not a list'}")
+                sample_doc = search_documents[0]
+                logger.info("=== COMPLETE DOCUMENT STRUCTURE ===")
+                for key, value in sample_doc.items():
+                    logger.info(f"Field '{key}': type={type(value)}, value={value if not isinstance(value, list) else f'[array with {len(value)} items]'}")
+                logger.info("=== END DOCUMENT STRUCTURE ===")
             
             self.search_client.upload_documents(documents=search_documents)
             
