@@ -11,7 +11,6 @@ from app.models.search import (
     CreateIndexRequest, CreateIndexResponse,
     ErrorResponse
 )
-from app.services.auth_service import get_current_user
 from app.services.search_service import SearchService
 from search.magazine2_pipeline import Magazine2Pipeline
 
@@ -32,7 +31,6 @@ def get_magazine2_pipeline() -> Magazine2Pipeline:
 @router.post("/query", response_model=SearchResponse)
 async def search_documents(
     request: SearchRequest,
-    current_user: Dict[str, Any] = Depends(get_current_user),
     search_service: SearchService = Depends(get_search_service)
 ):
     """
@@ -41,7 +39,7 @@ async def search_documents(
     try:
         start_time = time.time()
         
-        logger.info(f"Search request from user {current_user.get('id')}: {request.query}")
+        logger.info(f"Search request: {request.query}")
         
         # Perform search
         search_results = search_service.search_documents(
@@ -86,14 +84,13 @@ async def search_documents(
 
 @router.get("/status", response_model=ProcessingStatusResponse)
 async def get_processing_status(
-    current_user: Dict[str, Any] = Depends(get_current_user),
     pipeline: Magazine2Pipeline = Depends(get_magazine2_pipeline)
 ):
     """
     Get the current processing status of magazines
     """
     try:
-        logger.info(f"Processing status request from user {current_user.get('id')}")
+        logger.info(f"Processing status request")
         
         status = pipeline.get_processing_status()
         
@@ -119,14 +116,13 @@ async def get_processing_status(
 @router.post("/process/single", response_model=ProcessMagazineResponse)
 async def process_single_magazine(
     request: ProcessMagazineRequest,
-    current_user: Dict[str, Any] = Depends(get_current_user),
     pipeline: Magazine2Pipeline = Depends(get_magazine2_pipeline)
 ):
     """
     Process a single magazine through the search pipeline
     """
     try:
-        logger.info(f"Single magazine processing request from user {current_user.get('id')}: {request.magazine_id}")
+        logger.info(f"Single magazine processing request: {request.magazine_id}")
         
         result = pipeline.process_single_magazine(request.magazine_id)
         
@@ -149,14 +145,13 @@ async def process_single_magazine(
 
 @router.post("/process/all", response_model=ProcessAllResponse)
 async def process_all_magazines(
-    current_user: Dict[str, Any] = Depends(get_current_user),
     pipeline: Magazine2Pipeline = Depends(get_magazine2_pipeline)
 ):
     """
     Process all approved magazines through the search pipeline
     """
     try:
-        logger.info(f"Process all magazines request from user {current_user.get('id')}")
+        logger.info(f"Process all magazines request")
         
         result = pipeline.process_all_approved_magazines()
         
@@ -181,14 +176,13 @@ async def process_all_magazines(
 
 @router.post("/index/create", response_model=CreateIndexResponse)
 async def create_search_index(
-    current_user: Dict[str, Any] = Depends(get_current_user),
     pipeline: Magazine2Pipeline = Depends(get_magazine2_pipeline)
 ):
     """
     Create or update the search index
     """
     try:
-        logger.info(f"Create search index request from user {current_user.get('id')}")
+        logger.info(f"Create search index request")
         
         result = pipeline.create_search_index()
         
