@@ -92,7 +92,7 @@ async def get_processing_status(
     try:
         logger.info(f"Processing status request")
         
-        status = pipeline.get_processing_status()
+        status = await pipeline.get_processing_status()
         
         if not status["success"]:
             raise HTTPException(status_code=500, detail=status["error"])
@@ -124,7 +124,7 @@ async def process_single_magazine(
     try:
         logger.info(f"Single magazine processing request: {request.magazine_id}")
         
-        result = pipeline.process_single_magazine(request.magazine_id)
+        result = await pipeline.process_single_magazine(request.magazine_id)
         
         if not result["success"]:
             raise HTTPException(status_code=400, detail=result["error"])
@@ -153,7 +153,7 @@ async def process_all_magazines(
     try:
         logger.info(f"Process all magazines request")
         
-        result = pipeline.process_all_approved_magazines()
+        result = await pipeline.process_all_approved_magazines()
         
         if not result["success"]:
             raise HTTPException(status_code=500, detail=result["error"])
