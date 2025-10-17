@@ -169,9 +169,8 @@ class SearchService:
             # Download PDF from blob storage
             pdf_bytes = self.magazine2_container.download_blob(blob_name).readall()
             
-            # Process with Document Intelligence
-            stream = BytesIO(pdf_bytes)
-            poller = self.docint_client.begin_analyze_document("prebuilt-read", stream)
+            # Process with Document Intelligence - use bytes_source parameter
+            poller = self.docint_client.begin_analyze_document("prebuilt-read", bytes_source=pdf_bytes)
             result = poller.result()
             
             # Structure the result
