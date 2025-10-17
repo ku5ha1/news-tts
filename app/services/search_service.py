@@ -377,7 +377,7 @@ class SearchService:
                 search_text=query,
                 vector_queries=[VectorizedQuery(vector=query_vector, fields="contentVector")],
                 semantic_configuration_name="semanticConfig",
-                highlight_fields="content-3", 
+                highlight="content",
                 highlight_pre_tag="<mark>",
                 highlight_post_tag="</mark>",
                 top=top,
@@ -386,11 +386,23 @@ class SearchService:
             
             search_results = []
             for result in results:
+                # Extract highlighted content snippets
+                highlights = result.get("@search.highlights", {})
+                highlighted_content = highlights.get("content", [])
+                
+                # Use highlighted snippets if available, otherwise fallback to truncated content
+                if highlighted_content:
+                    content = " ... ".join(highlighted_content)
+                else:
+                    # Fallback: truncate content to 500 chars
+                    full_content = result.get("content", "")
+                    content = full_content[:500] + "..." if len(full_content) > 500 else full_content
+                
                 search_results.append({
                     "id": result["id"],
                     "title": result.get("title", ""),
                     "description": result.get("description", ""),
-                    "content": result.get("content", ""),
+                    "content": content,
                     "magazine_id": result.get("magazine_id", ""),
                     "published_year": result.get("published_year", 0),
                     "published_month": result.get("published_month", ""),
