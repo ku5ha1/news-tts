@@ -117,8 +117,8 @@ class SearchService:
                 SimpleField(name="edition_number", type=SearchFieldDataType.String),
                 SimpleField(name="pdf_url", type=SearchFieldDataType.String),
                 SimpleField(name="thumbnail_url", type=SearchFieldDataType.String),
-                SimpleField(name="contentVector", type=SearchFieldDataType.Collection(SearchFieldDataType.Single), 
-                          searchable=True, vector_search_dimensions=3072)
+                SearchableField(name="contentVector", type=SearchFieldDataType.Collection(SearchFieldDataType.Single), 
+                          searchable=True, vector_search_dimensions=3072, vector_search_configuration="vectorSearchProfile")
             ]
             
             vector_search = VectorSearch(
