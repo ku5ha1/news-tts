@@ -377,7 +377,7 @@ class SearchService:
                 search_text=query,
                 vector_queries=[VectorizedQuery(vector=query_vector, fields="contentVector")],
                 semantic_configuration_name="semanticConfig",
-                highlight="content",
+                highlight_fields="content",
                 highlight_pre_tag="<mark>",
                 highlight_post_tag="</mark>",
                 top=top,
