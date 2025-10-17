@@ -21,9 +21,12 @@ from azure.search.documents.indexes.models import (
     SemanticPrioritizedFields,
     SemanticField
 )
+from dotenv import load_dotenv
 import requests
 from io import BytesIO
 
+
+load_dotenv()
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -65,7 +68,7 @@ class SearchService:
         # Azure Cognitive Search
         search_endpoint = os.getenv("AZURE_SEARCH_ENDPOINT")
         search_key = os.getenv("AZURE_SEARCH_KEY")
-        self.search_index_name = os.getenv("AZURE_SEARCH_INDEX_NAME", "magazine2-search")
+        self.search_index_name = os.getenv("AZURE_SEARCH_INDEX_NAME")
         
         if not search_endpoint or not search_key:
             raise ValueError("AZURE_SEARCH_ENDPOINT or AZURE_SEARCH_KEY not found")
