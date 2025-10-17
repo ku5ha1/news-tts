@@ -7,7 +7,7 @@ import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 from app.services.search_service import SearchService
-from app.services.db_service import get_database
+from app.services.db_service import DBService
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -19,8 +19,9 @@ class Magazine2Pipeline:
     def __init__(self):
         """Initialize the pipeline"""
         self.search_service = SearchService()
-        self.db = get_database()
-        self.magazine2_collection = self.db.magazine2s
+        self.db_service = DBService()
+        self.db = self.db_service.db
+        self.magazine2_collection = self.db["magazine2"]
     
     def process_all_approved_magazines(self) -> Dict[str, Any]:
         """Process all approved Magazine2 documents"""
