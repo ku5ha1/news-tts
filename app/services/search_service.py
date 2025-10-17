@@ -326,7 +326,7 @@ class SearchService:
             # Perform search
             results = self.search_client.search(
                 search_text=query,
-                vector_queries=[{"vector": query_vector, "fields": "contentVector"}],
+                vector_queries=[{"vector": query_vector, "fields": "contentVector", "kind": "vector"}],
                 semantic_configuration_name="semanticConfig",
                 top=top,
                 include_total_count=True
