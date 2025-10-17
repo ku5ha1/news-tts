@@ -414,6 +414,21 @@ async def create_magazine2(
         # Insert into DB
         await asyncio.wait_for(get_db_service().insert_magazine2(magazine2_document), timeout=15.0)
 
+        # Trigger search pipeline if status is approved
+        if status == "approved":
+            try:
+                logger.info(f"[MAGAZINE2-CREATE] triggering search pipeline for approved magazine2_id={magazine2_id}")
+                from search.magazine2_pipeline import Magazine2Pipeline
+                pipeline = Magazine2Pipeline()
+                result = pipeline.process_single_magazine(str(magazine2_id))
+                if result["success"]:
+                    logger.info(f"[MAGAZINE2-CREATE] search pipeline completed successfully for magazine2_id={magazine2_id}")
+                else:
+                    logger.warning(f"[MAGAZINE2-CREATE] search pipeline failed for magazine2_id={magazine2_id}: {result.get('error', 'Unknown error')}")
+            except Exception as e:
+                logger.error(f"[MAGAZINE2-CREATE] search pipeline error for magazine2_id={magazine2_id}: {e}")
+                # Don't fail the main operation if search pipeline fails
+
         response_doc = _to_extended_json(magazine2_document)
         logger.info(f"[MAGAZINE2-CREATE] success magazine2_id={magazine2_id}")
         return Magazine2Response(success=True, data=response_doc)
@@ -561,7 +576,7 @@ async def update_magazine2(
                 if old_pdf_url:
                     old_files_to_delete.append(("pdf", old_pdf_url))
                 
-                # Upload new PDF
+                # Upload new PDFpai
                 pdf_url = azure_service.upload_magazine2_file(
                     magazinePdf, current_published_year, current_published_month, magazine2_id, "pdf"
                 )
@@ -676,8 +691,13 @@ async def update_magazine2(
                 user_role = current_user.get("role", "")
                 if user_role in ["admin", "moderator"]:
                     updates["status"] = status
+                    # Track if status is changing to approved for search pipeline trigger
+                    status_changing_to_approved = (status == "approved" and existing_magazine2.get("status") != "approved")
                 else:
                     logger.warning(f"[MAGAZINE2-UPDATE] Non-admin/moderator user tried to update status: {current_user.get('email')}")
+                    status_changing_to_approved = False
+            else:
+                status_changing_to_approved = False
             
             # Update last_updated timestamp
             updates["last_updated"] = datetime.utcnow()
@@ -686,6 +706,21 @@ async def update_magazine2(
             success = await get_db_service().update_magazine2_fields(ObjectId(magazine2_id), updates)
             if not success:
                 raise HTTPException(status_code=500, detail="Failed to update magazine2")
+            
+            # Trigger search pipeline if status changed to approved
+            if status_changing_to_approved:
+                try:
+                    logger.info(f"[MAGAZINE2-UPDATE] triggering search pipeline for status change to approved magazine2_id={magazine2_id}")
+                    from search.magazine2_pipeline import Magazine2Pipeline
+                    pipeline = Magazine2Pipeline()
+                    result = pipeline.process_single_magazine(magazine2_id)
+                    if result["success"]:
+                        logger.info(f"[MAGAZINE2-UPDATE] search pipeline completed successfully for magazine2_id={magazine2_id}")
+                    else:
+                        logger.warning(f"[MAGAZINE2-UPDATE] search pipeline failed for magazine2_id={magazine2_id}: {result.get('error', 'Unknown error')}")
+                except Exception as e:
+                    logger.error(f"[MAGAZINE2-UPDATE] search pipeline error for magazine2_id={magazine2_id}: {e}")
+                    # Don't fail the main operation if search pipeline fails
             
             # Delete old files after successful database update
             for file_type, old_url in old_files_to_delete:
