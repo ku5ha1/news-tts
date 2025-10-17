@@ -420,7 +420,7 @@ async def create_magazine2(
                 logger.info(f"[MAGAZINE2-CREATE] triggering search pipeline for approved magazine2_id={magazine2_id}")
                 from app.services.magazine2_pipeline import Magazine2Pipeline
                 pipeline = Magazine2Pipeline()
-                result = pipeline.process_single_magazine(str(magazine2_id))
+                result = await pipeline.process_single_magazine(str(magazine2_id))
                 if result["success"]:
                     logger.info(f"[MAGAZINE2-CREATE] search pipeline completed successfully for magazine2_id={magazine2_id}")
                 else:
@@ -713,7 +713,7 @@ async def update_magazine2(
                     logger.info(f"[MAGAZINE2-UPDATE] triggering search pipeline for status change to approved magazine2_id={magazine2_id}")
                     from app.services.magazine2_pipeline import Magazine2Pipeline
                     pipeline = Magazine2Pipeline()
-                    result = pipeline.process_single_magazine(magazine2_id)
+                    result = await pipeline.process_single_magazine(magazine2_id)
                     if result["success"]:
                         logger.info(f"[MAGAZINE2-UPDATE] search pipeline completed successfully for magazine2_id={magazine2_id}")
                     else:

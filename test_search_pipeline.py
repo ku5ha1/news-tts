@@ -4,6 +4,7 @@ Test script for Magazine2 Search Pipeline
 This script tests the search pipeline with existing Magazine2 PDFs
 """
 
+import asyncio
 import os
 import sys
 import json
@@ -20,7 +21,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-def test_search_pipeline():
+async def test_search_pipeline():
     """Test the search pipeline with existing Magazine2 PDFs"""
     try:
         logger.info("Starting Magazine2 Search Pipeline Test")
@@ -43,7 +44,7 @@ def test_search_pipeline():
         
         # Test 2: Get processing status
         logger.info("Test 2: Getting processing status...")
-        status = pipeline.get_processing_status()
+        status = await pipeline.get_processing_status()
         if status["success"]:
             logger.info(f"Processing status retrieved:")
             logger.info(f"   - Total approved magazines: {status['total_approved']}")
@@ -56,7 +57,7 @@ def test_search_pipeline():
         # Test 3: Process all approved magazines
         if status['unprocessed'] > 0:
             logger.info("Test 3: Processing all approved magazines...")
-            result = pipeline.process_all_approved_magazines()
+            result = await pipeline.process_all_approved_magazines()
             if result["success"]:
                 logger.info(f"Processing completed:")
                 logger.info(f"   - Processed: {result['processed']}")
@@ -90,18 +91,18 @@ def test_search_pipeline():
             for i, result in enumerate(results[:2]):  # Show first 2 results
                 logger.info(f"   Result {i+1}: {result['title'][:50]}... (Score: {result['score']:.2f})")
         
-        logger.info("✅ Search functionality test completed")
+        logger.info("Search functionality test completed")
         
         # Test 5: Final status check
         logger.info("Test 5: Final processing status check...")
-        final_status = pipeline.get_processing_status()
+        final_status = await pipeline.get_processing_status()
         if final_status["success"]:
             logger.info(f"Final status:")
             logger.info(f"   - Total approved magazines: {final_status['total_approved']}")
             logger.info(f"   - Processed: {final_status['processed']}")
             logger.info(f"   - Unprocessed: {final_status['unprocessed']}")
         
-        logger.info("🎉 All tests completed successfully!")
+        logger.info("All tests completed successfully!")
         return True
         
     except Exception as e:
@@ -142,7 +143,7 @@ def main():
     logger.info("All required environment variables are set")
     
     # Run tests
-    success = test_search_pipeline()
+    success = asyncio.run(test_search_pipeline())
     
     if success:
         logger.info("Test completed successfully!")

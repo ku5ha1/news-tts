@@ -8,6 +8,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 from app.services.search_service import SearchService
 from app.services.db_service import DBService
+from bson import ObjectId
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -23,13 +24,14 @@ class Magazine2Pipeline:
         self.db = self.db_service.db
         self.magazine2_collection = self.db["magazine2"]
     
-    def process_all_approved_magazines(self) -> Dict[str, Any]:
+    async def process_all_approved_magazines(self) -> Dict[str, Any]:
         """Process all approved Magazine2 documents"""
         try:
             logger.info("Starting processing of all approved Magazine2 documents")
             
             # Get all approved magazines
-            approved_magazines = list(self.magazine2_collection.find({"status": "approved"}))
+            cursor = self.magazine2_collection.find({"status": "approved"})
+            approved_magazines = await cursor.to_list(length=None)
             
             if not approved_magazines:
                 logger.info("No approved magazines found")
@@ -73,13 +75,13 @@ class Magazine2Pipeline:
             logger.error(f"Failed to process magazines: {e}")
             return {"success": False, "error": str(e)}
     
-    def process_single_magazine(self, magazine_id: str) -> Dict[str, Any]:
+    async def process_single_magazine(self, magazine_id: str) -> Dict[str, Any]:
         """Process a single Magazine2 document"""
         try:
             logger.info(f"Processing single magazine: {magazine_id}")
             
             # Get magazine from database
-            magazine = self.magazine2_collection.find_one({"_id": magazine_id})
+            magazine = await self.magazine2_collection.find_one({"_id": ObjectId(magazine_id)})
             
             if not magazine:
                 return {"success": False, "error": "Magazine not found"}
@@ -101,7 +103,7 @@ class Magazine2Pipeline:
             logger.error(f"Failed to process magazine {magazine_id}: {e}")
             return {"success": False, "error": str(e)}
     
-    def process_new_magazines(self, since_timestamp: Optional[datetime] = None) -> Dict[str, Any]:
+    async def process_new_magazines(self, since_timestamp: Optional[datetime] = None) -> Dict[str, Any]:
         """Process magazines created since a specific timestamp"""
         try:
             logger.info("Processing new magazines")
@@ -116,7 +118,8 @@ class Magazine2Pipeline:
                 "createdTime": {"$gte": since_timestamp}
             }
             
-            new_magazines = list(self.magazine2_collection.find(query))
+            cursor = self.magazine2_collection.find(query)
+            new_magazines = await cursor.to_list(length=None)
             
             if not new_magazines:
                 logger.info("No new magazines found")
@@ -160,11 +163,12 @@ class Magazine2Pipeline:
             logger.error(f"Failed to process new magazines: {e}")
             return {"success": False, "error": str(e)}
     
-    def get_processing_status(self) -> Dict[str, Any]:
+    async def get_processing_status(self) -> Dict[str, Any]:
         """Get the current processing status"""
         try:
             # Get all approved magazines
-            approved_magazines = list(self.magazine2_collection.find({"status": "approved"}))
+            cursor = self.magazine2_collection.find({"status": "approved"})
+            approved_magazines = await cursor.to_list(length=None)
             
             # Get processed files
             processed_files = self.search_service.get_processed_files()
