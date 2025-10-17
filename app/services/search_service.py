@@ -343,6 +343,22 @@ class SearchService:
                     logger.info(f"Field '{key}': type={type(value)}, value={value if not isinstance(value, list) else f'[array with {len(value)} items]'}")
                 logger.info("=== END DOCUMENT STRUCTURE ===")
             
+            # Ensure proper serialization for vector fields
+            # Convert embeddings to proper format for Azure Search
+            for doc in search_documents:
+                if 'contentVector' in doc and isinstance(doc['contentVector'], list):
+                    # Ensure all values are floats and properly formatted
+                    doc['contentVector'] = [float(x) for x in doc['contentVector']]
+            
+            # Additional validation: ensure all fields are properly serialized
+            try:
+                # Test serialization before uploading
+                json.dumps(search_documents[0])
+                logger.info("Document serialization test passed")
+            except Exception as e:
+                logger.error(f"Document serialization test failed: {e}")
+                raise ValueError(f"Document serialization failed: {e}")
+            
             self.search_client.upload_documents(documents=search_documents)
             
             logger.info(f"Successfully processed {magazine_id}: {len(chunks)} chunks indexed")
