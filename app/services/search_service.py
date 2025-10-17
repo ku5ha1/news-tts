@@ -291,17 +291,44 @@ class SearchService:
             # Step 5: Create search documents
             search_documents = []
             for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
+                # Handle publishedYear - might be array or string
+                published_year_raw = magazine_data.get("publishedYear", 0)
+                if isinstance(published_year_raw, list) and len(published_year_raw) > 0:
+                    published_year_raw = published_year_raw[0]  # Take first element if it's an array
+                published_year = int(published_year_raw) if str(published_year_raw).isdigit() else 0
+                
+                # Handle other fields that might be arrays
+                title = magazine_data.get("title", "")
+                if isinstance(title, list) and len(title) > 0:
+                    title = title[0]
+                
+                description = magazine_data.get("description", "")
+                if isinstance(description, list) and len(description) > 0:
+                    description = description[0]
+                
+                published_month = magazine_data.get("publishedMonth", "")
+                if isinstance(published_month, list) and len(published_month) > 0:
+                    published_month = published_month[0]
+                
+                edition_number = magazine_data.get("editionNumber", "")
+                if isinstance(edition_number, list) and len(edition_number) > 0:
+                    edition_number = edition_number[0]
+                
+                thumbnail_url = magazine_data.get("magazineThumbnail", "")
+                if isinstance(thumbnail_url, list) and len(thumbnail_url) > 0:
+                    thumbnail_url = thumbnail_url[0]
+                
                 doc = {
                     "id": f"{magazine_id}_chunk_{i}",
-                    "title": magazine_data.get("title", ""),
-                    "description": magazine_data.get("description", ""),
+                    "title": str(title),
+                    "description": str(description),
                     "content": chunk,
                     "magazine_id": magazine_id,
-                    "published_year": int(magazine_data.get("publishedYear", 0)),
-                    "published_month": magazine_data.get("publishedMonth", ""),
-                    "edition_number": magazine_data.get("editionNumber", ""),
+                    "published_year": published_year,
+                    "published_month": str(published_month),
+                    "edition_number": str(edition_number),
                     "pdf_url": pdf_url,
-                    "thumbnail_url": magazine_data.get("magazineThumbnail", ""),
+                    "thumbnail_url": str(thumbnail_url),
                     "contentVector": embedding
                 }
                 search_documents.append(doc)
