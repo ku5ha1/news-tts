@@ -12,7 +12,7 @@ from app.models.search import (
     ErrorResponse
 )
 from app.services.search_service import SearchService
-from search.magazine2_pipeline import Magazine2Pipeline
+from app.services.magazine2_pipeline import Magazine2Pipeline
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

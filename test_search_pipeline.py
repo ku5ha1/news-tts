@@ -26,7 +26,7 @@ def test_search_pipeline():
         logger.info("Starting Magazine2 Search Pipeline Test")
         
         # Import the pipeline
-        from search.magazine2_pipeline import Magazine2Pipeline
+        from app.services.magazine2_pipeline import Magazine2Pipeline
         
         # Initialize pipeline
         pipeline = Magazine2Pipeline()
