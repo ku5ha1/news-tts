@@ -307,6 +307,13 @@ class SearchService:
                 search_documents.append(doc)
             
             # Step 6: Upload to search index
+            # Debug: Log the first document to see the structure
+            if search_documents:
+                import json
+                logger.info(f"Sample document structure: {json.dumps(search_documents[0], indent=2)[:1000]}...")
+                logger.info(f"ContentVector type: {type(search_documents[0]['contentVector'])}")
+                logger.info(f"ContentVector length: {len(search_documents[0]['contentVector']) if isinstance(search_documents[0]['contentVector'], list) else 'Not a list'}")
+            
             self.search_client.upload_documents(documents=search_documents)
             
             logger.info(f"Successfully processed {magazine_id}: {len(chunks)} chunks indexed")
