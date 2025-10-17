@@ -373,12 +373,13 @@ class SearchService:
             query_embeddings = self.generate_embeddings([query])
             query_vector = query_embeddings[0]
             
-            # Perform search
             results = self.search_client.search(
                 search_text=query,
                 vector_queries=[VectorizedQuery(vector=query_vector, fields="contentVector")],
                 semantic_configuration_name="semanticConfig",
-                highlight_fields="content",
+                highlight_fields="content-3", 
+                highlight_pre_tag="<mark>",
+                highlight_post_tag="</mark>",
                 top=top,
                 include_total_count=True
             )
