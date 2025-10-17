@@ -7,12 +7,14 @@ from azure.storage.blob import BlobServiceClient
 from azure.ai.documentintelligence import DocumentIntelligenceClient
 from azure.core.credentials import AzureKeyCredential
 from azure.search.documents import SearchClient
+from azure.search.documents.models import VectorizedQuery
 from azure.search.documents.indexes import SearchIndexClient
 from azure.search.documents.indexes.models import (
     SearchIndex,
     SimpleField,
     SearchFieldDataType,
     SearchableField,
+    SearchField,
     VectorSearch,
     HnswAlgorithmConfiguration,
     VectorSearchProfile,
@@ -103,6 +105,21 @@ class SearchService:
         self.max_retries = 5
         self.backoff_factor = 2
     
+    def _first_or_str(self, x, default=""):
+        """Helper to ensure string fields are primitives, not arrays"""
+        if isinstance(x, list):
+            return str(x[0]) if x else default
+        return str(x) if x is not None else default
+    
+    def _first_or_int(self, x, default=0):
+        """Helper to ensure int fields are primitives, not arrays"""
+        if isinstance(x, list):
+            x = x[0] if x else default
+        try:
+            return int(x)
+        except Exception:
+            return default
+    
     def create_search_index(self) -> bool:
         """Create or update the search index"""
         try:
@@ -117,8 +134,8 @@ class SearchService:
                 SimpleField(name="edition_number", type=SearchFieldDataType.String),
                 SimpleField(name="pdf_url", type=SearchFieldDataType.String),
                 SimpleField(name="thumbnail_url", type=SearchFieldDataType.String),
-                SearchableField(name="contentVector", type=SearchFieldDataType.Collection(SearchFieldDataType.Single), 
-                          searchable=True, vector_search_dimensions=3072, vector_search_profile_name="vectorSearchProfile")
+                SearchField(name="contentVector", type=SearchFieldDataType.Collection(SearchFieldDataType.Single), 
+                          vector_search_dimensions=3072, vector_search_profile_name="vectorSearchProfile")
             ]
             
             vector_search = VectorSearch(
@@ -291,44 +308,25 @@ class SearchService:
             # Step 5: Create search documents
             search_documents = []
             for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
-                # Handle publishedYear - might be array or string
-                published_year_raw = magazine_data.get("publishedYear", 0)
-                if isinstance(published_year_raw, list) and len(published_year_raw) > 0:
-                    published_year_raw = published_year_raw[0]  # Take first element if it's an array
-                published_year = int(published_year_raw) if str(published_year_raw).isdigit() else 0
-                
-                # Handle other fields that might be arrays
-                title = magazine_data.get("title", "")
-                if isinstance(title, list) and len(title) > 0:
-                    title = title[0]
-                
-                description = magazine_data.get("description", "")
-                if isinstance(description, list) and len(description) > 0:
-                    description = description[0]
-                
-                published_month = magazine_data.get("publishedMonth", "")
-                if isinstance(published_month, list) and len(published_month) > 0:
-                    published_month = published_month[0]
-                
-                edition_number = magazine_data.get("editionNumber", "")
-                if isinstance(edition_number, list) and len(edition_number) > 0:
-                    edition_number = edition_number[0]
-                
-                thumbnail_url = magazine_data.get("magazineThumbnail", "")
-                if isinstance(thumbnail_url, list) and len(thumbnail_url) > 0:
-                    thumbnail_url = thumbnail_url[0]
+                # Use helper functions to ensure all fields are primitives
+                title = self._first_or_str(magazine_data.get("title"))
+                description = self._first_or_str(magazine_data.get("description"))
+                published_month = self._first_or_str(magazine_data.get("publishedMonth"))
+                edition_number = self._first_or_str(magazine_data.get("editionNumber"))
+                thumbnail_url = self._first_or_str(magazine_data.get("magazineThumbnail"))
+                published_year = self._first_or_int(magazine_data.get("publishedYear"))
                 
                 doc = {
                     "id": f"{magazine_id}_chunk_{i}",
-                    "title": str(title),
-                    "description": str(description),
+                    "title": title,
+                    "description": description,
                     "content": chunk,
                     "magazine_id": magazine_id,
                     "published_year": published_year,
-                    "published_month": str(published_month),
-                    "edition_number": str(edition_number),
+                    "published_month": published_month,
+                    "edition_number": edition_number,
                     "pdf_url": pdf_url,
-                    "thumbnail_url": str(thumbnail_url),
+                    "thumbnail_url": thumbnail_url,
                     "contentVector": embedding
                 }
                 search_documents.append(doc)
@@ -378,7 +376,7 @@ class SearchService:
             # Perform search
             results = self.search_client.search(
                 search_text=query,
-                vector_queries=[{"vector": query_vector, "fields": "contentVector", "kind": "vector"}],
+                vector_queries=[VectorizedQuery(vector=query_vector, fields="contentVector")],
                 semantic_configuration_name="semanticConfig",
                 top=top,
                 include_total_count=True
