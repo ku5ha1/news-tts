@@ -50,9 +50,15 @@ class SearchService:
         self.magazine2_container = self.blob_service.get_container_client(
             os.getenv("AZURE_STORAGE_MAGAZINE2_CONTAINER")
         )
-        self.output_container = self.blob_service.get_container_client(
-            os.getenv("AZURE_STORAGE_OUTPUT_CONTAINER_NAME")
-        )
+        
+        # Output container is optional - use magazine2 container if not specified
+        output_container_name = os.getenv("AZURE_STORAGE_OUTPUT_CONTAINER_NAME")
+        if output_container_name:
+            self.output_container = self.blob_service.get_container_client(output_container_name)
+        else:
+            # Use magazine2 container as fallback
+            self.output_container = self.magazine2_container
+            logger.warning("AZURE_STORAGE_OUTPUT_CONTAINER_NAME not set, using magazine2 container for output")
         
         # Azure Document Intelligence
         docint_endpoint = os.getenv("DOCINT_ENDPOINT")
