@@ -259,8 +259,16 @@ class SearchService:
             magazine_id = magazine_data["_id"]
             pdf_url = magazine_data["magazinePdf"]
             
-            # Extract blob name from URL
-            blob_name = pdf_url.split("/")[-1]
+            # Extract blob name from URL (preserve full path including folders)
+            # URL format: https://diprstorage.blob.core.windows.net/marchofkarnataka/2025/January/filename.pdf
+            # We need: 2025/January/filename.pdf
+            url_parts = pdf_url.split("/")
+            if len(url_parts) >= 5:
+                # Get everything after the container name (index 3)
+                blob_name = "/".join(url_parts[4:])
+            else:
+                # Fallback to just filename if URL structure is unexpected
+                blob_name = url_parts[-1]
             
             # Step 1: OCR
             ocr_result = self.ocr_pdf_from_blob(blob_name)
