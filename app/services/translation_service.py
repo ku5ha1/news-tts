@@ -2,9 +2,12 @@ import torch
 import os
 import asyncio
 import logging
+from dotenv import load_dotenv
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 from IndicTransToolkit.processor import IndicProcessor
 
+
+load_dotenv()
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
