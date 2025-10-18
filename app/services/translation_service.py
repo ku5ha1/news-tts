@@ -45,12 +45,13 @@ class TranslationService:
             try:
                 logger.info("Loading EN->Indic model immediately...")
                 self.en_indic_tokenizer = AutoTokenizer.from_pretrained(
-                    MODEL_NAMES["en_indic"], trust_remote_code=True
+                    MODEL_NAMES["en_indic"], trust_remote_code=True, token=os.getenv("HUGGINGFACE_ACCESSTOKEN")
                 )
                 self.en_indic_model = AutoModelForSeq2SeqLM.from_pretrained(
                     MODEL_NAMES["en_indic"], 
                     trust_remote_code=True, 
                     torch_dtype=torch.float16 if self.device.type == "cuda" else torch.float32,
+                    token=os.getenv("HUGGINGFACE_ACCESSTOKEN"),
                     # attn_implementation="flash_attention_2" if self.device.type == "cuda" else None
                 ).to(self.device)
                 self.en_indic_model.eval()
@@ -68,12 +69,13 @@ class TranslationService:
             try:
                 logger.info("Loading Indic->EN model immediately...")
                 self.indic_en_tokenizer = AutoTokenizer.from_pretrained(
-                    MODEL_NAMES["indic_en"], trust_remote_code=True
+                    MODEL_NAMES["indic_en"], trust_remote_code=True, token=os.getenv("HUGGINGFACE_ACCESSTOKEN")
                 )
                 self.indic_en_model = AutoModelForSeq2SeqLM.from_pretrained(
                     MODEL_NAMES["indic_en"], 
                     trust_remote_code=True, 
-                    torch_dtype=torch.float16 if self.device.type == "cuda" else torch.float32
+                    torch_dtype=torch.float16 if self.device.type == "cuda" else torch.float32,
+                    token=os.getenv("HUGGINGFACE_ACCESSTOKEN")
                 ).to(self.device)
                 self.indic_en_model.eval()
                 logger.info("Indic->EN model loaded successfully")
