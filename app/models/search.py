@@ -7,6 +7,7 @@ class SearchRequest(BaseModel):
     query: str = Field(..., description="Search query text", min_length=1, max_length=500)
     top: Optional[int] = Field(default=10, description="Number of results to return", ge=1, le=50)
     filters: Optional[Dict[str, Any]] = Field(default=None, description="Additional filters for search")
+    vector_weight: Optional[float] = Field(default=None, description="Weight for vector component in hybrid search (e.g., 2.5-4.0)")
 
 class SearchResult(BaseModel):
     """Individual search result model"""

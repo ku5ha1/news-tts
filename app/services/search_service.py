@@ -237,7 +237,9 @@ class SearchService:
                     resp = requests.post(url, headers=headers, json=payload)
                     resp.raise_for_status()
                     data = resp.json()
-                    embeddings.extend([item["embedding"] for item in data["data"]])
+                    raw_embeddings = [item["embedding"] for item in data["data"]]
+                    # Optional query/doc normalization can be applied at search-time; keep raw here
+                    embeddings.extend(raw_embeddings)
                     break  # success
                 except requests.exceptions.HTTPError as e:
                     if resp.status_code == 429:
@@ -366,23 +368,49 @@ class SearchService:
             logger.error(f"Failed to process magazine {magazine_id}: {e}")
             return False
     
-    def search_documents(self, query: str, top: int = 10) -> List[Dict[str, Any]]:
+    def search_documents(self, query: str, top: int = 10, filters: Optional[Dict[str, Any]] = None, vector_weight: Optional[float] = None) -> List[Dict[str, Any]]:
         """Search documents using semantic and vector search"""
         try:
             # Generate query embedding
             query_embeddings = self.generate_embeddings([query])
             query_vector = query_embeddings[0]
             
-            results = self.search_client.search(
-                search_text=query,
-                vector_queries=[VectorizedQuery(vector=query_vector, fields="contentVector")],
-                semantic_configuration_name="semanticConfig",
-                highlight_fields="content",
-                highlight_pre_tag="<mark>",
-                highlight_post_tag="</mark>",
-                top=top,
-                include_total_count=True
-            )
+            vector_query = VectorizedQuery(vector=query_vector, fields="contentVector")
+            if vector_weight is not None:
+                try:
+                    # Some SDK versions support weight on vector queries
+                    vector_query.weight = float(vector_weight)
+                except Exception:
+                    pass
+
+            search_kwargs: Dict[str, Any] = {
+                "search_text": query,
+                "vector_queries": [vector_query],
+                "semantic_configuration_name": "semanticConfig",
+                "highlight_fields": "content",
+                "highlight_pre_tag": "<mark>",
+                "highlight_post_tag": "</mark>",
+                "top": top,
+                "include_total_count": True,
+            }
+
+            # Apply pre-filters if provided (e.g., published_year, published_month, edition_number)
+            if filters:
+                # Build OData filter string from simple equality filters
+                clauses = []
+                for key, value in filters.items():
+                    if value is None:
+                        continue
+                    # Support int and string equality
+                    if isinstance(value, int):
+                        clauses.append(f"{key} eq {value}")
+                    else:
+                        safe_val = str(value).replace("'", "''")
+                        clauses.append(f"{key} eq '{safe_val}'")
+                if clauses:
+                    search_kwargs["filter"] = " and ".join(clauses)
+
+            results = self.search_client.search(**search_kwargs)
             
             search_results = []
             for result in results:
