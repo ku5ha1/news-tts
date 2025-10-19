@@ -2,6 +2,8 @@ import os
 import json
 import time
 import logging
+import math
+import difflib
 from typing import List, Dict, Any, Optional
 from azure.storage.blob import BlobServiceClient
 from azure.ai.documentintelligence import DocumentIntelligenceClient
@@ -374,14 +376,21 @@ class SearchService:
             # Generate query embedding
             query_embeddings = self.generate_embeddings([query])
             query_vector = query_embeddings[0]
+            # L2-normalize query vector for stable cosine-like behavior
+            try:
+                norm = math.sqrt(sum(x * x for x in query_vector)) or 1.0
+                query_vector = [x / norm for x in query_vector]
+            except Exception:
+                pass
             
             vector_query = VectorizedQuery(vector=query_vector, fields="contentVector")
-            if vector_weight is not None:
-                try:
-                    # Some SDK versions support weight on vector queries
-                    vector_query.weight = float(vector_weight)
-                except Exception:
-                    pass
+            # Enforce default vector weight = 4.0 regardless of client input
+            effective_weight = 4.0
+            try:
+                # Some SDK versions support weight on vector queries
+                vector_query.weight = float(effective_weight)
+            except Exception:
+                pass
 
             search_kwargs: Dict[str, Any] = {
                 "search_text": query,
@@ -410,9 +419,15 @@ class SearchService:
                 if clauses:
                     search_kwargs["filter"] = " and ".join(clauses)
 
+            t0 = time.time()
             results = self.search_client.search(**search_kwargs)
+            t_search = (time.time() - t0) * 1000.0
             
+            dedup_start = time.time()
             search_results = []
+            # Lightweight result-time dedup within same magazine_id
+            per_mag_seen: Dict[str, List[str]] = {}
+            dedup_skipped = 0
             for result in results:
                 # Extract highlighted content snippets
                 highlights = result.get("@search.highlights", {})
@@ -425,6 +440,27 @@ class SearchService:
                     # Fallback: truncate content to 500 chars
                     full_content = result.get("content", "")
                     content = full_content[:500] + "..." if len(full_content) > 500 else full_content
+
+                # Dedup logic: collapse near-identical chunks from the same magazine
+                magazine_id = result.get("magazine_id", "")
+                cleaned = content.lower().replace("<mark>", "").replace("</mark>", "").strip()
+                is_duplicate = False
+                if magazine_id:
+                    bucket = per_mag_seen.setdefault(magazine_id, [])
+                    for seen_text in bucket:
+                        # Use quick similarity check
+                        if cleaned and seen_text:
+                            ratio = difflib.SequenceMatcher(a=cleaned, b=seen_text).ratio()
+                            if ratio >= 0.9:
+                                is_duplicate = True
+                                break
+                    if not is_duplicate and cleaned:
+                        # Keep a limited memory of seen texts per magazine
+                        if len(per_mag_seen[magazine_id]) < 20:
+                            per_mag_seen[magazine_id].append(cleaned)
+                if is_duplicate:
+                    dedup_skipped += 1
+                    continue
                 
                 search_results.append({
                     "id": result["id"],
@@ -440,6 +476,8 @@ class SearchService:
                     "score": result.get("@search.score", 0)
                 })
             
+            t_dedup = (time.time() - dedup_start) * 1000.0
+            logger.info(f"[SEARCH] vector_weight={effective_weight} results={len(search_results)} dedup_skipped={dedup_skipped} t_search_ms={t_search:.1f} t_dedup_ms={t_dedup:.1f}")
             return search_results
             
         except Exception as e:
