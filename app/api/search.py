@@ -44,7 +44,9 @@ async def search_documents(
         # Perform search
         search_results = search_service.search_documents(
             query=request.query,
-            top=request.top
+            top=request.top,
+            filters=request.filters or {},
+            vector_weight=request.vector_weight
         )
         
         # Convert to response format
