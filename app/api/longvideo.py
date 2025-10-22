@@ -177,14 +177,14 @@ async def create_long_video(
             raise HTTPException(status_code=400, detail="Thumbnail URL cannot be empty")
         if not payload.video_url.strip():
             raise HTTPException(status_code=400, detail="Video URL cannot be empty")
-        if not payload.category.strip():
-            raise HTTPException(status_code=400, detail="Category cannot be empty")
+        # if not payload.category.strip():
+        #     raise HTTPException(status_code=400, detail="Category cannot be empty")
 
         # Validate category ObjectId
-        try:
-            category_object_id = ObjectId(payload.category)
-        except Exception:
-            raise HTTPException(status_code=400, detail="Invalid category ID format")
+        # try:
+        #     category_object_id = ObjectId(payload.category)
+        # except Exception:
+        #     raise HTTPException(status_code=400, detail="Invalid category ID format")
 
         # Validate Topics ObjectId if provided
         topics_object_id = None
@@ -241,7 +241,7 @@ async def create_long_video(
             "description": payload.description,
             "thumbnail": payload.thumbnail,
             "video_url": payload.video_url,
-            "category": category_object_id,
+            # "category": category_object_id,
             "magazineType": payload.magazineType,
             "newsType": payload.newsType,
             "Topics": topics_object_id,
@@ -459,11 +459,11 @@ async def update_long_video(
         if payload.video_url is not None:
             updates["video_url"] = payload.video_url
             
-        if payload.category is not None:
-            try:
-                updates["category"] = ObjectId(payload.category)
-            except Exception:
-                raise HTTPException(status_code=400, detail="Invalid category ID format")
+        # if payload.category is not None:
+        #     try:
+        #         updates["category"] = ObjectId(payload.category)
+        #     except Exception:
+        #         raise HTTPException(status_code=400, detail="Invalid category ID format")
                 
         if payload.magazineType is not None:
             updates["magazineType"] = payload.magazineType
