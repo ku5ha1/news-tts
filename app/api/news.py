@@ -401,7 +401,7 @@ async def create_news(
             "title": payload.title,
             "description": payload.description,
             "newsImage": payload.newsImage,
-            "category": ObjectId(payload.category) if isinstance(payload.category, str) and len(payload.category) == 24 else payload.category,
+            # "category": ObjectId(payload.category) if isinstance(payload.category, str) and len(payload.category) == 24 else payload.category,
             "author": payload.author,
             "publishedAt": datetime.utcnow(),
             "magazineType": payload.magazineType,
@@ -585,8 +585,8 @@ async def update_news(
                 raise HTTPException(status_code=500, detail=f"Translation failed for title/description update: {str(e)}")
             
         # Handle other field updates
-        if payload.category is not None:
-            updates["category"] = ObjectId(payload.category) if isinstance(payload.category, str) and len(payload.category) == 24 else payload.category
+        # if payload.category is not None:
+        #     updates["category"] = ObjectId(payload.category) if isinstance(payload.category, str) and len(payload.category) == 24 else payload.category
             
         if payload.author is not None:
             updates["author"] = payload.author

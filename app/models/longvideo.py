@@ -7,7 +7,7 @@ class LongVideoCreateRequest(BaseModel):
     description: str
     thumbnail: str
     video_url: str
-    category: str 
+    # category: str 
     magazineType: Literal["magazine", "magazine2"]
     newsType: Literal["statenews", "districtnews", "specialnews"]
     Topics: Optional[str] = None 
@@ -21,7 +21,7 @@ class LongVideoUpdateRequest(BaseModel):
     description: Optional[str] = None
     thumbnail: Optional[str] = None
     video_url: Optional[str] = None
-    category: Optional[str] = None
+    # category: Optional[str] = None 
     magazineType: Optional[Literal["magazine", "magazine2"]] = None
     newsType: Optional[Literal["statenews", "districtnews", "specialnews"]] = None
     Topics: Optional[str] = None

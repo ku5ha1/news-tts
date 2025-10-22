@@ -7,7 +7,7 @@ class ShortVideoCreateRequest(BaseModel):
     description: str
     thumbnail: str
     video_url: str
-    category: str  # ObjectId as string
+    # category: str  # ObjectId as string
     magazineType: Literal["magazine", "magazine2"]
     newsType: Literal["statenews", "districtnews", "specialnews"]
 
@@ -20,7 +20,7 @@ class ShortVideoUpdateRequest(BaseModel):
     description: Optional[str] = None
     thumbnail: Optional[str] = None
     video_url: Optional[str] = None
-    category: Optional[str] = None
+    # category: Optional[str] = None
     magazineType: Optional[Literal["magazine", "magazine2"]] = None
     newsType: Optional[Literal["statenews", "districtnews", "specialnews"]] = None
     status: Optional[Literal["pending", "approved", "rejected"]] = None

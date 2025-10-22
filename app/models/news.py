@@ -5,7 +5,7 @@ from datetime import datetime
 class NewsCreateRequest(BaseModel):
     title: str
     description: str
-    category: str
+    # category: str
     author: str
     newsImage: str
     publishedAt: datetime
@@ -15,7 +15,7 @@ class NewsCreateRequest(BaseModel):
 class NewsUpdateRequest(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
-    category: Optional[str] = None
+    # category: Optional[str] = None
     author: Optional[str] = None
     newsImage: Optional[str] = None
     magazineType: Optional[Literal["magazine", "magazine2"]] = None
