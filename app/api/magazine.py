@@ -498,34 +498,42 @@ async def update_magazine(
             if magazineThumbnail is not None:
                 validate_file(magazineThumbnail, "thumbnail")
                 
-                # Store old thumbnail URL for deletion
-                old_thumbnail_url = existing_magazine.get("magazineThumbnail")
-                if old_thumbnail_url:
-                    old_files_to_delete.append(("thumbnail", old_thumbnail_url))
-                
-                # Upload new thumbnail
+                # Upload new thumbnail first to get the new URL
                 thumbnail_url = azure_service.upload_magazine_file(
                     magazineThumbnail, current_published_year, current_published_month, magazine_id, "thumbnail"
                 )
                 uploaded_files.append(("thumbnail", thumbnail_url))
                 updates["magazineThumbnail"] = thumbnail_url
+                
+                # Only delete old thumbnail if the blob path is different
+                old_thumbnail_url = existing_magazine.get("magazineThumbnail")
+                if old_thumbnail_url and old_thumbnail_url != thumbnail_url:
+                    old_files_to_delete.append(("thumbnail", old_thumbnail_url))
+                    logger.info(f"[MAGAZINE-UPDATE] thumbnail path changed, will delete old file")
+                else:
+                    logger.info(f"[MAGAZINE-UPDATE] thumbnail path unchanged, using overwrite")
+                
                 logger.info(f"[MAGAZINE-UPDATE] thumbnail uploaded magazine_id={magazine_id}")
             
             # Handle PDF update
             if magazinePdf is not None:
                 validate_file(magazinePdf, "pdf")
                 
-                # Store old PDF URL for deletion
-                old_pdf_url = existing_magazine.get("magazinePdf")
-                if old_pdf_url:
-                    old_files_to_delete.append(("pdf", old_pdf_url))
-                
-                # Upload new PDF
+                # Upload new PDF first to get the new URL
                 pdf_url = azure_service.upload_magazine_file(
                     magazinePdf, current_published_year, current_published_month, magazine_id, "pdf"
                 )
                 uploaded_files.append(("pdf", pdf_url))
                 updates["magazinePdf"] = pdf_url
+                
+                # Only delete old PDF if the blob path is different
+                old_pdf_url = existing_magazine.get("magazinePdf")
+                if old_pdf_url and old_pdf_url != pdf_url:
+                    old_files_to_delete.append(("pdf", old_pdf_url))
+                    logger.info(f"[MAGAZINE-UPDATE] PDF path changed, will delete old file")
+                else:
+                    logger.info(f"[MAGAZINE-UPDATE] PDF path unchanged, using overwrite")
+                
                 logger.info(f"[MAGAZINE-UPDATE] PDF uploaded magazine_id={magazine_id}")
             
             # Handle title and description updates with translation
