@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_TRANSLATION_TIMEOUT = 90.0
 DEFAULT_PAGE_SIZE = 20
-MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
+MAX_FILE_SIZE = 4 * 1024 * 1024  # 4MB
 ALLOWED_IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'}
 ALLOWED_PDF_EXTENSIONS = {'.pdf'}
 
@@ -479,12 +479,14 @@ async def update_magazine(
         uploaded_files = []  # Track uploaded files for cleanup on failure
         old_files_to_delete = []  # Track old files to delete
         
+        # Initialize azure service early for cleanup operations
+        azure_service = get_azure_blob_service()
+        
         try:
             # Prepare update fields
             updates = {}
             
             # Handle file uploads first
-            azure_service = get_azure_blob_service()
             if not azure_service.is_connected():
                 raise HTTPException(status_code=503, detail="Azure Blob Storage is not available")
             
@@ -665,7 +667,6 @@ async def update_magazine(
             logger.error(f"[MAGAZINE-UPDATE] failed magazine_id={magazine_id} error={e}")
             # Clean up any uploaded files on error
             try:
-                azure_service = get_azure_blob_service()
                 for file_type, url in uploaded_files:
                     try:
                         azure_service.delete_magazine_file(url)
