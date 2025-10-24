@@ -13,8 +13,8 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 MODEL_NAMES = {
-    "en_indic": "ai4bharat/indictrans2-en-indic-1B",
-    "indic_en": "ai4bharat/indictrans2-indic-en-1B",
+    "en_indic": "ai4bharat/indictrans2-en-indic-dist-200M",
+    "indic_en": "ai4bharat/indictrans2-indic-en-dist-200M",
 }
 
 class TranslationService:
