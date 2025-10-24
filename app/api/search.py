@@ -58,6 +58,8 @@ async def search_documents(
                 description=result["description"],
                 content=result["content"],
                 magazine_id=result["magazine_id"],
+                page_number=result["page_number"],  # NEW FIELD
+                chunk_position=result.get("chunk_position", 0),  # NEW FIELD
                 published_year=result["published_year"],
                 published_month=result["published_month"],
                 edition_number=result["edition_number"],

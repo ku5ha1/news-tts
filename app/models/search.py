@@ -7,7 +7,7 @@ class SearchRequest(BaseModel):
     query: str = Field(..., description="Search query text", min_length=1, max_length=500)
     top: Optional[int] = Field(default=10, description="Number of results to return", ge=1, le=50)
     filters: Optional[Dict[str, Any]] = Field(default=None, description="Additional filters for search")
-    vector_weight: Optional[float] = Field(default=None, description="Weight for vector component in hybrid search (e.g., 2.5-4.0)")
+    vector_weight: Optional[float] = Field(default=4.0, description="Weight for vector component in hybrid search (e.g., 2.5-6.0)")
 
 class SearchResult(BaseModel):
     """Individual search result model"""
@@ -16,6 +16,8 @@ class SearchResult(BaseModel):
     description: str = Field(..., description="Description of the magazine")
     content: str = Field(..., description="Relevant content snippet")
     magazine_id: str = Field(..., description="ID of the source magazine")
+    page_number: int = Field(..., description="Page number where the content is located")  # NEW FIELD
+    chunk_position: Optional[int] = Field(default=0, description="Position of chunk within the page")  # NEW FIELD
     published_year: int = Field(..., description="Year of publication")
     published_month: str = Field(..., description="Month of publication")
     edition_number: str = Field(..., description="Edition number")

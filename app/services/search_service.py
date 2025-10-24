@@ -123,7 +123,7 @@ class SearchService:
             return default
     
     def create_search_index(self) -> bool:
-        """Create or update the search index"""
+        """Create or update the search index with enhanced schema"""
         try:
             fields = [
                 SimpleField(name="id", type=SearchFieldDataType.String, key=True),
@@ -131,6 +131,8 @@ class SearchService:
                 SearchableField(name="description", type=SearchFieldDataType.String),
                 SearchableField(name="content", type=SearchFieldDataType.String),
                 SimpleField(name="magazine_id", type=SearchFieldDataType.String),
+                SimpleField(name="page_number", type=SearchFieldDataType.Int32),  # NEW FIELD
+                SimpleField(name="chunk_position", type=SearchFieldDataType.Int32),  # NEW FIELD
                 SimpleField(name="published_year", type=SearchFieldDataType.Int32),
                 SimpleField(name="published_month", type=SearchFieldDataType.String),
                 SimpleField(name="edition_number", type=SearchFieldDataType.String),
@@ -259,7 +261,7 @@ class SearchService:
         return embeddings
     
     def chunk_text(self, text: str, chunk_size: int = 1000, overlap: int = 200) -> List[str]:
-        """Split text into semantic chunks"""
+        """Split text into semantic chunks (legacy method for compatibility)"""
         if not text.strip():
             return []
         
@@ -273,8 +275,49 @@ class SearchService:
         
         return chunks
     
+    def chunk_text_semantically(self, text: str, chunk_size: int = 800, overlap: int = 150) -> List[str]:
+        """Enhanced chunking that preserves semantic context"""
+        if not text.strip():
+            return []
+        
+        # Split by sentences first to preserve semantic boundaries
+        sentences = self._split_into_sentences(text)
+        chunks = []
+        current_chunk = []
+        current_length = 0
+        
+        for sentence in sentences:
+            sentence_length = len(sentence.split())
+            
+            # If adding this sentence exceeds chunk size, finalize current chunk
+            if current_length + sentence_length > chunk_size and current_chunk:
+                chunk_text = " ".join(current_chunk)
+                chunks.append(chunk_text.strip())
+                
+                # Start new chunk with overlap from previous chunk
+                overlap_sentences = current_chunk[-2:] if len(current_chunk) >= 2 else current_chunk
+                current_chunk = overlap_sentences + [sentence]
+                current_length = sum(len(s.split()) for s in current_chunk)
+            else:
+                current_chunk.append(sentence)
+                current_length += sentence_length
+        
+        # Add final chunk
+        if current_chunk:
+            chunk_text = " ".join(current_chunk)
+            chunks.append(chunk_text.strip())
+        
+        return chunks
+    
+    def _split_into_sentences(self, text: str) -> List[str]:
+        """Split text into sentences using simple rules"""
+        import re
+        # Simple sentence splitting - can be enhanced with NLTK if needed
+        sentences = re.split(r'[.!?]+', text)
+        return [s.strip() for s in sentences if s.strip()]
+    
     def process_magazine2_pdf(self, magazine_data: Dict[str, Any]) -> bool:
-        """Process a single Magazine2 PDF through the complete pipeline"""
+        """Process a single Magazine2 PDF through the enhanced pipeline with page-aware chunking"""
         try:
             magazine_id = str(magazine_data["_id"])  # Convert ObjectId to string
             pdf_url = magazine_data["magazinePdf"]
@@ -290,71 +333,24 @@ class SearchService:
                 # Fallback to just filename if URL structure is unexpected
                 blob_name = url_parts[-1]
             
-            # Step 1: OCR
-            ocr_result = self.ocr_pdf_from_blob(blob_name)
+            # Step 1: Get OCR result (from existing JSON or fresh OCR)
+            ocr_result = self._get_or_create_ocr_result(blob_name)
             if not ocr_result:
                 return False
             
-            # Step 2: Save OCR result
-            self.save_ocr_result(blob_name, ocr_result)
+            # Step 2: Apply NEW page-aware chunking logic
+            search_documents = self._create_search_documents_with_pages(
+                ocr_result, magazine_data
+            )
             
-            # Step 3: Extract and chunk text
-            all_text = " ".join([page["content"] for page in ocr_result["pages"]])
-            chunks = self.chunk_text(all_text)
-            
-            if not chunks:
-                logger.warning(f"No text chunks found for {magazine_id}")
+            if not search_documents:
+                logger.warning(f"No search documents created for {magazine_id}")
                 return False
             
-            # Step 4: Generate embeddings
-            embeddings = self.generate_embeddings(chunks)
-            
-            # Step 5: Create search documents
-            search_documents = []
-            for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
-                # Use helper functions to ensure all fields are primitives
-                title = self._first_or_str(magazine_data.get("title"))
-                description = self._first_or_str(magazine_data.get("description"))
-                published_month = self._first_or_str(magazine_data.get("publishedMonth"))
-                edition_number = self._first_or_str(magazine_data.get("editionNumber"))
-                thumbnail_url = self._first_or_str(magazine_data.get("magazineThumbnail"))
-                published_year = self._first_or_int(magazine_data.get("publishedYear"))
-                
-                doc = {
-                    "id": f"{magazine_id}_chunk_{i}",
-                    "title": title,
-                    "description": description,
-                    "content": chunk,
-                    "magazine_id": magazine_id,
-                    "published_year": published_year,
-                    "published_month": published_month,
-                    "edition_number": edition_number,
-                    "pdf_url": pdf_url,
-                    "thumbnail_url": thumbnail_url,
-                    "contentVector": embedding
-                }
-                search_documents.append(doc)
-            
-            # Step 6: Upload to search index
-            # Debug: Log the complete document structure to identify array fields
-            if search_documents:
-                import json
-                sample_doc = search_documents[0]
-                logger.info("=== COMPLETE DOCUMENT STRUCTURE ===")
-                for key, value in sample_doc.items():
-                    logger.info(f"Field '{key}': type={type(value)}, value={value if not isinstance(value, list) else f'[array with {len(value)} items]'}")
-                logger.info("=== END DOCUMENT STRUCTURE ===")
-            
-            # Ensure proper serialization for vector fields
-            # Convert embeddings to proper format for Azure Search
-            for doc in search_documents:
-                if 'contentVector' in doc and isinstance(doc['contentVector'], list):
-                    # Ensure all values are floats and properly formatted
-                    doc['contentVector'] = [float(x) for x in doc['contentVector']]
-            
-            # Additional validation: ensure all fields are properly serialized
+            # Step 3: Upload to search index with enhanced validation
             try:
                 # Test serialization before uploading
+                import json
                 json.dumps(search_documents[0])
                 logger.info("Document serialization test passed")
             except Exception as e:
@@ -363,19 +359,109 @@ class SearchService:
             
             self.search_client.upload_documents(documents=search_documents)
             
-            logger.info(f"Successfully processed {magazine_id}: {len(chunks)} chunks indexed")
+            logger.info(f"Successfully processed {magazine_id}: {len(search_documents)} chunks indexed with page numbers")
             return True
             
         except Exception as e:
             logger.error(f"Failed to process magazine {magazine_id}: {e}")
             return False
     
-    def search_documents(self, query: str, top: int = 10, filters: Optional[Dict[str, Any]] = None, vector_weight: Optional[float] = None) -> List[Dict[str, Any]]:
-        """Search documents using semantic and vector search"""
+    def _get_or_create_ocr_result(self, blob_name: str) -> Optional[Dict[str, Any]]:
+        """Get existing OCR result or create new one"""
         try:
+            # Try to load existing JSON first
+            json_path = blob_name.replace(".pdf", ".json")
+            
+            try:
+                json_blob = self.output_container.download_blob(json_path)
+                json_data = json_blob.readall().decode('utf-8')
+                ocr_result = json.loads(json_data)
+                logger.info(f"Using existing OCR result: {json_path}")
+                return ocr_result
+            except Exception:
+                # JSON doesn't exist or is corrupted, do fresh OCR
+                logger.info(f"No existing OCR result found, performing fresh OCR: {blob_name}")
+                pass
+            
+            # Perform fresh OCR
+            ocr_result = self.ocr_pdf_from_blob(blob_name)
+            if ocr_result:
+                # Save the new OCR result
+                self.save_ocr_result(blob_name, ocr_result)
+            
+            return ocr_result
+            
+        except Exception as e:
+            logger.error(f"Failed to get/create OCR result for {blob_name}: {e}")
+            return None
+    
+    def _create_search_documents_with_pages(self, ocr_result: Dict[str, Any], magazine_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Create search documents using NEW page-aware chunking logic"""
+        try:
+            magazine_id = str(magazine_data["_id"])
+            
+            # Extract metadata using helper functions
+            title = self._first_or_str(magazine_data.get("title"))
+            description = self._first_or_str(magazine_data.get("description"))
+            published_month = self._first_or_str(magazine_data.get("publishedMonth"))
+            edition_number = self._first_or_str(magazine_data.get("editionNumber"))
+            thumbnail_url = self._first_or_str(magazine_data.get("magazineThumbnail"))
+            published_year = self._first_or_int(magazine_data.get("publishedYear"))
+            pdf_url = magazine_data["magazinePdf"]
+            
+            search_documents = []
+            
+            # NEW: Process each page separately to maintain page numbers
+            for page in ocr_result["pages"]:
+                page_number = page["page_number"]
+                page_content = page["content"]
+                
+                if not page_content.strip():
+                    continue  # Skip empty pages
+                    
+                # Apply NEW semantic chunking to this page
+                page_chunks = self.chunk_text_semantically(page_content)
+                
+                if page_chunks:
+                    # Generate embeddings for this page's chunks
+                    page_embeddings = self.generate_embeddings(page_chunks)
+                    
+                    for chunk_index, (chunk, embedding) in enumerate(zip(page_chunks, page_embeddings)):
+                        doc = {
+                            "id": f"{magazine_id}_page_{page_number}_chunk_{chunk_index}",  # NEW ID format
+                            "title": title,
+                            "description": description,
+                            "content": chunk,
+                            "magazine_id": magazine_id,
+                            "page_number": page_number,  # NEW FIELD
+                            "chunk_position": chunk_index,  # NEW FIELD
+                            "published_year": published_year,
+                            "published_month": published_month,
+                            "edition_number": edition_number,
+                            "pdf_url": pdf_url,
+                            "thumbnail_url": thumbnail_url,
+                            "contentVector": [float(x) for x in embedding]  # Ensure float format
+                        }
+                        search_documents.append(doc)
+            
+            logger.info(f"Created {len(search_documents)} search documents with page information")
+            return search_documents
+            
+        except Exception as e:
+            logger.error(f"Failed to create search documents: {e}")
+            return []
+    
+    def search_documents(self, query: str, top: int = 10, filters: Optional[Dict[str, Any]] = None, vector_weight: Optional[float] = None) -> List[Dict[str, Any]]:
+        """Enhanced search with improved scoring and page number support"""
+        try:
+            # Preprocess query for better matching
+            processed_query = self._preprocess_query(query)
+            expanded_query = self._expand_query(processed_query)
+            
             # Generate query embedding
             query_embeddings = self.generate_embeddings([query])
             query_vector = query_embeddings[0]
+            
             # L2-normalize query vector for stable cosine-like behavior
             try:
                 norm = math.sqrt(sum(x * x for x in query_vector)) or 1.0
@@ -384,33 +470,32 @@ class SearchService:
                 pass
             
             vector_query = VectorizedQuery(vector=query_vector, fields="contentVector")
-            # Enforce default vector weight = 4.0 regardless of client input
-            effective_weight = 4.0
+            
+            # Dynamic vector weight based on query type
+            effective_weight = self._calculate_vector_weight(query, vector_weight)
+            
             try:
-                # Some SDK versions support weight on vector queries
                 vector_query.weight = float(effective_weight)
             except Exception:
                 pass
 
             search_kwargs: Dict[str, Any] = {
-                "search_text": query,
+                "search_text": expanded_query,  # Use expanded query for better recall
                 "vector_queries": [vector_query],
                 "semantic_configuration_name": "semanticConfig",
                 "highlight_fields": "content",
                 "highlight_pre_tag": "<mark>",
                 "highlight_post_tag": "</mark>",
-                "top": top,
+                "top": top * 2,  # Get more results for re-ranking
                 "include_total_count": True,
             }
 
-            # Apply pre-filters if provided (e.g., published_year, published_month, edition_number)
+            # Apply filters
             if filters:
-                # Build OData filter string from simple equality filters
                 clauses = []
                 for key, value in filters.items():
                     if value is None:
                         continue
-                    # Support int and string equality
                     if isinstance(value, int):
                         clauses.append(f"{key} eq {value}")
                     else:
@@ -423,66 +508,244 @@ class SearchService:
             results = self.search_client.search(**search_kwargs)
             t_search = (time.time() - t0) * 1000.0
             
-            dedup_start = time.time()
-            search_results = []
-            # Lightweight result-time dedup within same magazine_id
-            per_mag_seen: Dict[str, List[str]] = {}
-            dedup_skipped = 0
-            for result in results:
-                # Extract highlighted content snippets
-                highlights = result.get("@search.highlights", {})
-                highlighted_content = highlights.get("content", [])
-                
-                # Use highlighted snippets if available, otherwise fallback to truncated content
-                if highlighted_content:
-                    content = " ... ".join(highlighted_content)
-                else:
-                    # Fallback: truncate content to 500 chars
-                    full_content = result.get("content", "")
-                    content = full_content[:500] + "..." if len(full_content) > 500 else full_content
-
-                # Dedup logic: collapse near-identical chunks from the same magazine
-                magazine_id = result.get("magazine_id", "")
-                cleaned = content.lower().replace("<mark>", "").replace("</mark>", "").strip()
-                is_duplicate = False
-                if magazine_id:
-                    bucket = per_mag_seen.setdefault(magazine_id, [])
-                    for seen_text in bucket:
-                        # Use quick similarity check
-                        if cleaned and seen_text:
-                            ratio = difflib.SequenceMatcher(a=cleaned, b=seen_text).ratio()
-                            if ratio >= 0.9:
-                                is_duplicate = True
-                                break
-                    if not is_duplicate and cleaned:
-                        # Keep a limited memory of seen texts per magazine
-                        if len(per_mag_seen[magazine_id]) < 20:
-                            per_mag_seen[magazine_id].append(cleaned)
-                if is_duplicate:
-                    dedup_skipped += 1
-                    continue
-                
-                search_results.append({
-                    "id": result["id"],
-                    "title": result.get("title", ""),
-                    "description": result.get("description", ""),
-                    "content": content,
-                    "magazine_id": result.get("magazine_id", ""),
-                    "published_year": result.get("published_year", 0),
-                    "published_month": result.get("published_month", ""),
-                    "edition_number": result.get("edition_number", ""),
-                    "pdf_url": result.get("pdf_url", ""),
-                    "thumbnail_url": result.get("thumbnail_url", ""),
-                    "score": result.get("@search.score", 0)
-                })
+            # Enhanced result processing with re-ranking
+            processed_results = self._process_and_rerank_results(
+                results, query, processed_query
+            )
             
-            t_dedup = (time.time() - dedup_start) * 1000.0
-            logger.info(f"[SEARCH] vector_weight={effective_weight} results={len(search_results)} dedup_skipped={dedup_skipped} t_search_ms={t_search:.1f} t_dedup_ms={t_dedup:.1f}")
-            return search_results
+            # Apply enhanced deduplication
+            deduplicated_results = self._enhanced_deduplication(processed_results)
+            
+            # Return top results after re-ranking
+            final_results = deduplicated_results[:top]
+            
+            logger.info(f"[ENHANCED_SEARCH] query='{query}' vector_weight={effective_weight} results={len(final_results)} t_search_ms={t_search:.1f}")
+            return final_results
             
         except Exception as e:
             logger.error(f"Search failed: {e}")
             return []
+    
+    def _preprocess_query(self, query: str) -> str:
+        """Preprocess query for better matching"""
+        query = query.strip().lower()
+        # Remove extra spaces
+        query = " ".join(query.split())
+        return query
+    
+    def _expand_query(self, query: str) -> str:
+        """Expand query with synonyms and related terms"""
+        # Simple query expansion - can be enhanced with domain-specific synonyms
+        expansions = {
+            "bridge": "bridge infrastructure crossing construction",
+            "temple": "temple shrine religious architecture",
+            "festival": "festival celebration cultural event",
+            "government": "government administration policy"
+        }
+        
+        words = query.split()
+        expanded_words = []
+        
+        for word in words:
+            expanded_words.append(word)
+            if word in expansions:
+                expanded_words.extend(expansions[word].split())
+        
+        return " ".join(expanded_words)
+    
+    def _calculate_vector_weight(self, query: str, provided_weight: Optional[float]) -> float:
+        """Calculate dynamic vector weight based on query characteristics"""
+        if provided_weight is not None:
+            return provided_weight
+        
+        # Analyze query to determine optimal vector weight
+        query_lower = query.lower()
+        
+        # Infrastructure/technical queries benefit from higher vector weight
+        if any(term in query_lower for term in ["bridge", "infrastructure", "construction", "engineering"]):
+            return 6.0
+        
+        # General queries use balanced weight
+        if any(term in query_lower for term in ["karnataka", "bangalore", "government"]):
+            return 4.0
+        
+        # Tourism/cultural queries use lower vector weight (favor exact matches)
+        if any(term in query_lower for term in ["festival", "temple", "culture", "tourism"]):
+            return 3.0
+        
+        return 4.0  # Default
+    
+    def _process_and_rerank_results(self, results, original_query: str, processed_query: str) -> List[Dict[str, Any]]:
+        """Process results and apply custom re-ranking"""
+        processed_results = []
+        
+        for result in results:
+            # Extract highlighted content
+            highlights = result.get("@search.highlights", {})
+            highlighted_content = highlights.get("content", [])
+            
+            if highlighted_content:
+                content = " ... ".join(highlighted_content)
+            else:
+                full_content = result.get("content", "")
+                content = full_content[:500] + "..." if len(full_content) > 500 else full_content
+
+            # Calculate enhanced relevance score
+            base_score = result.get("@search.score", 0)
+            enhanced_score = self._calculate_enhanced_score(
+                result, original_query, processed_query, base_score
+            )
+
+            processed_result = {
+                "id": result["id"],
+                "title": result.get("title", ""),
+                "description": result.get("description", ""),
+                "content": content,
+                "magazine_id": result.get("magazine_id", ""),
+                "page_number": result.get("page_number", 1),  # NEW FIELD
+                "chunk_position": result.get("chunk_position", 0),  # NEW FIELD
+                "published_year": result.get("published_year", 0),
+                "published_month": result.get("published_month", ""),
+                "edition_number": result.get("edition_number", ""),
+                "pdf_url": result.get("pdf_url", ""),
+                "thumbnail_url": result.get("thumbnail_url", ""),
+                "score": enhanced_score,
+                "original_score": base_score
+            }
+            processed_results.append(processed_result)
+        
+        # Sort by enhanced score
+        processed_results.sort(key=lambda x: x["score"], reverse=True)
+        return processed_results
+    
+    def _calculate_enhanced_score(self, result: Dict, query: str, processed_query: str, base_score: float) -> float:
+        """Calculate enhanced relevance score using multiple factors"""
+        content = result.get("content", "").lower()
+        title = result.get("title", "").lower()
+        query_terms = processed_query.split()
+        
+        # Factor 1: Base search score (40%)
+        score = base_score * 0.4
+        
+        # Factor 2: Term frequency in content (25%)
+        term_freq_score = 0
+        for term in query_terms:
+            term_freq_score += content.count(term) * 0.1
+        score += min(term_freq_score, 1.0) * 0.25
+        
+        # Factor 3: Term proximity (20%)
+        proximity_score = self._calculate_proximity_score(content, query_terms)
+        score += proximity_score * 0.2
+        
+        # Factor 4: Title relevance (10%)
+        title_score = 0
+        for term in query_terms:
+            if term in title:
+                title_score += 0.2
+        score += min(title_score, 1.0) * 0.1
+        
+        # Factor 5: Content type relevance (5%)
+        content_type_score = self._calculate_content_type_score(content, query)
+        score += content_type_score * 0.05
+        
+        return score
+    
+    def _calculate_proximity_score(self, content: str, query_terms: List[str]) -> float:
+        """Calculate score based on proximity of query terms"""
+        if len(query_terms) < 2:
+            return 1.0
+        
+        words = content.split()
+        positions = {}
+        
+        # Find positions of each query term
+        for term in query_terms:
+            positions[term] = [i for i, word in enumerate(words) if term in word.lower()]
+        
+        if not all(positions.values()):
+            return 0.0
+        
+        # Calculate minimum distance between terms
+        min_distance = float('inf')
+        for i, term1 in enumerate(query_terms):
+            for j, term2 in enumerate(query_terms[i+1:], i+1):
+                for pos1 in positions[term1]:
+                    for pos2 in positions[term2]:
+                        distance = abs(pos1 - pos2)
+                        min_distance = min(min_distance, distance)
+        
+        # Convert distance to score (closer = higher score)
+        if min_distance == float('inf'):
+            return 0.0
+        
+        return max(0, 1.0 - (min_distance / 50.0))  # Normalize to 0-1
+    
+    def _calculate_content_type_score(self, content: str, query: str) -> float:
+        """Boost score based on content type relevance to query"""
+        query_lower = query.lower()
+        content_lower = content.lower()
+        
+        # Infrastructure queries should boost infrastructure content
+        if "bridge" in query_lower or "infrastructure" in query_lower:
+            if any(term in content_lower for term in ["construction", "engineering", "infrastructure", "project"]):
+                return 1.0
+            if any(term in content_lower for term in ["playground", "game", "children"]):
+                return 0.2  # Penalize playground equipment for infrastructure queries
+        
+        return 0.5  # Neutral score
+    
+    def _enhanced_deduplication(self, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Enhanced deduplication using improved similarity detection"""
+        if len(results) <= 1:
+            return results
+        
+        # Group by magazine_id first
+        magazine_groups = {}
+        for result in results:
+            mag_id = result["magazine_id"]
+            if mag_id not in magazine_groups:
+                magazine_groups[mag_id] = []
+            magazine_groups[mag_id].append(result)
+        
+        deduplicated = []
+        
+        for mag_id, mag_results in magazine_groups.items():
+            if len(mag_results) == 1:
+                deduplicated.extend(mag_results)
+                continue
+            
+            # For multiple results from same magazine, keep diverse ones
+            kept_results = [mag_results[0]]  # Always keep highest scoring
+            
+            for candidate in mag_results[1:]:
+                is_duplicate = False
+                candidate_content = candidate["content"].lower().replace("<mark>", "").replace("</mark>", "")
+                
+                for kept in kept_results:
+                    kept_content = kept["content"].lower().replace("<mark>", "").replace("</mark>", "")
+                    
+                    # Use improved similarity detection
+                    similarity = self._calculate_text_similarity(candidate_content, kept_content)
+                    
+                    if similarity > 0.85:  # Threshold for considering duplicate
+                        is_duplicate = True
+                        break
+                
+                if not is_duplicate:
+                    kept_results.append(candidate)
+                    
+                # Limit results per magazine
+                if len(kept_results) >= 3:
+                    break
+            
+            deduplicated.extend(kept_results)
+        
+        return deduplicated
+    
+    def _calculate_text_similarity(self, text1: str, text2: str) -> float:
+        """Calculate similarity between two texts"""
+        import difflib
+        return difflib.SequenceMatcher(a=text1, b=text2).ratio()
     
     def get_processed_files(self) -> List[str]:
         """Get list of already processed files"""
