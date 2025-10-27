@@ -839,3 +839,81 @@ class DBService:
         except Exception as e:
             logger.error(f"[MongoDB] Delete staticpage error for {staticpage_id}: {str(e)}", exc_info=True)
             return False
+
+    # LatestNotification methods
+    async def insert_latestnotification(self, data: dict) -> bool:
+        """Insert a new latest notification document."""
+        try:
+            collection = self.db["latestnotifications"]
+            result = await collection.insert_one(data)
+            logger.info(f"[MongoDB] LatestNotification inserted: {result.inserted_id}")
+            return True
+        except Exception as e:
+            logger.error(f"[MongoDB] Insert latestnotification error: {str(e)}", exc_info=True)
+            return False
+
+    async def get_latestnotification_by_id(self, latestnotification_id: ObjectId) -> Optional[dict]:
+        """Get a latest notification by ID."""
+        try:
+            collection = self.db["latestnotifications"]
+            latestnotification = await collection.find_one({"_id": latestnotification_id})
+            if latestnotification:
+                logger.info(f"[MongoDB] LatestNotification found: {latestnotification_id}")
+                return latestnotification
+            else:
+                logger.warning(f"[MongoDB] LatestNotification not found: {latestnotification_id}")
+                return None
+        except Exception as e:
+            logger.error(f"[MongoDB] Get latestnotification error for {latestnotification_id}: {str(e)}", exc_info=True)
+            return None
+
+    async def get_latestnotifications_paginated(self, skip: int = 0, limit: int = 20) -> tuple[List[dict], int]:
+        """Get paginated latest notifications."""
+        try:
+            collection = self.db["latestnotifications"]
+            
+            # Get total count
+            total = await collection.count_documents({})
+            
+            # Get paginated results
+            cursor = collection.find({}).sort("createdAt", -1).skip(skip).limit(limit)
+            latestnotifications = await cursor.to_list(length=limit)
+            
+            logger.info(f"[MongoDB] LatestNotifications paginated: {len(latestnotifications)}/{total} (skip={skip}, limit={limit})")
+            return latestnotifications, total
+        except Exception as e:
+            logger.error(f"[MongoDB] Get latestnotifications paginated error: {str(e)}", exc_info=True)
+            return [], 0
+
+    async def update_latestnotification_fields(self, latestnotification_id: ObjectId, updates: dict) -> bool:
+        """Update specific fields of a latest notification."""
+        try:
+            collection = self.db["latestnotifications"]
+            result = await collection.update_one(
+                {"_id": latestnotification_id},
+                {"$set": updates}
+            )
+            if result.modified_count > 0:
+                logger.info(f"[MongoDB] LatestNotification updated: {latestnotification_id}")
+                return True
+            else:
+                logger.warning(f"[MongoDB] LatestNotification not found for update: {latestnotification_id}")
+                return False
+        except Exception as e:
+            logger.error(f"[MongoDB] Update latestnotification error for {latestnotification_id}: {str(e)}", exc_info=True)
+            return False
+
+    async def delete_latestnotification(self, latestnotification_id: ObjectId) -> bool:
+        """Delete a latest notification."""
+        try:
+            collection = self.db["latestnotifications"]
+            result = await collection.delete_one({"_id": latestnotification_id})
+            if result.deleted_count > 0:
+                logger.info(f"[MongoDB] LatestNotification deleted: {latestnotification_id}")
+                return True
+            else:
+                logger.warning(f"[MongoDB] LatestNotification not found for deletion: {latestnotification_id}")
+                return False
+        except Exception as e:
+            logger.error(f"[MongoDB] Delete latestnotification error for {latestnotification_id}: {str(e)}", exc_info=True)
+            return False
