@@ -7,8 +7,8 @@ import logging
 import asyncio
 from dotenv import load_dotenv
 from elevenlabs.client import ElevenLabs
+import httpx
 
-# Load environment variables
 load_dotenv()
 
 logger = logging.getLogger(__name__)
@@ -28,7 +28,12 @@ class TTSService:
             if not api_key:
                 raise RuntimeError("ELEVENLABS_API_KEY environment variable not set")
             
-            TTSService._elevenlabs_client = ElevenLabs(api_key=api_key)
+            import httpx
+
+            TTSService._elevenlabs_client = ElevenLabs(
+                api_key=api_key,
+                http_client=httpx.Client(timeout=120.0)  
+            )
             logger.info("[TTS] ElevenLabs client initialized")
 
         self.voice_mapping: Dict[str, str] = {
@@ -42,11 +47,9 @@ class TTSService:
         logger.info(f"[TTS] Starting ElevenLabs audio generation for {language}: '{text[:50]}...'")
         
         try:
-            # Get voice ID for language
             voice_id = self.voice_mapping.get(language, self.voice_mapping["en"])
             logger.info(f"[TTS] Using voice ID: {voice_id} for language: {language}")
             
-            # Generate audio using ElevenLabs with timeout
             try:
                 audio = TTSService._elevenlabs_client.text_to_speech.convert(
                     text=text,
@@ -60,13 +63,11 @@ class TTSService:
                     raise RuntimeError(f"TTS generation timeout for {language}: {str(e)}")
                 else:
                     raise
-            
-            # Create temporary file
+                
             temp_dir = "/tmp" if os.path.exists("/tmp") else "/app/tmp"
             os.makedirs(temp_dir, exist_ok=True)
             temp_path = Path(temp_dir) / f"audio_{language}_{uuid.uuid4().hex[:8]}.mp3"
-            
-            # Write audio data to file
+
             with open(temp_path, "wb") as audio_file:
                 for chunk in audio:
                     audio_file.write(chunk)
@@ -90,12 +91,10 @@ class TTSService:
         """Get audio duration in seconds (estimated for MP3)"""
         try:
             if file_path and os.path.exists(file_path):
-                # For MP3, estimate duration based on file size
-                # Rough estimate: 128kbps MP3 ≈ 16KB per second
                 file_size = os.path.getsize(file_path)
-                estimated_duration = file_size / (16 * 1024)  # 16KB per second
-                return max(1.0, estimated_duration)  # Minimum 1 second
-            return 3.5  # Default duration
+                estimated_duration = file_size / (16 * 1024)  
+                return max(1.0, estimated_duration) 
+            return 3.5  
         except Exception as e:
             logger.warning(f"[TTS] Could not estimate duration for {file_path}: {e}")
             return 3.0
@@ -105,7 +104,7 @@ class TTSService:
         try:
             if file_path and os.path.exists(file_path):
                 return os.path.getsize(file_path)
-            return 50000  # Default MP3 file size estimate
+            return 50000  
         except Exception as e:
             logger.warning(f"[TTS] Could not get file size for {file_path}: {e}")
             return 50000
