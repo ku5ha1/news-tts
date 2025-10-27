@@ -231,10 +231,8 @@ async def root():
 if __name__ == "__main__":
     import uvicorn
     import os
-    
-    # Configure workers based on available CPUs
-    # For 32 vCPU system, use 20 workers (leaves CPU for system processes)
-    num_workers = int(os.environ.get("UVICORN_WORKERS", "20"))
+
+    num_workers = 20
     print(f"Starting server with {num_workers} workers on {os.cpu_count()} CPU cores")
     
     # Check if SSL certificates exist
