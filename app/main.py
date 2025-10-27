@@ -231,6 +231,9 @@ async def root():
 if __name__ == "__main__":
     import uvicorn
     import os
+
+    num_workers = 20
+    print(f"Starting server with {num_workers} workers on {os.cpu_count()} CPU cores")
     
     # Check if SSL certificates exist
     ssl_cert_path = "/etc/letsencrypt/live/diprkarnataka.duckdns.org/fullchain.pem"
@@ -242,9 +245,15 @@ if __name__ == "__main__":
             "app.main:app", 
             host="0.0.0.0", 
             port=443,
+            workers=num_workers,
             ssl_keyfile=ssl_key_path,
             ssl_certfile=ssl_cert_path
         )
     else:
         print("SSL certificates not found, starting HTTP server on port 8080")
-        uvicorn.run("app.main:app", host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
+        uvicorn.run(
+            "app.main:app", 
+            host="0.0.0.0", 
+            port=int(os.environ.get("PORT", 8080)),
+            workers=num_workers
+        )
