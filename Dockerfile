@@ -53,7 +53,10 @@ ENV PORT=8080 \
     LOG_LEVEL=info \
     HF_HOME=/home/app/.cache/huggingface \
     HF_HUB_OFFLINE=0 \
-    TRUST_REMOTE_CODE=1
+    TRUST_REMOTE_CODE=1 \
+    AZURE_SPEECH_KEY="" \
+    AZURE_SPEECH_REGION="" \
+    AZURE_SPEECH_ENDPOINT=""
 
 EXPOSE ${PORT}
 ENTRYPOINT ["./entrypoint.sh"]
