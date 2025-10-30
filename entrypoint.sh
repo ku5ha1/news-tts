@@ -14,6 +14,9 @@ echo "Environment validation:"
 echo "  HF_HUB_OFFLINE: ${HF_HUB_OFFLINE:-not_set}"
 echo "  TRUST_REMOTE_CODE: ${TRUST_REMOTE_CODE:-not_set}"
 echo "  TRANSFORMERS_CACHE: ${TRANSFORMERS_CACHE:-not_set}"
+echo "  AZURE_SPEECH_KEY: ${AZURE_SPEECH_KEY:-not_set}"
+echo "  AZURE_SPEECH_REGION: ${AZURE_SPEECH_REGION:-not_set}"
+echo "  AZURE_SPEECH_ENDPOINT: ${AZURE_SPEECH_ENDPOINT:-not_set}"
 
 if [ "$(id -u)" -eq 0 ]; then
     echo "Running as root. Setting up pre-loaded models for app user."

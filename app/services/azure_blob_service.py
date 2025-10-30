@@ -105,6 +105,36 @@ class AzureBlobService:
             logger.error(f"[AzureBlob] Upload.failed path={file_path} lang={language} error={e}", exc_info=True)
             raise RuntimeError(f"Azure Blob upload failed: {e}")
 
+    def upload_audio_to_existing_url(self, file_path: str, existing_url: str) -> str:
+        """Overwrite an existing blob path with a new audio file.
+
+        existing_url must target this account and the audio container.
+        Returns the same URL when successful.
+        """
+        if not self.connected:
+            raise RuntimeError("Azure Blob Storage not connected")
+
+        if not file_path:
+            raise ValueError("No file path provided")
+
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"Audio file not found: {file_path}")
+
+        expected_prefix = f"https://{self.account_name}.blob.core.windows.net/{self.container_name}/"
+        if not existing_url.startswith(expected_prefix):
+            raise ValueError("URL does not point to the configured audio container")
+
+        blob_path = existing_url.replace(expected_prefix, "")
+
+        try:
+            blob_client = self.container_client.get_blob_client(blob_path)
+            with open(file_path, "rb") as data:
+                blob_client.upload_blob(data, overwrite=True)
+            return existing_url
+        except Exception as e:
+            logger.error(f"[AzureBlob] Overwrite failed for {blob_path}: {str(e)}", exc_info=True)
+            raise RuntimeError(f"Azure Blob overwrite failed: {e}")
+
     def delete_audio(self, file_url: str) -> bool:
         try:
             if not self.connected:
