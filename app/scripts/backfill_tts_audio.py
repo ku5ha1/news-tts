@@ -166,12 +166,23 @@ def backfill(
     coll = db[collection_name]
 
     # Count documents with empty audio fields (not missing, just empty)
-    missing_audio_query = {
-        "$or": [
-            {f"{LANG_KEY_MAP[lang]}.audio_description": ""}
-            for lang in langs
-        ]
-    }
+    # Query for documents with missing audio fields
+    # For Kannada regeneration, we want ALL documents that have Kannada content
+    if "kn" in langs and len(langs) == 1:
+        # Special case: if only Kannada is specified, get ALL documents with Kannada content
+        missing_audio_query = {
+            f"{LANG_KEY_MAP['kn']}.title": {"$exists": True, "$ne": ""},
+            f"{LANG_KEY_MAP['kn']}.description": {"$exists": True, "$ne": ""}
+        }
+        log.info("Kannada-only mode: Processing ALL documents with Kannada content for regeneration")
+    else:
+        # Normal mode: only documents with missing audio
+        missing_audio_query = {
+            "$or": [
+                {f"{LANG_KEY_MAP[lang]}.audio_description": ""}
+                for lang in langs
+            ]
+        }
     
     # Add resume condition if specified
     if resume_from:
@@ -185,7 +196,11 @@ def backfill(
     
     total_missing = coll.count_documents(missing_audio_query)
     total_docs = coll.count_documents({})
-    log.info(f"Found {total_missing} documents with missing audio out of {total_docs} total documents")
+    
+    if "kn" in langs and len(langs) == 1:
+        log.info(f"Kannada regeneration mode: Found {total_missing} documents with Kannada content out of {total_docs} total documents")
+    else:
+        log.info(f"Found {total_missing} documents with missing audio out of {total_docs} total documents")
     
     if limit:
         log.info(f"TESTING MODE: Processing only {limit} document(s)")
@@ -220,7 +235,8 @@ def backfill(
                 doc_id_str = str(doc_id)
 
                 # Skip if document doesn't have any missing audio for our target languages
-                if not _has_any_missing_audio(doc, langs):
+                # Exception: For Kannada-only mode, process all documents regardless
+                if not _has_any_missing_audio(doc, langs) and not ("kn" in langs and len(langs) == 1):
                     log.info(f"[{doc_id_str}] Skipping - no missing audio for target languages")
                     continue
 
@@ -229,8 +245,9 @@ def backfill(
 
                 for lang in langs:
                     try:
+                        # For Kannada-only mode, always regenerate even if audio exists
                         if not _needs_audio(doc, lang):
-                            if not force_overwrite:
+                            if not force_overwrite and not ("kn" in langs and len(langs) == 1):
                                 continue
 
                         text = _get_text_for_language(doc, lang)
@@ -274,7 +291,9 @@ def backfill(
 
                         # Upload to Azure
                         existing_url = ((doc.get(LANG_KEY_MAP[lang]) or {}).get("audio_description") or "").strip()
-                        if existing_url and force_overwrite:
+                        
+                        # For Kannada-only mode, always overwrite existing audio
+                        if existing_url and (force_overwrite or ("kn" in langs and len(langs) == 1)):
                             # Overwrite same blob path to keep URL stable
                             audio_url = existing_url
                             if not dry_run:
