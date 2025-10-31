@@ -10,7 +10,7 @@ class NewsCreateRequest(BaseModel):
     newsImage: str
     publishedAt: datetime
     magazineType: Literal["magazine", "magazine2"]
-    newsType: Literal["statenews", "districtnews", "specialnews"]
+    newsType: Literal["statenews", "districtnews", "specialnews", "articles"]
 
 class NewsUpdateRequest(BaseModel):
     title: Optional[str] = None
@@ -19,7 +19,7 @@ class NewsUpdateRequest(BaseModel):
     author: Optional[str] = None
     newsImage: Optional[str] = None
     magazineType: Optional[Literal["magazine", "magazine2"]] = None
-    newsType: Optional[Literal["statenews", "districtnews", "specialnews"]] = None
+    newsType: Optional[Literal["statenews", "districtnews", "specialnews", "articles"]] = None
     status: Optional[Literal["pending", "approved", "rejected"]] = None
     isLive: Optional[bool] = None
 
