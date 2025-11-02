@@ -18,17 +18,21 @@ def normalize_bucket_name(name: str) -> str:
 
 class FirebaseService:
     def __init__(self):
+<<<<<<< HEAD
         self.settings = settings
         self.bucket_name = normalize_bucket_name(self.settings.FIREBASE_STORAGE_BUCKET or "")
+=======
+        self.bucket_name = normalize_bucket_name(settings.FIREBASE_STORAGE_BUCKET or "")
+>>>>>>> 0f1b80f4a9e37b585911f0fe0f7c4e0bbec6734c
 
         try:
-            if not self.settings.FIREBASE_SERVICE_ACCOUNT_BASE64:
+            if not settings.FIREBASE_SERVICE_ACCOUNT_BASE64:
                 logger.warning("FIREBASE_SERVICE_ACCOUNT_BASE64 is missing - Firebase will be disabled")
                 self.connected = False
                 return
 
             service_account_info = json.loads(
-                base64.b64decode(self.settings.FIREBASE_SERVICE_ACCOUNT_BASE64).decode("utf-8")
+                base64.b64decode(settings.FIREBASE_SERVICE_ACCOUNT_BASE64).decode("utf-8")
             )
 
             cred = credentials.Certificate(service_account_info)

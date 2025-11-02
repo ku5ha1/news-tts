@@ -1,10 +1,11 @@
 # =========================
-# Single Stage Build (Optimized)
+# Single-Stage Build (No Model Preloading)
 # =========================
+
 FROM python:3.11-slim
 WORKDIR /app
 
-# 1. Install system dependencies
+# Install system dependencies
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         build-essential \
@@ -15,45 +16,47 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-# 2. Create the non-root 'app' user and group
+# Create the non-root 'app' user and group
 RUN groupadd -r app && useradd -r -g app -d /app -s /bin/bash app
 
-# 3. Copy requirements and install Python dependencies
+# Copy requirements and install Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt && \
     pip cache purge && \
     rm -rf /root/.cache/pip
 
-# 4. Copy application source code
+# Copy application source code
 COPY app /app/app
 
-# 5. Create app user's home directory and cache directory
-RUN mkdir -p /home/app/.cache/huggingface && \
-    echo "App user's HuggingFace cache directory created - will download at runtime"
+# Create app user's home directory
+RUN mkdir -p /home/app && \
+    echo "Models will be downloaded at runtime"
 
-# 6. Clean up build dependencies to reduce image size
+# Clean up build dependencies to reduce image size
 RUN apt-get autoremove -y build-essential git && \
     apt-get clean && \
     apt-get autoclean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-# 7. Set correct ownership for the 'app' user
-RUN chown -R app:app /app && \
-    chmod -R 755 /app
+# Set correct ownership for the 'app' user
+RUN chown -R app:app /app /home/app && \
+    chmod -R 755 /app /home/app
 
-# 8. Copy and set executable permissions for the entrypoint script
+# Copy and set executable permissions for the entrypoint script
 COPY entrypoint.sh .
 RUN chmod +x entrypoint.sh
 
-# 9. Set user to root (entrypoint will switch to 'app' user)
-USER root 
+# Set user to root (entrypoint will switch to 'app' user)
+USER root
 ENV PORT=8080 \
     PYTHONUNBUFFERED=1 \
     LOG_LEVEL=info \
     HF_HOME=/home/app/.cache/huggingface \
-    TRANSFORMERS_CACHE=/home/app/.cache/huggingface \
     HF_HUB_OFFLINE=0 \
-    TRUST_REMOTE_CODE=1
+    TRUST_REMOTE_CODE=1 \
+    AZURE_SPEECH_KEY="" \
+    AZURE_SPEECH_REGION="" \
+    AZURE_SPEECH_ENDPOINT=""
 
 EXPOSE ${PORT}
 ENTRYPOINT ["./entrypoint.sh"]

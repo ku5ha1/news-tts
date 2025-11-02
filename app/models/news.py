@@ -5,12 +5,23 @@ from datetime import datetime
 class NewsCreateRequest(BaseModel):
     title: str
     description: str
-    category: str
+    # category: str
     author: str
     newsImage: str
     publishedAt: datetime
     magazineType: Literal["magazine", "magazine2"]
-    newsType: Literal["statenews", "districtnews", "specialnews"]
+    newsType: Literal["statenews", "districtnews", "specialnews", "articles"]
+
+class NewsUpdateRequest(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    # category: Optional[str] = None
+    author: Optional[str] = None
+    newsImage: Optional[str] = None
+    magazineType: Optional[Literal["magazine", "magazine2"]] = None
+    newsType: Optional[Literal["statenews", "districtnews", "specialnews", "articles"]] = None
+    status: Optional[Literal["pending", "approved", "rejected"]] = None
+    isLive: Optional[bool] = None
 
 class TranslationData(BaseModel):
     title: str

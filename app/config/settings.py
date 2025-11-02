@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     AZURE_STORAGE_CONNECTION_STRING: Optional[str] = None
     AZURE_STORAGE_ACCESS_KEY: Optional[str] = None
     AZURE_STORAGE_AUDIOFIELD_CONTAINER: Optional[str] = None
+<<<<<<< HEAD
     
     # ElevenLabs TTS
     ELEVENLABS_API_KEY: Optional[str] = None
@@ -25,6 +26,18 @@ class Settings(BaseSettings):
     
     # Google Cloud Translate
     GOOGLE_TRANSLATE_API_KEY: Optional[str] = None
+=======
+    AZURE_STORAGE_MAGAZINE_CONTAINER: Optional[str] = None
+    AZURE_STORAGE_MAGAZINE2_CONTAINER: Optional[str] = None
+    
+    # AI Models
+    AI4BHARAT_MODELS_PATH: Optional[str] = None
+    ELEVENLABS_API_KEY: Optional[str] = None
+    ELEVENLABS_VOICE_ID: Optional[str] = None
+    
+    # Authentication
+    JWT_SECRET: Optional[str] = None
+>>>>>>> 0f1b80f4a9e37b585911f0fe0f7c4e0bbec6734c
     
     # Logging
     LOG_LEVEL: Optional[str] = None
@@ -57,7 +70,11 @@ class Settings(BaseSettings):
 
     class Config:
         env_file = ".env"
+<<<<<<< HEAD
         extra = "ignore"  # Ignore extra fields instead of raising errors
+=======
+        extra = "ignore"
+>>>>>>> 0f1b80f4a9e37b585911f0fe0f7c4e0bbec6734c
 
 # Create global settings instance
 settings = Settings()
