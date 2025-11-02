@@ -221,9 +221,6 @@ async def health():
 @app.get("/")
 async def root():
     return {
-        "message": "Lightweight Translation & TTS", 
-        "translation": "IndicTrans2 1B",
-        "tts": "ElevenLabs API",
         "docs": "/docs", 
         "health": "/health"
     }

@@ -1,6 +1,6 @@
 # News TTS Service
 
-FastAPI service for news translation (IndicTrans2) and text-to-speech (ElevenLabs)
+FastAPI service for news translation (IndicTrans2) and text-to-speech (Azure Speech)
 
 ## Quick start
 ```bash
