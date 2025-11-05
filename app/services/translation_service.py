@@ -472,7 +472,7 @@ class TranslationService:
         
         # Long text: chunk and translate concurrently
         logger.info(f"[Chunking] Text length {len(text)} chars, splitting into chunks...")
-        chunks = self._chunk_text_smart(text, chunk_size=1200, overlap=100)
+        chunks = self._chunk_text_smart(text, chunk_size=800, overlap=80)
         logger.info(f"[Chunking] Split into {len(chunks)} chunks")
         
         loop = asyncio.get_event_loop()
@@ -586,7 +586,14 @@ class TranslationService:
                     if len(description) > 1500:
                         # Long description: translate separately with chunking
                         logger.info(f"[Batch] Long description detected ({len(description)} chars), using chunking for {target_lang}")
-                        translated_title = await self._translate_text_with_chunking(title, source_lang, target_lang, True)
+                        # Translate title directly (no chunking needed for short titles)
+                        translated_title = await loop.run_in_executor(
+                            self.executor,
+                            self._translate_en_to_indic,
+                            title,
+                            target_lang
+                        )
+                        # Translate description with chunking
                         translated_description = await self._translate_text_with_chunking(description, source_lang, target_lang, True)
                     else:
                         # Short texts: batch translate together (2 texts in 1 model call)
@@ -625,7 +632,14 @@ class TranslationService:
                 # Check if description needs chunking
                 if len(description) > 1500:
                     logger.info(f"[Batch] Long description detected ({len(description)} chars), using chunking for English")
-                    english_title = await self._translate_text_with_chunking(title, source_lang, "english", False)
+                    # Translate title directly (no chunking needed for short titles)
+                    english_title = await loop.run_in_executor(
+                        self.executor,
+                        self._translate_indic_to_en,
+                        title,
+                        source_lang
+                    )
+                    # Translate description with chunking
                     english_description = await self._translate_text_with_chunking(description, source_lang, "english", False)
                 else:
                     texts = [title, description]
@@ -652,7 +666,14 @@ class TranslationService:
                 async def translate_english_to_target(target_lang: str):
                     if len(english_description) > 1500:
                         logger.info(f"[Batch] Long English description detected ({len(english_description)} chars), using chunking for {target_lang}")
-                        translated_title = await self._translate_text_with_chunking(english_title, "english", target_lang, True)
+                        # Translate title directly (no chunking needed for short titles)
+                        translated_title = await loop.run_in_executor(
+                            self.executor,
+                            self._translate_en_to_indic,
+                            english_title,
+                            target_lang
+                        )
+                        # Translate description with chunking
                         translated_description = await self._translate_text_with_chunking(english_description, "english", target_lang, True)
                     else:
                         texts = [english_title, english_description]
