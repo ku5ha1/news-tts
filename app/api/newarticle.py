@@ -235,8 +235,7 @@ async def create_new_article(
 @router.get("/list", response_model=NewArticleListResponse)
 async def list_new_articles(
     page: int = 1,
-    page_size: int = DEFAULT_PAGE_SIZE,
-    current_user: dict = Depends(get_current_user)
+    page_size: int = DEFAULT_PAGE_SIZE
 ):
     """List new articles with pagination."""
     try:
@@ -268,8 +267,7 @@ async def list_new_articles(
 
 @router.get("/{newarticle_id}", response_model=NewArticleResponse)
 async def get_new_article(
-    newarticle_id: str,
-    current_user: dict = Depends(get_current_user)
+    newarticle_id: str
 ):
     """Get a specific new article by ID."""
     try:
@@ -402,8 +400,7 @@ async def update_new_article(
 
 @router.delete("/{newarticle_id}")
 async def delete_new_article(
-    newarticle_id: str,
-    current_user: dict = Depends(get_current_user)
+    newarticle_id: str
 ):
     """Delete a new article."""
     try:
