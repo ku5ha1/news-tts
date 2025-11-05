@@ -24,9 +24,10 @@ class DynamicBatchQueue:
     
     def __init__(
         self,
-        batch_size: int = 4,
-        max_wait_ms: int = 50,
-        max_batch_chars: int = 3000
+        batch_size: int = 6,
+        max_wait_ms: int = 100,
+        max_batch_chars: int = 3000,
+        max_inflight_batches: int = 2,
     ):
         """
         Initialize dynamic batch queue.
@@ -39,10 +40,12 @@ class DynamicBatchQueue:
         self.batch_size = batch_size
         self.max_wait_ms = max_wait_ms
         self.max_batch_chars = max_batch_chars
+        self.max_inflight_batches = max(max_inflight_batches, 1)
         self.queue: List[BatchRequest] = []
         self.queue_lock = asyncio.Lock()
         self.processing = False
         self.batch_processor_task: Optional[asyncio.Task] = None
+        self.queue_capacity = self.batch_size * self.max_inflight_batches
         
     async def add_request(
         self,
@@ -65,24 +68,32 @@ class DynamicBatchQueue:
             future=future,
             timestamp=time.time()
         )
-        
+        immediate_execution = False
+
         async with self.queue_lock:
-            self.queue.append(request)
-            
-            # Start batch processor if not running
-            if not self.processing:
-                self.processing = True
-                self.batch_processor_task = asyncio.create_task(
-                    self._process_batches(translate_func)
+            if len(self.queue) >= self.queue_capacity:
+                logger.warning(
+                    "[BatchQueue] Queue saturated (%s/%s) - executing request inline",
+                    len(self.queue),
+                    self.queue_capacity,
                 )
-            
-            # Trigger immediate processing if batch is full
-            if len(self.queue) >= self.batch_size:
-                # Wake up the batch processor
-                pass
+                immediate_execution = True
+            else:
+                self.queue.append(request)
+
+                # Start batch processor if not running
+                if not self.processing:
+                    self.processing = True
+                    self.batch_processor_task = asyncio.create_task(
+                        self._process_batches(translate_func)
+                    )
         
         # Wait for result
         try:
+            if immediate_execution:
+                future.cancel()
+                result = await translate_func(title, description, source_lang)
+                return result
             result = await future
             return result
         except Exception as e:
@@ -193,9 +204,10 @@ def get_batch_queue(enabled: bool = True) -> Optional[DynamicBatchQueue]:
     global _dynamic_batch_queue
     if enabled and _dynamic_batch_queue is None:
         _dynamic_batch_queue = DynamicBatchQueue(
-            batch_size=4,
-            max_wait_ms=50,
-            max_batch_chars=3000
+            batch_size=6,
+            max_wait_ms=100,
+            max_batch_chars=3000,
+            max_inflight_batches=2,
         )
     return _dynamic_batch_queue if enabled else None
 

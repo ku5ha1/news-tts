@@ -256,6 +256,93 @@ async def _generate_audio_with_retry(text: str, language: str, max_retries: int 
                 raise RuntimeError(f"TTS generation failed after {max_retries + 1} attempts for {language}: {str(e)}")
 
 
+async def _translate_and_attach_translations(document_id: ObjectId, payload: NewsCreateRequest, source_lang: str):
+    """Background job: translate to all languages, update document, then generate TTS."""
+    try:
+        # Verify document exists
+        existing_doc = await get_db_service().get_news_by_id(document_id)
+        if not existing_doc:
+            logger.warning(f"[BG-TRANSLATE] Document not found, skipping translation doc={document_id}")
+            return
+
+        logger.info(f"[BG-TRANSLATE] Starting translation for doc={document_id} source_lang={source_lang}")
+
+        start_time = datetime.utcnow()
+        attempts = int(existing_doc.get("translationAttempts", 0) or 0) + 1
+
+        await get_db_service().update_news_fields(
+            document_id,
+            {
+                "translationStatus": "processing",
+                "translationAttempts": attempts,
+                "translationLastAttempt": start_time,
+                "translationError": "",
+                "last_updated": datetime.utcnow(),
+            },
+        )
+
+        # Perform translation (no timeout in background)
+        try:
+            translation_service = get_translation_service()
+            translations = await translation_service.translate_to_all_async(
+                payload.title,
+                payload.description,
+                source_lang
+            )
+            logger.info(f"[BG-TRANSLATE] Translation completed langs={list(translations.keys())} doc={document_id}")
+        except Exception as e:
+            logger.error(f"[BG-TRANSLATE] Translation failed for doc={document_id}: {e}")
+            await get_db_service().update_news_fields(
+                document_id,
+                {
+                    "translationStatus": "failed",
+                    "translationError": str(e)[:512],
+                    "translationAttempts": attempts,
+                    "last_updated": datetime.utcnow(),
+                },
+            )
+            # Don't crash, just log and return - document still has original text
+            return
+
+        # Update document with translations
+        updates = {
+            "hindi.title": translations.get("hindi", {}).get("title", payload.title),
+            "hindi.description": translations.get("hindi", {}).get("description", payload.description),
+            "kannada.title": translations.get("kannada", {}).get("title", payload.title),
+            "kannada.description": translations.get("kannada", {}).get("description", payload.description),
+            "English.title": translations.get("english", {}).get("title", payload.title),
+            "English.description": translations.get("english", {}).get("description", payload.description),
+            "last_updated": datetime.utcnow(),
+            "translationStatus": "completed",
+            "translationError": "",
+            "translationAttempts": attempts,
+            "translationCompletedAt": datetime.utcnow(),
+            "translationDurationSeconds": (datetime.utcnow() - start_time).total_seconds(),
+        }
+
+        ok = await get_db_service().update_news_fields(document_id, updates)
+        if not ok:
+            logger.error(f"[BG-TRANSLATE] Mongo update returned modified_count=0 for doc={document_id}")
+            return
+        else:
+            logger.info(f"[BG-TRANSLATE] Successfully updated document {document_id} with translations")
+
+        # Now generate TTS for all languages
+        logger.info(f"[BG-TRANSLATE] Starting TTS generation for doc={document_id}")
+        await _generate_and_attach_audio(document_id, payload, translations, source_lang)
+
+    except Exception as e:
+        logger.error(f"[BG-TRANSLATE] Unexpected background translation error for {document_id}: {e}")
+        await get_db_service().update_news_fields(
+            document_id,
+            {
+                "translationStatus": "failed",
+                "translationError": str(e)[:512],
+                "last_updated": datetime.utcnow(),
+            },
+        )
+
+
 async def _generate_and_attach_audio(document_id: ObjectId, payload: NewsCreateRequest, translations: dict, source_lang: str):
     """Background job: generate TTS sequentially, upload to Firebase, update Mongo doc."""
     try:
@@ -349,40 +436,13 @@ async def create_news(
     background_tasks: BackgroundTasks,
     current_user: dict = Depends(get_current_user)
 ):
-    """Create news doc; translation synchronous, TTS runs in background."""
+    """Create news doc immediately; translation and TTS run in background."""
     document_id = ObjectId()
     logger.info(f"[CREATE] start doc={document_id} user={current_user.get('email', 'unknown')}")
 
     try:
         source_lang = detect_language(payload.title + " " + payload.description)
         logger.info(f"[CREATE] detected_language={source_lang} doc={document_id}")
-
-        # Translation with timeout (no fallback)
-        try:
-            timeout_sec = float(os.getenv("TRANSLATION_PER_CALL_TIMEOUT", str(DEFAULT_TRANSLATION_TIMEOUT)))
-        except (ValueError, TypeError):
-            timeout_sec = DEFAULT_TRANSLATION_TIMEOUT
-
-        try:
-            translation_service = get_translation_service()
-            translations = await retry_translation_with_timeout(
-                translation_service,
-                payload.title,
-                payload.description,
-                source_lang,
-                timeout=timeout_sec,
-                max_retries=3
-            )
-            logger.info(f"[CREATE] translation.done langs={list(translations.keys())} doc={document_id}")
-        except asyncio.TimeoutError:
-            logger.error(f"[CREATE] translation timed out after {timeout_sec}s for doc={document_id}")
-            raise HTTPException(status_code=504, detail="Translation timed out")
-        except Exception as e:
-            logger.error(f"[CREATE] translation failed for doc={document_id}: {e}")
-            # Add specific guidance for IndicTrans2 errors
-            if "IndicTrans2" in str(e) or "Model" in str(e):
-                logger.error("This appears to be an IndicTrans2 model loading issue")
-            raise
 
         # Determine status and isLive based on user role
         user_role = current_user.get("role", "")
@@ -395,7 +455,8 @@ async def create_news(
             isLive = False
             logger.info(f"[CREATE] Non-admin user creating news - status=pending, isLive=False doc={document_id}")
 
-        # Create news document
+        # Create news document with original text and empty translations
+        # Translations will be filled in by background task
         news_document = {
             "_id": document_id,
             "title": payload.title,
@@ -415,30 +476,38 @@ async def create_news(
             "last_updated": datetime.utcnow(),
             "createdBy": ObjectId(current_user.get("_id")) if current_user.get("_id") else None,
             "status": status,
+            "translationStatus": "pending",
+            "translationAttempts": 0,
+            "translationError": "",
+            "translationLastAttempt": None,
+            "translationCompletedAt": None,
+            "translationDurationSeconds": 0.0,
             "hindi": {
-                "title": translations.get("hindi", {}).get("title", payload.title),
-                "description": translations.get("hindi", {}).get("description", payload.description),
+                "title": "",
+                "description": "",
                 "audio_description": "",
             },
             "kannada": {
-                "title": translations.get("kannada", {}).get("title", payload.title),
-                "description": translations.get("kannada", {}).get("description", payload.description),
+                "title": "",
+                "description": "",
                 "audio_description": "",
             },
             "English": {
-                "title": translations.get("english", {}).get("title", payload.title),
-                "description": translations.get("english", {}).get("description", payload.description),
+                "title": "",
+                "description": "",
                 "audio_description": "",
             },
         }
 
         # Insert into DB
         await asyncio.wait_for(get_db_service().insert_news(news_document), timeout=15.0)
+        logger.info(f"[CREATE] Document created successfully doc={document_id}")
 
-        # Schedule TTS in background
+        # Schedule translation in background (will also trigger TTS after completion)
         background_tasks.add_task(
-            _generate_and_attach_audio, document_id, payload, translations, source_lang
+            _translate_and_attach_translations, document_id, payload, source_lang
         )
+        logger.info(f"[CREATE] Background translation task scheduled doc={document_id}")
 
         response_doc = _to_extended_json(news_document)
         return NewsResponse(success=True, data=response_doc)
@@ -507,6 +576,7 @@ async def update_news(
                 except (ValueError, TypeError):
                     timeout_sec = DEFAULT_TRANSLATION_TIMEOUT
                 
+                translation_start = datetime.utcnow()
                 try:
                     translation_service = get_translation_service()
                     translations = await retry_translation_with_timeout(
@@ -553,6 +623,7 @@ async def update_news(
                     logger.info(f"[UPDATE] added original text as Hindi translation for source=hi")
                 
                 # Update translation fields
+                duration_seconds = (datetime.utcnow() - translation_start).total_seconds()
                 updates["hindi"] = {
                     "title": translations.get("hindi", {}).get("title", current_title),
                     "description": translations.get("hindi", {}).get("description", current_description),
@@ -568,6 +639,11 @@ async def update_news(
                     "description": translations.get("english", {}).get("description", current_description),
                     "audio_description": existing_news.get("English", {}).get("audio_description", "")
                 }
+                updates["translationStatus"] = "completed"
+                updates["translationError"] = ""
+                updates["translationLastAttempt"] = translation_start
+                updates["translationCompletedAt"] = datetime.utcnow()
+                updates["translationDurationSeconds"] = duration_seconds
                 
                 logger.info(f"[UPDATE] updated translations for title/description update")
                 
