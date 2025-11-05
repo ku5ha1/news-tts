@@ -109,14 +109,28 @@ async def lifespan(app: FastAPI):
         log.info(f"Settings AZURE_STORAGE_ACCOUNT_NAME: {'SET' if getattr(settings, 'AZURE_STORAGE_ACCOUNT_NAME', None) else 'NOT_SET'}")
         log.info("=== END DEBUG ===")
 
-        # Skip background model preloading for faster startup
-        # Models will be downloaded on first use
-        log.info("Skipping background model preload - models will download on first use")
         global _is_ready, _model_err
-        _is_ready = True  # Mark as ready immediately
+
+        # Warm translation workers during startup to avoid request-time stalls
+        try:
+            log.info("Warming translation workers (this may take a few minutes)...")
+            from app.services.translation_service import translation_service
+
+            warmup_ok = await translation_service.warmup()
+            if warmup_ok:
+                log.info("Translation workers warmed successfully")
+                _is_ready = True
+                _model_err = None
+            else:
+                log.warning("Translation warmup reported failure; service will run in degraded mode")
+                _is_ready = False
+                _model_err = "Translation warmup failed"
+        except Exception as warmup_error:
+            log.warning("Translation warmup failed: %s", warmup_error)
+            _is_ready = False
+            _model_err = f"Translation warmup failed: {warmup_error}"
 
         log.info("ElevenLabs TTS service ready - no warmup needed")
-        # _is_ready remains False until models are loaded
 
     except Exception as e:
         log.exception(f"Service initialization failed: {e}")
