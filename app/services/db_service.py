@@ -917,3 +917,81 @@ class DBService:
         except Exception as e:
             logger.error(f"[MongoDB] Delete latestnotification error for {latestnotification_id}: {str(e)}", exc_info=True)
             return False
+
+    # NewArticle methods
+    async def insert_newarticle(self, data: dict) -> bool:
+        """Insert a new article document."""
+        try:
+            collection = self.db["newarticles"]
+            result = await collection.insert_one(data)
+            logger.info(f"[MongoDB] NewArticle inserted: {result.inserted_id}")
+            return True
+        except Exception as e:
+            logger.error(f"[MongoDB] Insert newarticle error: {str(e)}", exc_info=True)
+            return False
+
+    async def get_newarticle_by_id(self, newarticle_id: ObjectId) -> Optional[dict]:
+        """Get a new article by ID."""
+        try:
+            collection = self.db["newarticles"]
+            newarticle = await collection.find_one({"_id": newarticle_id})
+            if newarticle:
+                logger.info(f"[MongoDB] NewArticle found: {newarticle_id}")
+                return newarticle
+            else:
+                logger.warning(f"[MongoDB] NewArticle not found: {newarticle_id}")
+                return None
+        except Exception as e:
+            logger.error(f"[MongoDB] Get newarticle error for {newarticle_id}: {str(e)}", exc_info=True)
+            return None
+
+    async def get_newarticles_paginated(self, skip: int = 0, limit: int = 20) -> tuple[List[dict], int]:
+        """Get paginated new articles."""
+        try:
+            collection = self.db["newarticles"]
+            
+            # Get total count
+            total = await collection.count_documents({})
+            
+            # Get paginated results
+            cursor = collection.find({}).sort("createdAt", -1).skip(skip).limit(limit)
+            newarticles = await cursor.to_list(length=limit)
+            
+            logger.info(f"[MongoDB] NewArticles paginated: {len(newarticles)}/{total} (skip={skip}, limit={limit})")
+            return newarticles, total
+        except Exception as e:
+            logger.error(f"[MongoDB] Get newarticles paginated error: {str(e)}", exc_info=True)
+            return [], 0
+
+    async def update_newarticle_fields(self, newarticle_id: ObjectId, updates: dict) -> bool:
+        """Update specific fields of a new article."""
+        try:
+            collection = self.db["newarticles"]
+            result = await collection.update_one(
+                {"_id": newarticle_id},
+                {"$set": updates}
+            )
+            if result.modified_count > 0:
+                logger.info(f"[MongoDB] NewArticle updated: {newarticle_id}")
+                return True
+            else:
+                logger.warning(f"[MongoDB] NewArticle not found for update: {newarticle_id}")
+                return False
+        except Exception as e:
+            logger.error(f"[MongoDB] Update newarticle error for {newarticle_id}: {str(e)}", exc_info=True)
+            return False
+
+    async def delete_newarticle(self, newarticle_id: ObjectId) -> bool:
+        """Delete a new article."""
+        try:
+            collection = self.db["newarticles"]
+            result = await collection.delete_one({"_id": newarticle_id})
+            if result.deleted_count > 0:
+                logger.info(f"[MongoDB] NewArticle deleted: {newarticle_id}")
+                return True
+            else:
+                logger.warning(f"[MongoDB] NewArticle not found for deletion: {newarticle_id}")
+                return False
+        except Exception as e:
+            logger.error(f"[MongoDB] Delete newarticle error for {newarticle_id}: {str(e)}", exc_info=True)
+            return False

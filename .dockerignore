@@ -23,6 +23,7 @@ wheels/
 
 # Virtual environments (if any local ones exist)
 venv/
+.venv/
 env/
 ENV/
 
@@ -81,3 +82,6 @@ LICENSE
 *.out
 *.so
 *.o
+
+
+*.md

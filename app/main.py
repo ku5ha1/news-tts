@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import news, category, longvideo, shortvideo, photo, magazine, magazine2, staticpage, search, latestnotification
+from app.api import news, category, longvideo, shortvideo, photo, magazine, magazine2, staticpage, search, latestnotification, newarticle
 from app.config.settings import settings
 import asyncio
 import logging
@@ -173,6 +173,7 @@ app.include_router(magazine.router, prefix="/api/magazines", tags=["magazines"])
 app.include_router(magazine2.router, prefix="/api/magazine2", tags=["magazine2"])
 app.include_router(staticpage.router, prefix="/api/staticpages", tags=["staticpages"])
 app.include_router(latestnotification.router, prefix="/api/latestnotifications", tags=["latestnotifications"])
+app.include_router(newarticle.router, prefix="/api/newarticles", tags=["newarticles"])
 app.include_router(search.router, tags=["search"])
 
 @app.get("/health")
@@ -221,39 +222,36 @@ async def health():
 @app.get("/")
 async def root():
     return {
-        "message": "Lightweight Translation & TTS", 
-        "translation": "IndicTrans2 1B",
-        "tts": "ElevenLabs API",
         "docs": "/docs", 
         "health": "/health"
     }
 
-if __name__ == "__main__":
-    import uvicorn
-    import os
+# if __name__ == "__main__":
+#     import uvicorn
+#     import os
 
-    num_workers = 25  
-    print(f"Starting server with {num_workers} workers on {os.cpu_count()} CPU cores")
+#     num_workers = 25  
+#     print(f"Starting server with {num_workers} workers on {os.cpu_count()} CPU cores")
     
-    # Check if SSL certificates exist
-    ssl_cert_path = "/etc/letsencrypt/live/diprkarnataka.duckdns.org/fullchain.pem"
-    ssl_key_path = "/etc/letsencrypt/live/diprkarnataka.duckdns.org/privkey.pem"
+#     # Check if SSL certificates exist
+#     ssl_cert_path = "/etc/letsencrypt/live/diprkarnataka.duckdns.org/fullchain.pem"
+#     ssl_key_path = "/etc/letsencrypt/live/diprkarnataka.duckdns.org/privkey.pem"
     
-    if os.path.exists(ssl_cert_path) and os.path.exists(ssl_key_path):
-        print("SSL certificates found, starting HTTPS server on port 443")
-        uvicorn.run(
-            "app.main:app", 
-            host="0.0.0.0", 
-            port=443,
-            workers=num_workers,
-            ssl_keyfile=ssl_key_path,
-            ssl_certfile=ssl_cert_path
-        )
-    else:
-        print("SSL certificates not found, starting HTTP server on port 8080")
-        uvicorn.run(
-            "app.main:app", 
-            host="0.0.0.0", 
-            port=int(os.environ.get("PORT", 8080)),
-            workers=num_workers
-        )
+#     if os.path.exists(ssl_cert_path) and os.path.exists(ssl_key_path):
+#         print("SSL certificates found, starting HTTPS server on port 443")
+#         uvicorn.run(
+#             "app.main:app", 
+#             host="0.0.0.0", 
+#             port=443,
+#             workers=num_workers,
+#             ssl_keyfile=ssl_key_path,
+#             ssl_certfile=ssl_cert_path
+#         )
+#     else:
+#         print("SSL certificates not found, starting HTTP server on port 8080")
+#         uvicorn.run(
+#             "app.main:app", 
+#             host="0.0.0.0", 
+#             port=int(os.environ.get("PORT", 8080)),
+#             workers=num_workers
+#         )
