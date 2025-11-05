@@ -46,7 +46,7 @@ async def retry_translation_with_timeout(
     description: str,
     source_lang: str,
     timeout: float = 90.0,
-    max_retries: int = 3
+    max_retries: int = 1
 ) -> dict:
     """
     Retry translation with adaptive timeout based on text length.
@@ -56,11 +56,15 @@ async def retry_translation_with_timeout(
     total_chars = len(title) + len(description)
     if total_chars > 2000:
         # Very long text with chunking: need much more time
-        # Each chunk takes ~10-15s, 5 chunks × 2 languages = 10 translations = 100-150s minimum
-        # Add buffer: base + (chars - 2000) / 100 * 5s per 100 chars (more generous)
-        adaptive_timeout = timeout + (total_chars - 2000) / 100 * 5  # 5s per 100 chars over 2000
-        adaptive_timeout = min(adaptive_timeout, 600.0)  # Cap at 10 minutes for very long texts
-        logger.info(f"[Timeout] Adaptive timeout: {adaptive_timeout:.1f}s for {total_chars} chars with chunking (base: {timeout}s)")
+        # Formula: base + (num_chunks × 25s per chunk × 2 languages) + buffer
+        # Chunk size is 1200 chars, so estimate number of chunks
+        num_chunks = max(1, (total_chars - 1500) // 1200 + 1)
+        # Each chunk takes ~20-25s, process in batches of 4 (parallel)
+        # Time = (num_chunks / 4) batches × 25s per batch × 2 languages + buffer
+        batch_time = ((num_chunks + 3) // 4) * 25  # Round up division for batches
+        adaptive_timeout = 60 + (batch_time * 2) + 30  # base + (batches × langs) + buffer
+        adaptive_timeout = min(adaptive_timeout, 300.0)  # Cap at 5 minutes
+        logger.info(f"[Timeout] Adaptive timeout: {adaptive_timeout:.1f}s for {total_chars} chars ({num_chunks} chunks, {(num_chunks+3)//4} batches) (base: {timeout}s)")
         timeout = adaptive_timeout
     elif total_chars > 1500:
         # Long text: moderate increase

@@ -472,7 +472,7 @@ class TranslationService:
         
         # Long text: chunk and translate concurrently
         logger.info(f"[Chunking] Text length {len(text)} chars, splitting into chunks...")
-        chunks = self._chunk_text_smart(text, chunk_size=800, overlap=150)
+        chunks = self._chunk_text_smart(text, chunk_size=1200, overlap=100)
         logger.info(f"[Chunking] Split into {len(chunks)} chunks")
         
         loop = asyncio.get_event_loop()
@@ -494,11 +494,20 @@ class TranslationService:
                     source_lang
                 )
         
-        # OPTIMIZATION: Process ALL chunks concurrently using all 4 vCPUs
-        # PyTorch releases GIL during inference, so ThreadPoolExecutor with 4 workers = true parallelism
-        # No semaphore needed here - executor already limits to 4 workers
-        # Process all chunks in parallel (executor will queue excess)
-        translated_chunks = await asyncio.gather(*[translate_chunk(chunk) for chunk in chunks])
+        # OPTIMIZATION: Process chunks in batches of 4 to match 4 vCPUs
+        # This ensures true parallel processing without overwhelming the executor
+        # Batch processing: [chunk1, chunk2, chunk3, chunk4] → [chunk5, ...] → etc.
+        async def translate_chunks_in_batches(chunks_list, batch_size=4):
+            results = []
+            for i in range(0, len(chunks_list), batch_size):
+                batch = chunks_list[i:i+batch_size]
+                logger.info(f"[Chunking] Processing batch {i//batch_size + 1}/{(len(chunks_list)-1)//batch_size + 1} ({len(batch)} chunks)")
+                batch_results = await asyncio.gather(*[translate_chunk(chunk) for chunk in batch])
+                results.extend(batch_results)
+            return results
+        
+        # Process all chunks in batches (4 at a time for 4 vCPUs)
+        translated_chunks = await translate_chunks_in_batches(chunks, batch_size=4)
         
         # Rejoin chunks (remove overlap duplicates)
         result = " ".join(translated_chunks)
