@@ -130,23 +130,32 @@ class TranslationService:
                 raise RuntimeError(f"Indic->EN model loading failed: {e}")
             
             # Initialize batch processing executor and configuration
-            # CRITICAL: Reduced workers to prevent memory/CPU overload on 4 vCPU VM
-            # With multiple Uvicorn workers, each process loads models separately
-            # ThreadPoolExecutor doesn't help much with GIL, so keep it minimal
+            # OPTIMIZATION FOR 4 vCPU/16GB VM:
+            # Use ThreadPoolExecutor with 4 workers (PyTorch releases GIL during inference)
+            # PyTorch's C++ backend releases GIL, so we get true parallelism for model inference
+            # Preprocessing/postprocessing may hold GIL briefly, but most time is in inference
             self.max_batch_chars = 3000  # Max characters per batch
             cpu_count = os.cpu_count() or 4
-            # Use 2 workers max - enough for batching without overwhelming CPU
-            # Each worker process already has models loaded, so we don't need many threads
+            
+            # Use ThreadPoolExecutor with 4 workers to match 4 vCPUs
+            # PyTorch releases GIL during model.generate() calls, enabling true parallelism
+            # CRITICAL: Set PyTorch to use 1 thread per worker to avoid thread contention
+            # Each worker = 1 CPU core, so PyTorch should use 1 thread per worker
+            torch.set_num_threads(1)  # Each worker uses 1 CPU core
+            torch.set_num_interop_threads(1)  # Inter-op threads also set to 1
+            
             self.executor = concurrent.futures.ThreadPoolExecutor(
-                max_workers=2,  # Reduced from 4 to prevent CPU competition
+                max_workers=4,  # Match 4 vCPUs exactly for maximum utilization
                 thread_name_prefix="translation"
             )
             
-            # Request throttling: Limit concurrent translations to prevent overload
-            # With 4 vCPU and CPU-bound inference, max 2 concurrent translations
+            # Request throttling: Allow 1-2 concurrent full translations
+            # Each translation can spawn 10+ chunks (5 chunks × 2 languages)
+            # With 4 workers, we can handle 1 full translation efficiently
+            # 2 concurrent translations = 20 chunks competing for 4 workers (acceptable)
             self._translation_semaphore = asyncio.Semaphore(2)
             
-            logger.info(f"[Translation] Batch processing initialized: {self.executor._max_workers} executor workers, max_batch_chars={self.max_batch_chars}, max_concurrent_translations=2")
+            logger.info(f"[Translation] Optimized for 4 vCPU/16GB VM: {self.executor._max_workers} executor workers, max_batch_chars={self.max_batch_chars}, max_concurrent_translations=2")
 
     def _normalize_lang_code(self, lang: str) -> str:
         """Normalize language codes from detection to internal format."""
@@ -485,13 +494,11 @@ class TranslationService:
                     source_lang
                 )
         
-        # Process max 4 chunks concurrently (one per vCPU)
-        semaphore = asyncio.Semaphore(4)
-        async def translate_with_limit(chunk: str):
-            async with semaphore:
-                return await translate_chunk(chunk)
-        
-        translated_chunks = await asyncio.gather(*[translate_with_limit(chunk) for chunk in chunks])
+        # OPTIMIZATION: Process ALL chunks concurrently using all 4 vCPUs
+        # PyTorch releases GIL during inference, so ThreadPoolExecutor with 4 workers = true parallelism
+        # No semaphore needed here - executor already limits to 4 workers
+        # Process all chunks in parallel (executor will queue excess)
+        translated_chunks = await asyncio.gather(*[translate_chunk(chunk) for chunk in chunks])
         
         # Rejoin chunks (remove overlap duplicates)
         result = " ".join(translated_chunks)

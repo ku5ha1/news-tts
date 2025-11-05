@@ -55,10 +55,12 @@ async def retry_translation_with_timeout(
     # Calculate adaptive timeout: base + extra time for long texts
     total_chars = len(title) + len(description)
     if total_chars > 2000:
-        # Very long text: increase timeout significantly (chunking takes time)
-        adaptive_timeout = timeout + (total_chars - 2000) / 100 * 2  # 2s per 100 chars over 2000
-        adaptive_timeout = min(adaptive_timeout, 300.0)  # Cap at 5 minutes
-        logger.info(f"[Timeout] Adaptive timeout: {adaptive_timeout:.1f}s for {total_chars} chars (base: {timeout}s)")
+        # Very long text with chunking: need much more time
+        # Each chunk takes ~10-15s, 5 chunks × 2 languages = 10 translations = 100-150s minimum
+        # Add buffer: base + (chars - 2000) / 100 * 5s per 100 chars (more generous)
+        adaptive_timeout = timeout + (total_chars - 2000) / 100 * 5  # 5s per 100 chars over 2000
+        adaptive_timeout = min(adaptive_timeout, 600.0)  # Cap at 10 minutes for very long texts
+        logger.info(f"[Timeout] Adaptive timeout: {adaptive_timeout:.1f}s for {total_chars} chars with chunking (base: {timeout}s)")
         timeout = adaptive_timeout
     elif total_chars > 1500:
         # Long text: moderate increase
