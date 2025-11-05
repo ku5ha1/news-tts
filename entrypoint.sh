@@ -90,9 +90,31 @@ if [ "$(id -u)" -eq 0 ]; then
     fi
     echo "Application files are accessible."
 
+    # Check SSL certificates as root (before switching users)
+    SSL_CERT_PATH="/etc/letsencrypt/live/diprkarnataka.duckdns.org/fullchain.pem"
+    SSL_KEY_PATH="/etc/letsencrypt/live/diprkarnataka.duckdns.org/privkey.pem"
+    
+    if [ -f "$SSL_CERT_PATH" ] && [ -f "$SSL_KEY_PATH" ]; then
+        echo "✅ SSL certificates found at: $SSL_CERT_PATH"
+        # Make certs readable by app user (if needed)
+        # Cert files should be readable, key should be readable by owner only
+        chmod 644 "$SSL_CERT_PATH" 2>/dev/null || true
+        chmod 644 "$SSL_KEY_PATH" 2>/dev/null || true
+        # Try to make them readable by app user group (if in same group)
+        chgrp "$APP_USER" "$SSL_CERT_PATH" 2>/dev/null || true
+        chgrp "$APP_USER" "$SSL_KEY_PATH" 2>/dev/null || true
+        export SSL_AVAILABLE="true"
+        echo "SSL certificates configured for app user"
+    else
+        echo "⚠️  SSL certificates not found at: $SSL_CERT_PATH"
+        echo "Will use HTTP server on port 8080"
+        export SSL_AVAILABLE="false"
+    fi
+
     echo "Switching to user $APP_USER and starting uvicorn..."
     echo "About to execute: su $APP_USER -c 'cd /app && python -m app.main'"
-    exec su "$APP_USER" -c "cd /app && echo 'Starting uvicorn with SSL support...' && python -m app.main"
+    # Pass SSL_AVAILABLE environment variable to the app user
+    exec su "$APP_USER" -c "cd /app && export SSL_AVAILABLE=\"$SSL_AVAILABLE\" && echo 'Starting uvicorn with SSL support...' && python -m app.main"
 
 fi
 
