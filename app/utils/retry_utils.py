@@ -56,15 +56,16 @@ async def retry_translation_with_timeout(
     total_chars = len(title) + len(description)
     if total_chars > 2000:
         # Very long text with chunking: need much more time
-        # Formula: base + (num_chunks × 25s per chunk × 2 languages) + buffer
-        # Chunk size is 1200 chars, so estimate number of chunks
-        num_chunks = max(1, (total_chars - 1500) // 1200 + 1)
-        # Each chunk takes ~20-25s, process in batches of 4 (parallel)
-        # Time = (num_chunks / 4) batches × 25s per batch × 2 languages + buffer
-        batch_time = ((num_chunks + 3) // 4) * 25  # Round up division for batches
-        adaptive_timeout = 60 + (batch_time * 2) + 30  # base + (batches × langs) + buffer
-        adaptive_timeout = min(adaptive_timeout, 300.0)  # Cap at 5 minutes
-        logger.info(f"[Timeout] Adaptive timeout: {adaptive_timeout:.1f}s for {total_chars} chars ({num_chunks} chunks, {(num_chunks+3)//4} batches) (base: {timeout}s)")
+        # Formula: base + (num_chunks × time_per_batch × 2 languages) + buffer
+        # Chunk size is 800 chars, so estimate number of chunks
+        num_chunks = max(1, (total_chars - 1500) // 800 + 1)
+        # Each batch takes ~35-40s on CPU (realistic measurement from logs)
+        # Process in batches of 4 (parallel on 4 vCPUs)
+        num_batches = (num_chunks + 3) // 4  # Round up division for batches
+        batch_time = num_batches * 40  # 40s per batch (realistic for CPU)
+        adaptive_timeout = 60 + (batch_time * 2) + 60  # base + (batches × langs) + larger buffer
+        adaptive_timeout = min(adaptive_timeout, 240.0)  # Cap at 4 minutes (increased from 300s)
+        logger.info(f"[Timeout] Adaptive timeout: {adaptive_timeout:.1f}s for {total_chars} chars ({num_chunks} chunks, {num_batches} batches) (base: {timeout}s)")
         timeout = adaptive_timeout
     elif total_chars > 1500:
         # Long text: moderate increase
