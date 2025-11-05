@@ -2,32 +2,20 @@ import os
 import uuid
 import logging
 from typing import Optional
-<<<<<<< HEAD
-from azure.storage.blob import BlobServiceClient, BlobClient
-=======
 from azure.storage.blob import BlobServiceClient, BlobClient, ContentSettings
 from fastapi import UploadFile
->>>>>>> 0f1b80f4a9e37b585911f0fe0f7c4e0bbec6734c
 from app.config.settings import settings
 
 logger = logging.getLogger(__name__)
 
 class AzureBlobService:
     def __init__(self):
-<<<<<<< HEAD
-        self.settings = settings
-        self.account_name = self.settings.AZURE_STORAGE_ACCOUNT_NAME
-        self.connection_string = self.settings.AZURE_STORAGE_CONNECTION_STRING
-        self.access_key = self.settings.AZURE_STORAGE_ACCESS_KEY
-        self.container_name = self.settings.AZURE_STORAGE_AUDIOFIELD_CONTAINER
-=======
         self.account_name = settings.AZURE_STORAGE_ACCOUNT_NAME
         self.connection_string = settings.AZURE_STORAGE_CONNECTION_STRING
         self.access_key = settings.AZURE_STORAGE_ACCESS_KEY
         self.container_name = settings.AZURE_STORAGE_AUDIOFIELD_CONTAINER
         self.magazine_container_name = settings.AZURE_STORAGE_MAGAZINE_CONTAINER
         self.magazine2_container_name = settings.AZURE_STORAGE_MAGAZINE2_CONTAINER
->>>>>>> 0f1b80f4a9e37b585911f0fe0f7c4e0bbec6734c
 
         try:
             if not self.account_name or not self.container_name:
@@ -51,11 +39,6 @@ class AzureBlobService:
             self.container_client = self.blob_service_client.get_container_client(self.container_name)
             self.container_client.get_container_properties()
             
-<<<<<<< HEAD
-            self.connected = True
-            logger.info(f"Azure Blob Storage initialized with account: {self.account_name}, container: {self.container_name}")
-
-=======
             # Initialize magazine container client
             self.magazine_container_client = self.blob_service_client.get_container_client(self.magazine_container_name)
             self.magazine_container_client.get_container_properties()
@@ -73,7 +56,6 @@ class AzureBlobService:
         except ConnectionError as e:
             logger.error(f"Azure Storage connection error: {str(e)}", exc_info=True)
             self.connected = False
->>>>>>> 0f1b80f4a9e37b585911f0fe0f7c4e0bbec6734c
         except Exception as e:
             logger.error(f"Azure Blob Storage initialization error: {str(e)}", exc_info=True)
             self.connected = False
@@ -113,21 +95,16 @@ class AzureBlobService:
             logger.info(f"[AzureBlob] Upload.complete url={public_url}")
             return public_url
             
-<<<<<<< HEAD
-=======
         except FileNotFoundError as e:
             logger.error(f"[AzureBlob] File not found: {str(e)}", exc_info=True)
             raise RuntimeError(f"Audio file not found: {str(e)}")
         except ConnectionError as e:
             logger.error(f"[AzureBlob] Connection error during upload: {str(e)}", exc_info=True)
             raise RuntimeError(f"Azure Storage connection failed: {str(e)}")
->>>>>>> 0f1b80f4a9e37b585911f0fe0f7c4e0bbec6734c
         except Exception as e:
             logger.error(f"[AzureBlob] Upload.failed path={file_path} lang={language} error={e}", exc_info=True)
             raise RuntimeError(f"Azure Blob upload failed: {e}")
 
-<<<<<<< HEAD
-=======
     def upload_audio_to_existing_url(self, file_path: str, existing_url: str) -> str:
         """Overwrite an existing blob path with a new audio file.
 
@@ -158,7 +135,6 @@ class AzureBlobService:
             logger.error(f"[AzureBlob] Overwrite failed for {blob_path}: {str(e)}", exc_info=True)
             raise RuntimeError(f"Azure Blob overwrite failed: {e}")
 
->>>>>>> 0f1b80f4a9e37b585911f0fe0f7c4e0bbec6734c
     def delete_audio(self, file_url: str) -> bool:
         try:
             if not self.connected:
@@ -184,8 +160,6 @@ class AzureBlobService:
     def is_connected(self) -> bool:
         return self.connected
 
-<<<<<<< HEAD
-=======
     def upload_magazine_file(self, file: UploadFile, published_year: str, published_month: str, magazine_id: str, file_type: str) -> str:
         logger.info(f"[AzureBlob] Magazine upload start: {file_type} for magazine {magazine_id}")
         
@@ -265,14 +239,11 @@ class AzureBlobService:
             logger.error(f"[AzureBlob] Magazine file delete error: {str(e)}")
             return False
 
->>>>>>> 0f1b80f4a9e37b585911f0fe0f7c4e0bbec6734c
     def get_container_url(self) -> str:
         """Get the base URL for the container"""
         if not self.connected:
             return ""
         return f"https://{self.account_name}.blob.core.windows.net/{self.container_name}"
-<<<<<<< HEAD
-=======
     
     def get_magazine_container_url(self) -> str:
         """Get the base URL for the magazine container"""
@@ -384,4 +355,3 @@ class AzureBlobService:
         if not self.connected:
             return ""
         return f"https://{self.account_name}.blob.core.windows.net/{self.magazine2_container_name}"
->>>>>>> 0f1b80f4a9e37b585911f0fe0f7c4e0bbec6734c

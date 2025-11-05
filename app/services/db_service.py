@@ -12,10 +12,6 @@ MAX_RETRIES = 2
 
 class DBService:
     def __init__(self):
-<<<<<<< HEAD
-        self.settings = settings
-=======
->>>>>>> 0f1b80f4a9e37b585911f0fe0f7c4e0bbec6734c
         self.connected = False
         self.client = None
         self.db = None

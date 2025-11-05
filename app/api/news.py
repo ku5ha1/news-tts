@@ -122,14 +122,6 @@ def get_azure_blob_service():
     if azure_blob_service is None:
         try:
             azure_blob_service = AzureBlobService()
-<<<<<<< HEAD
-        except Exception as e:
-            logger.error(f"Failed to initialize Azure Blob service: {e}")
-            raise HTTPException(
-                status_code=503, 
-                detail=f"Azure Blob service unavailable: {str(e)}"
-            )
-=======
         except ImportError as e:
             logger.error(f"Failed to import Azure Blob service: {e}")
             raise HTTPException(
@@ -148,7 +140,6 @@ def get_azure_blob_service():
                 status_code=503, 
                 detail=f"Azure Blob service unavailable: {str(e)}"
             )
->>>>>>> 0f1b80f4a9e37b585911f0fe0f7c4e0bbec6734c
     return azure_blob_service
 
 def get_db_service():
@@ -177,13 +168,9 @@ def get_db_service():
             )
     return db_service
 
-def get_google_translate_service():
-    """Lazy import of Google Translate service to avoid module-level failures."""
+def get_translation_service():
+    """Lazy import of translation service to avoid module-level failures."""
     try:
-<<<<<<< HEAD
-        from app.services.google_translate_service import google_translate_service
-        return google_translate_service
-=======
         from app.services.translation_service import translation_service
         return translation_service
     except ImportError as e:
@@ -198,12 +185,11 @@ def get_google_translate_service():
             status_code=503, 
             detail=f"Translation service unavailable: {str(e)}"
         )
->>>>>>> 0f1b80f4a9e37b585911f0fe0f7c4e0bbec6734c
     except Exception as e:
-        logger.error(f"Failed to import Google Translate service: {e}")
+        logger.error(f"Failed to import translation service: {e}")
         raise HTTPException(
             status_code=503, 
-            detail=f"Google Translate service unavailable: {str(e)}"
+            detail=f"Translation service unavailable: {str(e)}"
         )
 
 def _to_extended_json(document: dict) -> dict:
@@ -298,11 +284,6 @@ async def _generate_and_attach_audio(document_id: ObjectId, payload: NewsCreateR
 
                 logger.info(f"[BG-TTS] Generating audio for {lang} (doc={document_id})")
 
-<<<<<<< HEAD
-                # Run blocking TTS & Azure Blob calls in separate threads
-                audio_file = await asyncio.to_thread(get_tts_service().generate_audio, text, lang)
-                audio_url = await asyncio.to_thread(get_azure_blob_service().upload_audio, audio_file, lang, str(document_id))
-=======
                 # Generate audio with retry logic and timeout
                 audio_file = await _generate_audio_with_retry(text, lang)
                 
@@ -311,7 +292,6 @@ async def _generate_and_attach_audio(document_id: ObjectId, payload: NewsCreateR
                     asyncio.to_thread(get_azure_blob_service().upload_audio, audio_file, lang, str(document_id)),
                     timeout=30.0  # 30 second timeout for upload
                 )
->>>>>>> 0f1b80f4a9e37b585911f0fe0f7c4e0bbec6734c
 
                 # Update DB fields
                 field = f"{lang_map[lang]}.audio_description"
@@ -384,12 +364,6 @@ async def create_news(
             timeout_sec = DEFAULT_TRANSLATION_TIMEOUT
 
         try:
-<<<<<<< HEAD
-            google_translate_service = get_google_translate_service()
-            translations = await asyncio.wait_for(
-                google_translate_service.translate_to_all_async(payload.title, payload.description, source_lang),
-                timeout=timeout_sec
-=======
             translation_service = get_translation_service()
             translations = await retry_translation_with_timeout(
                 translation_service,
@@ -398,17 +372,16 @@ async def create_news(
                 source_lang,
                 timeout=timeout_sec,
                 max_retries=3
->>>>>>> 0f1b80f4a9e37b585911f0fe0f7c4e0bbec6734c
             )
-            logger.info(f"[CREATE] Google Translate done langs={list(translations.keys())} doc={document_id}")
+            logger.info(f"[CREATE] translation.done langs={list(translations.keys())} doc={document_id}")
         except asyncio.TimeoutError:
-            logger.error(f"[CREATE] Google Translate timed out after {timeout_sec}s for doc={document_id}")
+            logger.error(f"[CREATE] translation timed out after {timeout_sec}s for doc={document_id}")
             raise HTTPException(status_code=504, detail="Translation timed out")
         except Exception as e:
-            logger.error(f"[CREATE] Google Translate failed for doc={document_id}: {e}")
-            # Add specific guidance for Google Translate errors
-            if "GOOGLE_TRANSLATE_API_KEY" in str(e):
-                logger.error("This appears to be a Google Translate API key issue")
+            logger.error(f"[CREATE] translation failed for doc={document_id}: {e}")
+            # Add specific guidance for IndicTrans2 errors
+            if "IndicTrans2" in str(e) or "Model" in str(e):
+                logger.error("This appears to be an IndicTrans2 model loading issue")
             raise
 
         # Determine status and isLive based on user role
@@ -697,10 +670,11 @@ async def translate_text(payload: TranslationRequest):
             
             # Use retry logic for direct translation
             timeout_sec = float(os.getenv("TRANSLATION_PER_CALL_TIMEOUT", "90.0"))
+            
+            # translate() is now async, so call it directly with await
             translated_text = await retry_with_exponential_backoff(
                 lambda: asyncio.wait_for(
-                    asyncio.to_thread(
-                        translation_service.translate,
+                    translation_service.translate(
                         payload.text,
                         payload.source_language,
                         payload.target_language

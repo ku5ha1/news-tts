@@ -1,0 +1,511 @@
+API DOCUMENTATION
+
+================================================================================
+HEALTH & STATUS ENDPOINTS
+================================================================================
+
+GET /health
+-----------
+Service health check with diagnostics.
+
+Response:
+{
+  "status": "ok",
+  "service": "news-tts",
+  "version": "2.0.0",
+  "translation": "IndicTrans2 200M",
+  "tts": "ElevenLabs API",
+  "storage": "Azure Blob Storage",
+  "ready": true,
+  "error": null,
+  "diagnostics": {
+    "hf_home": "/mnt/models",
+    "hf_home_exists": true,
+    "azure_storage_account": "SET"
+  }
+}
+
+GET /
+-----
+Root endpoint with service information.
+
+================================================================================
+NEWS MANAGEMENT
+================================================================================
+
+POST /api/create
+----------------
+Create news article with automatic translation and TTS generation.
+
+Request Body:
+{
+  "title": "Breaking News Title",
+  "description": "Detailed news description",
+  "newsImage": "https://example.com/image.jpg",
+  "author": "Author Name",
+  "magazineType": "news",
+  "newsType": "breaking"
+}
+
+Response:
+{
+  "success": true,
+  "data": {
+    "_id": {"$oid": "..."},
+    "title": "Breaking News Title",
+    "hindi": {
+      "title": "समाचार शीर्षक",
+      "description": "विस्तृत समाचार विवरण",
+      "audio_description": "https://..."
+    },
+    "kannada": {...},
+    "English": {...},
+    "status": "approved",
+    "isLive": true,
+    "publishedAt": {"$date": "..."}
+  }
+}
+
+Features:
+- Auto-detects source language
+- Translates to Hindi, Kannada, English
+- Generates audio descriptions (background task)
+- Admin users: auto-approved
+- Non-admin users: pending approval
+
+PUT /api/{news_id}
+------------------
+Update existing news article.
+
+Request Body (all fields optional):
+{
+  "title": "Updated Title",
+  "description": "Updated Description",
+  "newsImage": "https://...",
+  "author": "Author Name",
+  "magazineType": "news",
+  "newsType": "breaking",
+  "status": "approved",
+  "isLive": true
+}
+
+================================================================================
+CATEGORIES
+================================================================================
+
+POST /api/categories/create
+----------------------------
+Create category with translations.
+
+Request Body:
+{
+  "name": "Politics",
+  "description": "Political news and updates"
+}
+
+GET /api/categories/list
+-------------------------
+List categories with pagination.
+
+Query Parameters:
+- page (default: 1)
+- page_size (default: 20)
+- status_filter (optional: "approved", "pending")
+
+GET /api/categories/{category_id}
+----------------------------------
+Get specific category.
+
+PUT /api/categories/{category_id}
+----------------------------------
+Update category.
+
+DELETE /api/categories/{category_id}
+-------------------------------------
+Delete category.
+
+================================================================================
+LONG VIDEOS
+================================================================================
+
+POST /api/longvideos/create
+----------------------------
+Create long video entry with translations.
+
+Request Body:
+{
+  "title": "Video Title",
+  "description": "Video Description",
+  "thumbnail": "https://...",
+  "video_url": "https://...",
+  "magazineType": "video",
+  "newsType": "documentary",
+  "Topics": "topic_id_optional"
+}
+
+GET /api/longvideos/list
+-------------------------
+List long videos with pagination.
+
+Query Parameters:
+- page
+- page_size
+- status_filter
+- category_filter
+
+GET /api/longvideos/{video_id}
+-------------------------------
+Get specific long video.
+
+PUT /api/longvideos/{video_id}
+-------------------------------
+Update long video.
+
+DELETE /api/longvideos/{video_id}
+----------------------------------
+Delete long video.
+
+================================================================================
+SHORT VIDEOS
+================================================================================
+
+POST /api/shortvideos/create
+-----------------------------
+Create short video entry (similar to long videos).
+
+GET /api/shortvideos/list
+--------------------------
+List short videos.
+
+GET /api/shortvideos/{video_id}
+--------------------------------
+Get specific short video.
+
+PUT /api/shortvideos/{video_id}
+--------------------------------
+Update short video.
+
+DELETE /api/shortvideos/{video_id}
+-----------------------------------
+Delete short video.
+
+================================================================================
+PHOTOS
+================================================================================
+
+POST /api/photos/create
+------------------------
+Create photo entry with translations.
+
+Request Body:
+{
+  "title": "Photo Title",
+  "photoImage": "https://..."
+}
+
+GET /api/photos/list
+--------------------
+List photos with pagination.
+
+GET /api/photos/{photo_id}
+---------------------------
+Get specific photo.
+
+PUT /api/photos/{photo_id}
+---------------------------
+Update photo.
+
+DELETE /api/photos/{photo_id}
+------------------------------
+Delete photo.
+
+================================================================================
+MAGAZINES (TYPE 1)
+================================================================================
+
+POST /api/magazines/create
+---------------------------
+Create magazine with file uploads.
+
+Request: multipart/form-data
+- title (string)
+- description (string)
+- editionNumber (string)
+- publishedMonth (string)
+- publishedYear (string)
+- magazineThumbnail (file, max 4MB, jpg/png/gif/webp)
+- magazinePdf (file, max 4MB, pdf)
+
+Features:
+- Uploads files to Azure Blob Storage
+- Auto-translates title and description
+- Validates file types and sizes
+
+GET /api/magazines/list
+------------------------
+List magazines with pagination.
+
+GET /api/magazines/{magazine_id}
+---------------------------------
+Get specific magazine.
+
+PUT /api/magazines/{magazine_id}
+---------------------------------
+Update magazine (supports file updates).
+
+DELETE /api/magazines/{magazine_id}
+------------------------------------
+Delete magazine.
+
+================================================================================
+MAGAZINE2 (TYPE 2 - SEARCHABLE)
+================================================================================
+
+POST /api/magazine2/create
+---------------------------
+Create searchable magazine with automatic indexing.
+
+Request: multipart/form-data (same as magazines)
+
+Features:
+- Same as Magazine Type 1
+- Automatically triggers search pipeline for approved magazines
+- Indexes content for semantic search
+
+GET /api/magazine2/list
+------------------------
+List magazine2 entries.
+
+GET /api/magazine2/{magazine2_id}
+----------------------------------
+Get specific magazine2.
+
+PUT /api/magazine2/{magazine2_id}
+----------------------------------
+Update magazine2.
+
+DELETE /api/magazine2/{magazine2_id}
+-------------------------------------
+Delete magazine2.
+
+================================================================================
+STATIC PAGES
+================================================================================
+
+POST /api/staticpages/create
+-----------------------------
+Create static page with translations.
+
+Request Body:
+{
+  "staticpageName": "About Us",
+  "staticpageImage": "https://...",
+  "staticpageLink": "https://..."
+}
+
+GET /api/staticpages/list
+--------------------------
+List static pages.
+
+GET /api/staticpages/{staticpage_id}
+-------------------------------------
+Get specific static page.
+
+PUT /api/staticpages/{staticpage_id}
+-------------------------------------
+Update static page.
+
+DELETE /api/staticpages/{staticpage_id}
+----------------------------------------
+Delete static page.
+
+================================================================================
+LATEST NOTIFICATIONS
+================================================================================
+
+POST /api/latestnotifications/create
+-------------------------------------
+Create notification with translations.
+
+Request Body:
+{
+  "title": "Important Update",
+  "link": "https://..."
+}
+
+GET /api/latestnotifications/list
+----------------------------------
+List notifications.
+
+GET /api/latestnotifications/{notification_id}
+-----------------------------------------------
+Get specific notification.
+
+PUT /api/latestnotifications/{notification_id}
+-----------------------------------------------
+Update notification.
+
+DELETE /api/latestnotifications/{notification_id}
+--------------------------------------------------
+Delete notification.
+
+================================================================================
+SEARCH (SEMANTIC SEARCH)
+================================================================================
+
+POST /api/search/query
+----------------------
+Search magazine content using semantic and vector search.
+
+Request Body:
+{
+  "query": "search text",
+  "top": 10,
+  "filters": {},
+  "vector_weight": 0.5
+}
+
+Response:
+{
+  "success": true,
+  "query": "search text",
+  "results": [
+    {
+      "id": "...",
+      "title": "...",
+      "description": "...",
+      "content": "...",
+      "magazine_id": "...",
+      "page_number": 1,
+      "chunk_position": 0,
+      "published_year": "2024",
+      "published_month": "January",
+      "edition_number": "1",
+      "pdf_url": "https://...",
+      "thumbnail_url": "https://...",
+      "score": 0.95
+    }
+  ],
+  "total_results": 10,
+  "processing_time_ms": 125.5
+}
+
+GET /api/search/status
+----------------------
+Get processing status of magazines in search index.
+
+Response:
+{
+  "success": true,
+  "total_approved": 50,
+  "processed": 45,
+  "unprocessed": 5,
+  "processed_files": ["id1", "id2", ...]
+}
+
+POST /api/search/process/single
+--------------------------------
+Process single magazine for search indexing.
+
+Request Body:
+{
+  "magazine_id": "magazine_id_here"
+}
+
+POST /api/search/process/all
+-----------------------------
+Process all approved magazines for search indexing.
+
+Response:
+{
+  "success": true,
+  "processed": 10,
+  "skipped": 5,
+  "failed": 0,
+  "total": 15
+}
+
+POST /api/search/index/create
+------------------------------
+Create or update search index.
+
+GET /api/search/health
+----------------------
+Search service health check.
+
+================================================================================
+COMMON RESPONSE PATTERNS
+================================================================================
+
+Success Response:
+{
+  "success": true,
+  "data": {...}
+}
+
+Error Response:
+{
+  "detail": "Error message"
+}
+
+List Response:
+{
+  "success": true,
+  "data": {
+    "items": [...]
+  },
+  "total": 100,
+  "page": 1,
+  "page_size": 20
+}
+
+================================================================================
+STATUS CODES
+================================================================================
+
+200 - Success
+201 - Created
+400 - Bad Request (validation error)
+401 - Unauthorized (invalid/expired token)
+403 - Forbidden (insufficient permissions)
+404 - Not Found
+500 - Internal Server Error
+503 - Service Unavailable
+504 - Gateway Timeout (translation timeout)
+
+================================================================================
+TRANSLATION FEATURES
+================================================================================
+
+All content endpoints automatically:
+1. Detect source language (English, Hindi, or Kannada)
+2. Translate to all three languages
+3. Store translations in respective fields
+4. Handle bidirectional translation
+
+Supported Languages:
+- English (en)
+- Hindi (hi)
+- Kannada (kn)
+
+Images (thumbnails):
+- Max size: 4MB
+- Formats: jpg, jpeg, png, gif, bmp, webp
+
+PDFs:
+- Max size: 4MB
+- Format: pdf only
+
+Key environment variables:
+- MONGO_URI - MongoDB connection string
+- DATABASE_NAME - Database name
+- AZURE_STORAGE_ACCOUNT_NAME - Azure storage account
+- AZURE_STORAGE_CONNECTION_STRING - Azure connection string
+- ELEVENLABS_API_KEY - TTS API key
+- HF_HOME - Hugging Face model cache
+- TRANSLATION_PER_CALL_TIMEOUT - Translation timeout (default: 90s)
+- CORS_ORIGINS - Allowed CORS origins
+
+Swagger UI: /docs
+ReDoc: /redoc
+
