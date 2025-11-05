@@ -149,7 +149,6 @@ async def lifespan(app: FastAPI):
     yield  # lifespan yields to FastAPI's runtime
 
     # Cleanup / finalization phase
-    global _warmup_task
     if task:
         try:
             await task
