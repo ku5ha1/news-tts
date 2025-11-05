@@ -230,13 +230,19 @@ if __name__ == "__main__":
     import uvicorn
     import os
 
-    # Get worker count from env or use CPU count (not more than CPU cores)
+    # CRITICAL: Reduce workers to prevent memory overload
+    # Each worker loads 2 translation models (~2-3GB each) = 4-6GB per worker
+    # With 16GB VM RAM: 1-2 workers max (leaves 8-12GB for system/other)
+    # With 4 vCPU: 1-2 workers is optimal (translation is CPU-bound, GIL limits parallelism)
     cpu_count = os.cpu_count() or 4
-    max_workers = min(cpu_count, 4)  # Max 4 workers for 4-core VM
-    num_workers = int(os.getenv("UVICORN_WORKERS", str(max_workers)))  # Default to max_workers
-    # Ensure workers don't exceed CPU count
-    num_workers = min(num_workers, cpu_count)
-    print(f"Starting server with {num_workers} workers on {cpu_count} CPU cores")
+    # RECOMMENDED: 1 worker for 16GB RAM, 2 workers for 32GB+ RAM
+    max_workers = 1 if os.getenv("VM_RAM_GB", "16").lower() in ["16", "15", "14"] else 2
+    num_workers = int(os.getenv("UVICORN_WORKERS", str(max_workers)))
+    # Safety: Never exceed 2 workers (memory constraint)
+    num_workers = min(num_workers, 2)
+    print(f"⚠️  CRITICAL: Starting with {num_workers} worker(s) (recommended: 1-2 for 16GB RAM, 4 vCPU)")
+    print(f"   Each worker loads ~4-6GB models. {num_workers} workers = ~{num_workers * 5}GB RAM for models")
+    print(f"   If experiencing OOM/performance issues, set UVICORN_WORKERS=1")
     
     # Check if SSL certificates exist (with better error handling)
     ssl_cert_path = "/etc/letsencrypt/live/diprkarnataka.duckdns.org/fullchain.pem"

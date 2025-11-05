@@ -48,11 +48,35 @@ async def retry_translation_with_timeout(
     timeout: float = 90.0,
     max_retries: int = 3
 ) -> dict:
+    """
+    Retry translation with adaptive timeout based on text length.
+    For long texts, increases timeout to ensure reliability.
+    """
+    # Calculate adaptive timeout: base + extra time for long texts
+    total_chars = len(title) + len(description)
+    if total_chars > 2000:
+        # Very long text: increase timeout significantly (chunking takes time)
+        adaptive_timeout = timeout + (total_chars - 2000) / 100 * 2  # 2s per 100 chars over 2000
+        adaptive_timeout = min(adaptive_timeout, 300.0)  # Cap at 5 minutes
+        logger.info(f"[Timeout] Adaptive timeout: {adaptive_timeout:.1f}s for {total_chars} chars (base: {timeout}s)")
+        timeout = adaptive_timeout
+    elif total_chars > 1500:
+        # Long text: moderate increase
+        timeout = timeout * 1.5
+        logger.info(f"[Timeout] Increased timeout to {timeout:.1f}s for long text ({total_chars} chars)")
+    
     async def translate_with_timeout():
-        return await asyncio.wait_for(
-            translation_service.translate_to_all_async(title, description, source_lang),
-            timeout=timeout
-        )
+        try:
+            return await asyncio.wait_for(
+                translation_service.translate_to_all_async(title, description, source_lang),
+                timeout=timeout
+            )
+        except asyncio.TimeoutError as e:
+            logger.error(f"[Timeout] Translation timed out after {timeout:.1f}s for {len(title)+len(description)} chars")
+            raise
+        except Exception as e:
+            logger.error(f"[Translation] Error during translation: {type(e).__name__}: {str(e)}")
+            raise
     
     return await retry_with_exponential_backoff(
         translate_with_timeout,
