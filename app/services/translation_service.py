@@ -36,7 +36,10 @@ class TranslationService:
             return
 
         self._initialised = True
-        self.max_workers = min(4, os.cpu_count() or 4)
+
+        # Hard limit: run a single worker by default
+        cpu_count = os.cpu_count() or 1
+        self.max_workers = 1 if cpu_count >= 1 else 1
         self._process_executor = ProcessPoolExecutor(
             max_workers=self.max_workers,
             initializer=initialize_worker,
