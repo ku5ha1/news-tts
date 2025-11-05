@@ -64,7 +64,7 @@ async def retry_translation_with_timeout(
         num_batches = (num_chunks + 3) // 4  # Round up division for batches
         batch_time = num_batches * 40  # 40s per batch (realistic for CPU)
         adaptive_timeout = 60 + (batch_time * 2) + 60  # base + (batches × langs) + larger buffer
-        adaptive_timeout = min(adaptive_timeout, 240.0)  # Cap at 4 minutes (increased from 300s)
+        adaptive_timeout = min(adaptive_timeout, 300.0)  # Cap at 5 minutes for sequential processing
         logger.info(f"[Timeout] Adaptive timeout: {adaptive_timeout:.1f}s for {total_chars} chars ({num_chunks} chunks, {num_batches} batches) (base: {timeout}s)")
         timeout = adaptive_timeout
     elif total_chars > 1500:
