@@ -18,6 +18,28 @@ log = logging.getLogger("news-tts-service")
 
 _is_ready = False
 _model_err: str | None = None
+_warmup_task: asyncio.Task | None = None
+
+
+async def _run_translation_warmup() -> None:
+    global _is_ready, _model_err
+    try:
+        log.info("Warming translation workers (this may take a few minutes)...")
+        from app.services.translation_service import translation_service
+
+        warmup_ok = await translation_service.warmup()
+        if warmup_ok:
+            log.info("Translation workers warmed successfully")
+            _is_ready = True
+            _model_err = None
+        else:
+            log.warning("Translation warmup reported failure; service will run in degraded mode")
+            _is_ready = False
+            _model_err = "Translation warmup failed"
+    except Exception as warmup_error:
+        log.warning("Translation warmup failed: %s", warmup_error)
+        _is_ready = False
+        _model_err = f"Translation warmup failed: {warmup_error}"
 
 async def background_model_preload():
     """Background task to preload translation models without blocking startup."""
@@ -109,26 +131,11 @@ async def lifespan(app: FastAPI):
         log.info(f"Settings AZURE_STORAGE_ACCOUNT_NAME: {'SET' if getattr(settings, 'AZURE_STORAGE_ACCOUNT_NAME', None) else 'NOT_SET'}")
         log.info("=== END DEBUG ===")
 
-        global _is_ready, _model_err
+        global _is_ready, _model_err, _warmup_task
 
-        # Warm translation workers during startup to avoid request-time stalls
-        try:
-            log.info("Warming translation workers (this may take a few minutes)...")
-            from app.services.translation_service import translation_service
-
-            warmup_ok = await translation_service.warmup()
-            if warmup_ok:
-                log.info("Translation workers warmed successfully")
-                _is_ready = True
-                _model_err = None
-            else:
-                log.warning("Translation warmup reported failure; service will run in degraded mode")
-                _is_ready = False
-                _model_err = "Translation warmup failed"
-        except Exception as warmup_error:
-            log.warning("Translation warmup failed: %s", warmup_error)
-            _is_ready = False
-            _model_err = f"Translation warmup failed: {warmup_error}"
+        _is_ready = False
+        _model_err = "warming"
+        _warmup_task = asyncio.create_task(_run_translation_warmup())
 
         log.info("ElevenLabs TTS service ready - no warmup needed")
 
@@ -142,11 +149,18 @@ async def lifespan(app: FastAPI):
     yield  # lifespan yields to FastAPI's runtime
 
     # Cleanup / finalization phase
+    global _warmup_task
     if task:
         try:
             await task
         except Exception as e:
             log.exception(f"Background model preloading task failed: {e}")
+
+    if _warmup_task:
+        try:
+            await _warmup_task
+        except Exception as e:
+            log.exception("Translation warmup task failed: %s", e)
 
     
 
