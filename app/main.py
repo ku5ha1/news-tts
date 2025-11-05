@@ -226,99 +226,99 @@ async def root():
         "health": "/health"
     }
 
-if __name__ == "__main__":
-    import uvicorn
-    import os
+# if __name__ == "__main__":
+#     import uvicorn
+#     import os
 
-    # CRITICAL: Reduce workers to prevent memory overload
-    # Each worker loads 2 translation models (~2-3GB each) = 4-6GB per worker
-    # With 16GB VM RAM: 1-2 workers max (leaves 8-12GB for system/other)
-    # With 4 vCPU: 1-2 workers is optimal (translation is CPU-bound, GIL limits parallelism)
-    cpu_count = os.cpu_count() or 4
-    # RECOMMENDED: 1 worker for 16GB RAM, 2 workers for 32GB+ RAM
-    max_workers = 1 if os.getenv("VM_RAM_GB", "16").lower() in ["16", "15", "14"] else 2
-    num_workers = int(os.getenv("UVICORN_WORKERS", str(max_workers)))
-    # Safety: Never exceed 2 workers (memory constraint)
-    num_workers = min(num_workers, 2)
-    print(f"⚠️  CRITICAL: Starting with {num_workers} worker(s) (recommended: 1-2 for 16GB RAM, 4 vCPU)")
-    print(f"   Each worker loads ~4-6GB models. {num_workers} workers = ~{num_workers * 5}GB RAM for models")
-    print(f"   If experiencing OOM/performance issues, set UVICORN_WORKERS=1")
+#     # CRITICAL: Reduce workers to prevent memory overload
+#     # Each worker loads 2 translation models (~2-3GB each) = 4-6GB per worker
+#     # With 16GB VM RAM: 1-2 workers max (leaves 8-12GB for system/other)
+#     # With 4 vCPU: 1-2 workers is optimal (translation is CPU-bound, GIL limits parallelism)
+#     cpu_count = os.cpu_count() or 4
+#     # RECOMMENDED: 1 worker for 16GB RAM, 2 workers for 32GB+ RAM
+#     max_workers = 1 if os.getenv("VM_RAM_GB", "16").lower() in ["16", "15", "14"] else 2
+#     num_workers = int(os.getenv("UVICORN_WORKERS", str(max_workers)))
+#     # Safety: Never exceed 2 workers (memory constraint)
+#     num_workers = min(num_workers, 2)
+#     print(f"⚠️  CRITICAL: Starting with {num_workers} worker(s) (recommended: 1-2 for 16GB RAM, 4 vCPU)")
+#     print(f"   Each worker loads ~4-6GB models. {num_workers} workers = ~{num_workers * 5}GB RAM for models")
+#     print(f"   If experiencing OOM/performance issues, set UVICORN_WORKERS=1")
     
-    # Check if SSL certificates exist (with better error handling)
-    ssl_cert_path = "/etc/letsencrypt/live/diprkarnataka.duckdns.org/fullchain.pem"
-    ssl_key_path = "/etc/letsencrypt/live/diprkarnataka.duckdns.org/privkey.pem"
+#     # Check if SSL certificates exist (with better error handling)
+#     ssl_cert_path = "/etc/letsencrypt/live/diprkarnataka.duckdns.org/fullchain.pem"
+#     ssl_key_path = "/etc/letsencrypt/live/diprkarnataka.duckdns.org/privkey.pem"
     
-    # First check environment variable set by entrypoint.sh (checked as root)
-    ssl_available_env = os.getenv("SSL_AVAILABLE", "false").lower() == "true"
-    ssl_certs_exist = False
+#     # First check environment variable set by entrypoint.sh (checked as root)
+#     ssl_available_env = os.getenv("SSL_AVAILABLE", "false").lower() == "true"
+#     ssl_certs_exist = False
     
-    if ssl_available_env:
-        # Entrypoint.sh confirmed SSL certs exist, now verify we can read them
-        try:
-            if os.path.exists(ssl_cert_path) and os.path.exists(ssl_key_path):
-                # Verify we can read the certs
-                try:
-                    with open(ssl_cert_path, 'r') as f:
-                        f.read(1)
-                    with open(ssl_key_path, 'r') as f:
-                        f.read(1)
-                    ssl_certs_exist = True
-                except (PermissionError, IOError) as e:
-                    print(f"SSL certificates found but not readable: {e}, falling back to HTTP")
-                    ssl_certs_exist = False
-            else:
-                print(f"SSL_AVAILABLE=true but cert files not found, falling back to HTTP")
-                ssl_certs_exist = False
-        except Exception as e:
-            print(f"Error checking SSL certificates: {e}, falling back to HTTP")
-            ssl_certs_exist = False
-    else:
-        # SSL_AVAILABLE not set or false, try to check anyway (for local development)
-        try:
-            ssl_certs_exist = os.path.exists(ssl_cert_path) and os.path.exists(ssl_key_path)
-            if ssl_certs_exist:
-                # Verify we can read the certs
-                try:
-                    with open(ssl_cert_path, 'r') as f:
-                        f.read(1)
-                    with open(ssl_key_path, 'r') as f:
-                        f.read(1)
-                except (PermissionError, IOError):
-                    print(f"SSL certificates found but not readable, falling back to HTTP")
-                    ssl_certs_exist = False
-        except Exception as e:
-            print(f"Could not check SSL certificates: {e}, falling back to HTTP")
-            ssl_certs_exist = False
+#     if ssl_available_env:
+#         # Entrypoint.sh confirmed SSL certs exist, now verify we can read them
+#         try:
+#             if os.path.exists(ssl_cert_path) and os.path.exists(ssl_key_path):
+#                 # Verify we can read the certs
+#                 try:
+#                     with open(ssl_cert_path, 'r') as f:
+#                         f.read(1)
+#                     with open(ssl_key_path, 'r') as f:
+#                         f.read(1)
+#                     ssl_certs_exist = True
+#                 except (PermissionError, IOError) as e:
+#                     print(f"SSL certificates found but not readable: {e}, falling back to HTTP")
+#                     ssl_certs_exist = False
+#             else:
+#                 print(f"SSL_AVAILABLE=true but cert files not found, falling back to HTTP")
+#                 ssl_certs_exist = False
+#         except Exception as e:
+#             print(f"Error checking SSL certificates: {e}, falling back to HTTP")
+#             ssl_certs_exist = False
+#     else:
+#         # SSL_AVAILABLE not set or false, try to check anyway (for local development)
+#         try:
+#             ssl_certs_exist = os.path.exists(ssl_cert_path) and os.path.exists(ssl_key_path)
+#             if ssl_certs_exist:
+#                 # Verify we can read the certs
+#                 try:
+#                     with open(ssl_cert_path, 'r') as f:
+#                         f.read(1)
+#                     with open(ssl_key_path, 'r') as f:
+#                         f.read(1)
+#                 except (PermissionError, IOError):
+#                     print(f"SSL certificates found but not readable, falling back to HTTP")
+#                     ssl_certs_exist = False
+#         except Exception as e:
+#             print(f"Could not check SSL certificates: {e}, falling back to HTTP")
+#             ssl_certs_exist = False
     
-    if ssl_certs_exist:
-        print("SSL certificates found, starting HTTPS server on port 443")
-        try:
-            uvicorn.run(
-                "app.main:app", 
-                host="0.0.0.0", 
-                port=443,
-                workers=num_workers,
-                ssl_keyfile=ssl_key_path,
-                ssl_certfile=ssl_cert_path
-            )
-        except Exception as e:
-            print(f"Failed to start HTTPS server: {e}")
-            print("Falling back to HTTP server on port 8080")
-            uvicorn.run(
-                "app.main:app", 
-                host="0.0.0.0", 
-                port=int(os.environ.get("PORT", 8080)),
-                workers=num_workers
-            )
-    else:
-        print("SSL certificates not found, starting HTTP server on port 8080")
-        try:
-            uvicorn.run(
-                "app.main:app", 
-                host="0.0.0.0", 
-                port=int(os.environ.get("PORT", 8080)),
-                workers=num_workers
-            )
-        except Exception as e:
-            print(f"Failed to start HTTP server: {e}")
-            raise
+#     if ssl_certs_exist:
+#         print("SSL certificates found, starting HTTPS server on port 443")
+#         try:
+#             uvicorn.run(
+#                 "app.main:app", 
+#                 host="0.0.0.0", 
+#                 port=443,
+#                 workers=num_workers,
+#                 ssl_keyfile=ssl_key_path,
+#                 ssl_certfile=ssl_cert_path
+#             )
+#         except Exception as e:
+#             print(f"Failed to start HTTPS server: {e}")
+#             print("Falling back to HTTP server on port 8080")
+#             uvicorn.run(
+#                 "app.main:app", 
+#                 host="0.0.0.0", 
+#                 port=int(os.environ.get("PORT", 8080)),
+#                 workers=num_workers
+#             )
+#     else:
+#         print("SSL certificates not found, starting HTTP server on port 8080")
+#         try:
+#             uvicorn.run(
+#                 "app.main:app", 
+#                 host="0.0.0.0", 
+#                 port=int(os.environ.get("PORT", 8080)),
+#                 workers=num_workers
+#             )
+#         except Exception as e:
+#             print(f"Failed to start HTTP server: {e}")
+#             raise
