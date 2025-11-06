@@ -41,3 +41,9 @@ nginx-timeout-config.conf
 QUICK_START.md
 
 DEPLOYMENT_INSTRUCTIONS.md
+
+setup_gpu.sh
+
+verify_gpu.py
+
+.github/workflows

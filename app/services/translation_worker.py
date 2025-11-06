@@ -12,27 +12,37 @@ def _load_indic_processor() -> Any:
     module = importlib.import_module("IndicTransToolkit.processor")  # type: ignore[import]
     return module.IndicProcessor
 
-
 load_dotenv()
 
-
 logger = logging.getLogger(__name__)
-
 
 MODEL_NAMES = {
     "en_indic": "ai4bharat/indictrans2-en-indic-dist-200M",
     "indic_en": "ai4bharat/indictrans2-indic-en-dist-200M",
 }
 
-
 class TranslationWorker:
-    """CPU-friendly translation runtime that lives inside worker processes."""
+    """
+    Translation runtime that lives inside worker processes.
+    Automatically uses CUDA GPU (float16) if available, otherwise falls back to CPU (int8 quantization).
+    """
 
     def __init__(self) -> None:
         logging.basicConfig(level=logging.INFO)
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        logger.info(f"[TranslationWorker] Using device: {self.device}")
+        
+        # Log detailed device information
+        if self.device.type == "cuda":
+            gpu_name = torch.cuda.get_device_name(0)
+            gpu_memory = torch.cuda.get_device_properties(0).total_memory / (1024**3)
+            logger.info(f"[TranslationWorker] ✓ CUDA available - Using GPU: {gpu_name}")
+            logger.info(f"[TranslationWorker] ✓ GPU Memory: {gpu_memory:.2f} GB")
+            logger.info(f"[TranslationWorker] ✓ Models will use float16 precision for faster inference")
+        else:
+            logger.info(f"[TranslationWorker] ⚠ CUDA not available - Using CPU")
+            logger.info(f"[TranslationWorker] ⚠ Models will use int8 quantization (slower inference)")
+            logger.warning("[TranslationWorker] For better performance, install CUDA-enabled PyTorch")
 
         try:
             logger.info("[TranslationWorker] Initialising IndicProcessor ...")
@@ -45,8 +55,28 @@ class TranslationWorker:
             logger.error("IndicProcessor initialisation failed", exc_info=True)
             raise RuntimeError(f"IndicTransToolkit initialisation failed: {exc}") from exc
 
-        torch.set_num_threads(1)
-        torch.set_num_interop_threads(1)
+        # Configure threading based on device
+        if self.device.type == "cpu":
+            # For CPU: limit threads to avoid oversubscription in multi-worker setup
+            torch.set_num_threads(1)
+            torch.set_num_interop_threads(1)
+            logger.info("[TranslationWorker] CPU threading: 1 thread per worker")
+        else:
+            # For GPU: can use more threads as CPU is only used for preprocessing
+            torch.set_num_threads(4)
+            torch.set_num_interop_threads(2)
+            logger.info("[TranslationWorker] GPU mode: using 4 threads for CPU preprocessing")
+            
+            # Enable TF32 for Ampere+ GPUs (RTX 30xx, RTX 40xx, RTX 50xx series)
+            # This provides ~2x speedup with minimal accuracy impact
+            if torch.cuda.is_available():
+                torch.backends.cuda.matmul.allow_tf32 = True
+                torch.backends.cudnn.allow_tf32 = True
+                logger.info("[TranslationWorker] ✓ TF32 enabled for faster GPU inference")
+                
+                # Enable cuDNN autotuner for optimal performance
+                torch.backends.cudnn.benchmark = True
+                logger.info("[TranslationWorker] ✓ cuDNN autotuner enabled")
 
         self._load_models()
 
@@ -57,7 +87,9 @@ class TranslationWorker:
         token = os.getenv("HUGGINGFACE_ACCESSTOKEN")
 
         try:
-            logger.info("[TranslationWorker] Loading EN->Indic model ...")
+            dtype_str = "float16 (GPU)" if self.device.type == "cuda" else "float32 (CPU)"
+            logger.info(f"[TranslationWorker] Loading EN->Indic model ({dtype_str}) ...")
+            
             self.en_indic_tokenizer = AutoTokenizer.from_pretrained(
                 MODEL_NAMES["en_indic"],
                 trust_remote_code=True,
@@ -81,14 +113,21 @@ class TranslationWorker:
                     )
                 except Exception as exc:  # pragma: no cover - int8 optional
                     logger.warning("EN->Indic quantisation failed: %s", exc)
+            else:
+                # Log GPU memory usage after model loading
+                if torch.cuda.is_available():
+                    memory_allocated = torch.cuda.memory_allocated(0) / (1024**3)
+                    logger.info(f"[TranslationWorker] GPU memory allocated: {memory_allocated:.2f} GB")
 
-            logger.info("[TranslationWorker] EN->Indic model ready")
+            logger.info("[TranslationWorker] ✓ EN->Indic model ready")
         except Exception as exc:  # pragma: no cover - infrastructure failure
             logger.error("Failed to load EN->Indic model", exc_info=True)
             raise RuntimeError(f"EN->Indic model loading failed: {exc}") from exc
 
         try:
-            logger.info("[TranslationWorker] Loading Indic->EN model ...")
+            dtype_str = "float16 (GPU)" if self.device.type == "cuda" else "float32 (CPU)"
+            logger.info(f"[TranslationWorker] Loading Indic->EN model ({dtype_str}) ...")
+            
             self.indic_en_tokenizer = AutoTokenizer.from_pretrained(
                 MODEL_NAMES["indic_en"],
                 trust_remote_code=True,
@@ -112,8 +151,14 @@ class TranslationWorker:
                     )
                 except Exception as exc:  # pragma: no cover
                     logger.warning("Indic->EN quantisation failed: %s", exc)
+            else:
+                # Log total GPU memory usage after both models loaded
+                if torch.cuda.is_available():
+                    memory_allocated = torch.cuda.memory_allocated(0) / (1024**3)
+                    memory_reserved = torch.cuda.memory_reserved(0) / (1024**3)
+                    logger.info(f"[TranslationWorker] Total GPU memory: {memory_allocated:.2f} GB allocated, {memory_reserved:.2f} GB reserved")
 
-            logger.info("[TranslationWorker] Indic->EN model ready")
+            logger.info("[TranslationWorker] ✓ Indic->EN model ready")
         except Exception as exc:  # pragma: no cover
             logger.error("Failed to load Indic->EN model", exc_info=True)
             raise RuntimeError(f"Indic->EN model loading failed: {exc}") from exc
@@ -154,6 +199,12 @@ class TranslationWorker:
 
     @staticmethod
     def _chunk_text_smart(text: str, chunk_size: int = 800, overlap: int = 80) -> List[str]:
+        """
+        Split text into chunks at sentence boundaries without overlap.
+        overlap parameter is kept for backward compatibility but not used.
+        
+        Fixed: Removed overlap logic that was causing sentence duplication in translations.
+        """
         if len(text) <= chunk_size:
             return [text]
 
@@ -169,12 +220,13 @@ class TranslationWorker:
 
             size = len(sentence)
             if current and current_len + size > chunk_size:
+                # Finalize current chunk
                 chunk_text = ". ".join(current) + "."
                 chunks.append(chunk_text)
-
-                overlap_sentences = current[-2:] if len(current) >= 2 else current
-                current = overlap_sentences + [sentence]
-                current_len = sum(len(s) for s in current)
+                
+                # Start fresh chunk with current sentence (NO OVERLAP)
+                current = [sentence]
+                current_len = size
             else:
                 current.append(sentence)
                 current_len += size
@@ -336,7 +388,8 @@ class TranslationWorker:
                 else self._translate_indic_to_en(text, source_lang)
             )
 
-        chunks = self._chunk_text_smart(text, chunk_size=800, overlap=80)
+        # Split text into manageable chunks without overlap (prevents duplication)
+        chunks = self._chunk_text_smart(text, chunk_size=800)
         translations: List[str] = []
         for chunk in chunks:
             translated = (

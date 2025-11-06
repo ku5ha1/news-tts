@@ -37,16 +37,23 @@ class TranslationService:
 
         self._initialised = True
 
-        # Hard limit: run a single worker by default
+        # Determine optimal worker count based on hardware
+        # For GPU: single worker is sufficient as GPU handles batches efficiently
+        # For CPU: single worker to avoid memory issues (models are large)
         cpu_count = os.cpu_count() or 1
-        self.max_workers = 1 if cpu_count >= 1 else 1
+        
+        # Note: We use 1 worker regardless of GPU/CPU to keep memory usage predictable
+        # GPU inference is fast enough with a single worker
+        self.max_workers = 1
+        
         self._process_executor = ProcessPoolExecutor(
             max_workers=self.max_workers,
             initializer=initialize_worker,
         )
         self._translation_semaphore = asyncio.Semaphore(2)
         logger.info(
-            "[Translation] ProcessPoolExecutor initialised (workers=%s)", self.max_workers
+            "[Translation] ProcessPoolExecutor initialised (workers=%s, device will be auto-detected)", 
+            self.max_workers
         )
 
     # ------------------------------------------------------------------

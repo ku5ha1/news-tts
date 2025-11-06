@@ -19,11 +19,13 @@ httpx==0.25.2
 aiofiles==23.2.1
 python-multipart==0.0.6
 
-# PyTorch CPU-only (optimized for high-memory VMs)
---find-links https://download.pytorch.org/whl/cpu/torch_stable.html
+# PyTorch with CUDA support (falls back to CPU if CUDA unavailable)
+# Install from PyPI with CUDA 12.4 support for NVIDIA GPUs
+# Note: --extra-index-url adds to default PyPI, not replaces it
+--extra-index-url https://download.pytorch.org/whl/cu124
 torch>=2.5.0
-torchvision>=0.20.0+cpu  
-torchaudio>=2.5.0+cpu
+torchvision>=0.20.0
+torchaudio>=2.5.0
 
 # Translation - IndicTransToolkit requirements
 numpy>=2.1.0
