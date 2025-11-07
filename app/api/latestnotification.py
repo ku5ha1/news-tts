@@ -12,6 +12,7 @@ from app.services.db_service import DBService
 from app.services.auth_service import auth_service
 from app.utils.language_detection import detect_language
 from app.utils.retry_utils import retry_translation_with_timeout
+from app.utils.json_encoder import to_extended_json
 import logging
 
 logger = logging.getLogger(__name__)
@@ -131,32 +132,7 @@ def get_translation_service():
             detail=f"Translation service unavailable: {str(e)}"
         )
 
-def _to_extended_json(document: dict) -> dict:
-    def oidify(value):
-        try:
-            return {"$oid": str(ObjectId(value))}
-        except Exception:
-            return {"$oid": str(value)} if isinstance(value, ObjectId) else value
-
-    def dateify(value: datetime):
-        return {"$date": value.replace(microsecond=0).isoformat() + "Z"}
-
-    # Shallow copy
-    doc = dict(document)
-
-    # ObjectId fields
-    for key in ["_id"]:
-        if key in doc:
-            val = doc[key]
-            if isinstance(val, ObjectId) or (isinstance(val, str) and len(val) == 24):
-                doc[key] = oidify(val)
-
-    # Date fields
-    for key in ["createdAt"]:
-        if key in doc and isinstance(doc[key], datetime):
-            doc[key] = dateify(doc[key])
-
-    return doc
+# Removed local to_extended_json - now using universal to_extended_json from utils
 
 @router.post("/create", response_model=LatestNotificationResponse)
 async def create_latest_notification(
@@ -218,7 +194,7 @@ async def create_latest_notification(
         # Insert into DB
         await asyncio.wait_for(get_db_service().insert_latestnotification(latestnotification_document), timeout=15.0)
 
-        response_doc = _to_extended_json(latestnotification_document)
+        response_doc = to_extended_json(latestnotification_document)
         logger.info(f"[LATESTNOTIFICATION-CREATE] success latestnotification_id={latestnotification_id}")
         return LatestNotificationResponse(success=True, data=response_doc)
 
@@ -252,7 +228,7 @@ async def list_latest_notifications(
         )
         
         # Format response
-        formatted_latestnotifications = [_to_extended_json(notification) for notification in latestnotifications]
+        formatted_latestnotifications = [to_extended_json(notification) for notification in latestnotifications]
         
         return LatestNotificationListResponse(
             success=True,
@@ -279,7 +255,7 @@ async def get_latest_notification(
         if not latestnotification:
             raise HTTPException(status_code=404, detail="Latest notification not found")
         
-        response_doc = _to_extended_json(latestnotification)
+        response_doc = to_extended_json(latestnotification)
         return LatestNotificationResponse(success=True, data=response_doc)
         
     except HTTPException:
@@ -390,7 +366,7 @@ async def update_latest_notification(
         
         # Get updated latest notification
         updated_latestnotification = await get_db_service().get_latestnotification_by_id(ObjectId(latestnotification_id))
-        response_doc = _to_extended_json(updated_latestnotification)
+        response_doc = to_extended_json(updated_latestnotification)
         
         return LatestNotificationResponse(success=True, data=response_doc)
         

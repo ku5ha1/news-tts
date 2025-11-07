@@ -14,6 +14,7 @@ from app.services.auth_service import auth_service
 from app.services.azure_blob_service import AzureBlobService
 from app.utils.language_detection import detect_language
 from app.utils.retry_utils import retry_translation_with_timeout
+from app.utils.json_encoder import to_extended_json
 import logging
 
 logger = logging.getLogger(__name__)
@@ -191,32 +192,7 @@ def validate_file(file: UploadFile, file_type: str) -> None:
                 detail=f"Invalid PDF file type. Only PDF files are allowed."
             )
 
-def _to_extended_json(document: dict) -> dict:
-    def oidify(value):
-        try:
-            return {"$oid": str(ObjectId(value))}
-        except Exception:
-            return {"$oid": str(value)} if isinstance(value, ObjectId) else value
-
-    def dateify(value: datetime):
-        return {"$date": value.replace(microsecond=0).isoformat() + "Z"}
-
-    # Shallow copy
-    doc = dict(document)
-
-    # ObjectId fields
-    for key in ["_id", "createdBy"]:
-        if key in doc:
-            val = doc[key]
-            if isinstance(val, ObjectId) or (isinstance(val, str) and len(val) == 24):
-                doc[key] = oidify(val)
-
-    # Date fields
-    for key in ["createdTime", "last_updated"]:
-        if key in doc and isinstance(doc[key], datetime):
-            doc[key] = dateify(doc[key])
-
-    return doc
+# Removed local to_extended_json - now using universal to_extended_json from utils
 
 @router.post("/create", response_model=MagazineResponse)
 async def create_magazine(
@@ -371,7 +347,7 @@ async def create_magazine(
         # Insert into DB
         await asyncio.wait_for(get_db_service().insert_magazine(magazine_document), timeout=15.0)
 
-        response_doc = _to_extended_json(magazine_document)
+        response_doc = to_extended_json(magazine_document)
         logger.info(f"[MAGAZINE-CREATE] success magazine_id={magazine_id}")
         return MagazineResponse(success=True, data=response_doc)
 
@@ -418,7 +394,7 @@ async def list_magazines(
         )
         
         # Format response
-        formatted_magazines = [_to_extended_json(magazine) for magazine in magazines]
+        formatted_magazines = [to_extended_json(magazine) for magazine in magazines]
         
         return MagazineListResponse(
             success=True,
@@ -445,7 +421,7 @@ async def get_magazine(
         if not magazine:
             raise HTTPException(status_code=404, detail="Magazine not found")
         
-        response_doc = _to_extended_json(magazine)
+        response_doc = to_extended_json(magazine)
         return MagazineResponse(success=True, data=response_doc)
         
     except HTTPException:
@@ -664,7 +640,7 @@ async def update_magazine(
             
             # Get updated magazine
             updated_magazine = await get_db_service().get_magazine_by_id(ObjectId(magazine_id))
-            response_doc = _to_extended_json(updated_magazine)
+            response_doc = to_extended_json(updated_magazine)
             
             logger.info(f"[MAGAZINE-UPDATE] success magazine_id={magazine_id}")
             return MagazineResponse(success=True, data=response_doc)

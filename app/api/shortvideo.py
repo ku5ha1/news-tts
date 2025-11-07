@@ -12,6 +12,7 @@ from app.services.db_service import DBService
 from app.services.auth_service import auth_service
 from app.utils.language_detection import detect_language
 from app.utils.retry_utils import retry_translation_with_timeout
+from app.utils.json_encoder import to_extended_json
 import logging
 
 logger = logging.getLogger(__name__)
@@ -131,32 +132,7 @@ def get_translation_service():
             detail=f"Translation service unavailable: {str(e)}"
         )
 
-def _to_extended_json(document: dict) -> dict:
-    def oidify(value):
-        try:
-            return {"$oid": str(ObjectId(value))}
-        except Exception:
-            return {"$oid": str(value)} if isinstance(value, ObjectId) else value
-
-    def dateify(value: datetime):
-        return {"$date": value.replace(microsecond=0).isoformat() + "Z"}
-
-    # Shallow copy
-    doc = dict(document)
-
-    # ObjectId fields
-    for key in ["_id", "category", "createdBy"]:
-        if key in doc:
-            val = doc[key]
-            if isinstance(val, ObjectId) or (isinstance(val, str) and len(val) == 24):
-                doc[key] = oidify(val)
-
-    # Date fields
-    for key in ["createdAt"]:
-        if key in doc and isinstance(doc[key], datetime):
-            doc[key] = dateify(doc[key])
-
-    return doc
+# Removed local to_extended_json - now using universal to_extended_json from utils
 
 @router.post("/create", response_model=ShortVideoResponse)
 async def create_short_video(
@@ -260,7 +236,7 @@ async def create_short_video(
         # Insert into DB
         await asyncio.wait_for(get_db_service().insert_shortvideo(short_video_document), timeout=15.0)
 
-        response_doc = _to_extended_json(short_video_document)
+        response_doc = to_extended_json(short_video_document)
         logger.info(f"[SHORTVIDEO-CREATE] success video_id={video_id}")
         return ShortVideoResponse(success=True, data=response_doc)
 
@@ -298,7 +274,7 @@ async def list_short_videos(
         )
         
         # Format response
-        formatted_videos = [_to_extended_json(video) for video in videos]
+        formatted_videos = [to_extended_json(video) for video in videos]
         
         return ShortVideoListResponse(
             success=True,
@@ -325,7 +301,7 @@ async def get_short_video(
         if not video:
             raise HTTPException(status_code=404, detail="Short video not found")
         
-        response_doc = _to_extended_json(video)
+        response_doc = to_extended_json(video)
         return ShortVideoResponse(success=True, data=response_doc)
         
     except HTTPException:
@@ -477,7 +453,7 @@ async def update_short_video(
         
         # Get updated video
         updated_video = await get_db_service().get_shortvideo_by_id(ObjectId(video_id))
-        response_doc = _to_extended_json(updated_video)
+        response_doc = to_extended_json(updated_video)
         
         return ShortVideoResponse(success=True, data=response_doc)
         
