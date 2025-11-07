@@ -430,6 +430,96 @@ async def _generate_and_attach_audio(document_id: ObjectId, payload: NewsCreateR
 #             await db_service.update_news_fields(document_id, updates)
 
 
+@router.get("/", response_model=NewsResponse)
+async def get_all_news(
+    page: int = 1,
+    limit: int = DEFAULT_PAGE_SIZE,
+    status: str = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get all news with pagination and optional status filter."""
+    try:
+        logger.info(f"[GET_ALL] start page={page} limit={limit} status={status} user={current_user.get('email', 'unknown')}")
+        
+        # Validate pagination parameters
+        if page < 1:
+            raise HTTPException(status_code=400, detail="Page must be >= 1")
+        if limit < 1 or limit > 100:
+            raise HTTPException(status_code=400, detail="Limit must be between 1 and 100")
+        
+        skip = (page - 1) * limit
+        
+        # Get news from database
+        collection = get_db_service().db["news"]
+        query = {}
+        
+        # Filter by status if provided
+        if status:
+            query["status"] = status
+        
+        # Get total count
+        total = await collection.count_documents(query)
+        
+        # Get paginated results, sorted by creation time (newest first)
+        cursor = collection.find(query).sort("createdTime", -1).skip(skip).limit(limit)
+        news_list = await cursor.to_list(length=limit)
+        
+        # Convert to extended JSON format
+        news_list_json = [_to_extended_json(doc) for doc in news_list]
+        
+        logger.info(f"[GET_ALL] success - found {len(news_list)}/{total} news items")
+        
+        return NewsResponse(
+            success=True,
+            data={
+                "news": news_list_json,
+                "total": total,
+                "page": page,
+                "limit": limit,
+                "total_pages": (total + limit - 1) // limit if total > 0 else 0
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[GET_ALL] error: {e}")
+        raise HTTPException(status_code=500, detail=f"Error fetching news: {str(e)}")
+
+
+@router.get("/{news_id}", response_model=NewsResponse)
+async def get_news_by_id(
+    news_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get a single news article by ID."""
+    try:
+        logger.info(f"[GET_BY_ID] start news_id={news_id} user={current_user.get('email', 'unknown')}")
+        
+        # Validate ObjectId format
+        try:
+            ObjectId(news_id)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid news ID format")
+        
+        # Get news from database
+        news = await get_db_service().get_news_by_id(ObjectId(news_id))
+        if not news:
+            raise HTTPException(status_code=404, detail="News not found")
+        
+        # Convert to extended JSON format
+        news_json = _to_extended_json(news)
+        
+        logger.info(f"[GET_BY_ID] success news_id={news_id}")
+        return NewsResponse(success=True, data=news_json)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[GET_BY_ID] error: {e}")
+        raise HTTPException(status_code=500, detail=f"Error fetching news: {str(e)}")
+
+
 @router.post("/create", response_model=NewsResponse)
 async def create_news(
     payload: NewsCreateRequest, 
@@ -709,6 +799,44 @@ async def update_news(
     except Exception as e:
         logger.error(f"[UPDATE] error: {e}")
         raise HTTPException(status_code=500, detail=f"Error updating news: {str(e)}")
+
+
+@router.delete("/{news_id}", response_model=NewsResponse)
+async def delete_news(
+    news_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Delete a news article."""
+    try:
+        logger.info(f"[DELETE] start news_id={news_id} user={current_user.get('email', 'unknown')}")
+        
+        # Check if news exists
+        existing_news = await get_db_service().get_news_by_id(ObjectId(news_id))
+        if not existing_news:
+            raise HTTPException(status_code=404, detail="News not found")
+        
+        # Check permissions
+        user_role = current_user.get("role", "")
+        user_id = current_user.get("id")
+        news_creator_id = existing_news.get("createdBy")
+        
+        # Admin can delete any news, others can only delete their own
+        if user_role != "admin" and (not user_id or not news_creator_id or str(news_creator_id) != str(user_id)):
+            raise HTTPException(status_code=403, detail="You can only delete your own news articles")
+        
+        # Delete the news document
+        success = await get_db_service().delete_news(ObjectId(news_id))
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to delete news")
+        
+        logger.info(f"[DELETE] success news_id={news_id}")
+        return NewsResponse(success=True, data={"_id": {"$oid": news_id}, "deleted": True})
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[DELETE] error: {e}")
+        raise HTTPException(status_code=500, detail=f"Error deleting news: {str(e)}")
 
 
 @router.post("/translate", response_model=TranslationResponse)

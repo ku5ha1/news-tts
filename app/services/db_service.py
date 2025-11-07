@@ -129,6 +129,25 @@ class DBService:
             logger.error(f"[MongoDB] Get error for {news_id}: {str(e)}", exc_info=True)
             return None
 
+    async def delete_news(self, news_id: str | ObjectId) -> bool:
+        """Delete a news document"""
+        if not self.connected or not self.client:
+            logger.error("[MongoDB] Cannot delete news - not connected")
+            return False
+        try:
+            oid = ObjectId(news_id) if not isinstance(news_id, ObjectId) else news_id
+            logger.info(f"[MongoDB] Deleting news: {oid}")
+            result = await self.collection.delete_one({"_id": oid})
+            if result.deleted_count > 0:
+                logger.info(f"[MongoDB] News deleted: {oid}")
+                return True
+            else:
+                logger.warning(f"[MongoDB] News not found for deletion: {oid}")
+                return False
+        except Exception as e:
+            logger.error(f"[MongoDB] Delete news error for {news_id}: {str(e)}", exc_info=True)
+            return False
+
     # Category methods
     async def insert_category(self, data: dict):
         """Insert category document into MongoDB"""
