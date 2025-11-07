@@ -28,7 +28,7 @@ services.yaml
 
 env.yaml
 
-json_input/
+
 
 cloudbuild.yaml
 
