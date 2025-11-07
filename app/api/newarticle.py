@@ -12,6 +12,7 @@ from app.services.db_service import DBService
 from app.services.auth_service import auth_service
 from app.utils.language_detection import detect_language
 from app.utils.retry_utils import retry_translation_with_timeout
+from app.utils.json_encoder import to_extended_json
 import logging
 
 logger = logging.getLogger(__name__)
@@ -131,32 +132,7 @@ def get_translation_service():
             detail=f"Translation service unavailable: {str(e)}"
         )
 
-def _to_extended_json(document: dict) -> dict:
-    def oidify(value):
-        try:
-            return {"$oid": str(ObjectId(value))}
-        except Exception:
-            return {"$oid": str(value)} if isinstance(value, ObjectId) else value
-
-    def dateify(value: datetime):
-        return {"$date": value.replace(microsecond=0).isoformat() + "Z"}
-
-    # Shallow copy
-    doc = dict(document)
-
-    # ObjectId fields
-    for key in ["_id"]:
-        if key in doc:
-            val = doc[key]
-            if isinstance(val, ObjectId) or (isinstance(val, str) and len(val) == 24):
-                doc[key] = oidify(val)
-
-    # Date fields
-    for key in ["createdAt"]:
-        if key in doc and isinstance(doc[key], datetime):
-            doc[key] = dateify(doc[key])
-
-    return doc
+# Removed local to_extended_json - now using universal to_extended_json from utils
 
 @router.post("/create", response_model=NewArticleResponse)
 async def create_new_article(
@@ -218,7 +194,7 @@ async def create_new_article(
         # Insert into DB
         await asyncio.wait_for(get_db_service().insert_newarticle(newarticle_document), timeout=15.0)
 
-        response_doc = _to_extended_json(newarticle_document)
+        response_doc = to_extended_json(newarticle_document)
         logger.info(f"[NEWARTICLE-CREATE] success newarticle_id={newarticle_id}")
         return NewArticleResponse(success=True, data=response_doc)
 
@@ -251,7 +227,7 @@ async def list_new_articles(
         )
         
         # Format response
-        formatted_newarticles = [_to_extended_json(article) for article in newarticles]
+        formatted_newarticles = [to_extended_json(article) for article in newarticles]
         
         return NewArticleListResponse(
             success=True,
@@ -277,7 +253,7 @@ async def get_new_article(
         if not newarticle:
             raise HTTPException(status_code=404, detail="New article not found")
         
-        response_doc = _to_extended_json(newarticle)
+        response_doc = to_extended_json(newarticle)
         return NewArticleResponse(success=True, data=response_doc)
         
     except HTTPException:
@@ -388,7 +364,7 @@ async def update_new_article(
         
         # Get updated new article
         updated_newarticle = await get_db_service().get_newarticle_by_id(ObjectId(newarticle_id))
-        response_doc = _to_extended_json(updated_newarticle)
+        response_doc = to_extended_json(updated_newarticle)
         
         return NewArticleResponse(success=True, data=response_doc)
         

@@ -15,6 +15,7 @@ from app.services.db_service import DBService
 from app.services.auth_service import auth_service
 from app.utils.language_detection import detect_language
 from app.utils.retry_utils import retry_translation_with_timeout, retry_with_exponential_backoff
+from app.utils.json_encoder import to_extended_json
 import logging 
 
 logger = logging.getLogger(__name__)
@@ -192,32 +193,7 @@ def get_translation_service():
             detail=f"Translation service unavailable: {str(e)}"
         )
 
-def _to_extended_json(document: dict) -> dict:
-    def oidify(value):
-        try:
-            return {"$oid": str(ObjectId(value))}
-        except Exception:
-            return {"$oid": str(value)} if isinstance(value, ObjectId) else value
-
-    def dateify(value: datetime):
-        return {"$date": value.replace(microsecond=0).isoformat() + "Z"}
-
-    # Shallow copy
-    doc = dict(document)
-
-    # ObjectId fields
-    for key in ["_id", "category", "createdBy"]:
-        if key in doc:
-            val = doc[key]
-            if isinstance(val, ObjectId) or (isinstance(val, str) and len(val) == 24):
-                doc[key] = oidify(val)
-
-    # Date fields
-    for key in ["publishedAt", "createdTime", "last_updated"]:
-        if key in doc and isinstance(doc[key], datetime):
-            doc[key] = dateify(doc[key])
-
-    return doc
+# Removed local _to_extended_json - now using universal to_extended_json from utils
 
 
 async def _generate_audio_with_retry(text: str, language: str, max_retries: int = MAX_TTS_RETRIES) -> str:
@@ -449,23 +425,15 @@ async def get_all_news(
         
         skip = (page - 1) * limit
         
-        # Get news from database
-        collection = get_db_service().db["news"]
-        query = {}
-        
-        # Filter by status if provided
-        if status:
-            query["status"] = status
-        
-        # Get total count
-        total = await collection.count_documents(query)
-        
-        # Get paginated results, sorted by creation time (newest first)
-        cursor = collection.find(query).sort("createdTime", -1).skip(skip).limit(limit)
-        news_list = await cursor.to_list(length=limit)
+        # Get news from database using db_service
+        news_list, total = await get_db_service().get_news_paginated(
+            skip=skip,
+            limit=limit,
+            status_filter=status
+        )
         
         # Convert to extended JSON format
-        news_list_json = [_to_extended_json(doc) for doc in news_list]
+        news_list_json = [to_extended_json(doc) for doc in news_list]
         
         logger.info(f"[GET_ALL] success - found {len(news_list)}/{total} news items")
         
@@ -508,7 +476,7 @@ async def get_news_by_id(
             raise HTTPException(status_code=404, detail="News not found")
         
         # Convert to extended JSON format
-        news_json = _to_extended_json(news)
+        news_json = to_extended_json(news)
         
         logger.info(f"[GET_BY_ID] success news_id={news_id}")
         return NewsResponse(success=True, data=news_json)
@@ -599,7 +567,7 @@ async def create_news(
         )
         logger.info(f"[CREATE] Background translation task scheduled doc={document_id}")
 
-        response_doc = _to_extended_json(news_document)
+        response_doc = to_extended_json(news_document)
         return NewsResponse(success=True, data=response_doc)
 
     except HTTPException:
@@ -789,7 +757,7 @@ async def update_news(
         
         # Get updated news
         updated_news = await get_db_service().get_news_by_id(ObjectId(news_id))
-        response_doc = _to_extended_json(updated_news)
+        response_doc = to_extended_json(updated_news)
         
         logger.info(f"[UPDATE] success news_id={news_id}")
         return NewsResponse(success=True, data=response_doc)

@@ -129,6 +129,29 @@ class DBService:
             logger.error(f"[MongoDB] Get error for {news_id}: {str(e)}", exc_info=True)
             return None
 
+    async def get_news_paginated(self, skip: int = 0, limit: int = 20, status_filter: str = None):
+        """Get news with pagination and optional status filter"""
+        if not self.connected or not self.client:
+            logger.error("[MongoDB] Cannot get news - not connected")
+            return [], 0
+        try:
+            query = {}
+            if status_filter:
+                query["status"] = status_filter
+            
+            # Get total count
+            total = await self.collection.count_documents(query)
+            
+            # Get paginated results, sorted by creation time (newest first)
+            cursor = self.collection.find(query).sort("createdTime", -1).skip(skip).limit(limit)
+            news_list = await cursor.to_list(length=limit)
+            
+            logger.info(f"[MongoDB] Found {len(news_list)} news (total: {total})")
+            return news_list, total
+        except Exception as e:
+            logger.error(f"[MongoDB] Get news paginated error: {str(e)}", exc_info=True)
+            return [], 0
+
     async def delete_news(self, news_id: str | ObjectId) -> bool:
         """Delete a news document"""
         if not self.connected or not self.client:

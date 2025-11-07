@@ -12,6 +12,7 @@ from app.services.db_service import DBService
 from app.services.auth_service import auth_service
 from app.utils.language_detection import detect_language
 from app.utils.retry_utils import retry_translation_with_timeout
+from app.utils.json_encoder import to_extended_json
 import logging
 
 logger = logging.getLogger(__name__)
@@ -131,32 +132,7 @@ def get_translation_service():
             detail=f"Translation service unavailable: {str(e)}"
         )
 
-def _to_extended_json(document: dict) -> dict:
-    def oidify(value):
-        try:
-            return {"$oid": str(ObjectId(value))}
-        except Exception:
-            return {"$oid": str(value)} if isinstance(value, ObjectId) else value
-
-    def dateify(value: datetime):
-        return {"$date": value.replace(microsecond=0).isoformat() + "Z"}
-
-    # Shallow copy
-    doc = dict(document)
-
-    # ObjectId fields
-    for key in ["_id", "createdBy"]:
-        if key in doc:
-            val = doc[key]
-            if isinstance(val, ObjectId) or (isinstance(val, str) and len(val) == 24):
-                doc[key] = oidify(val)
-
-    # Date fields
-    for key in ["createdTime"]:
-        if key in doc and isinstance(doc[key], datetime):
-            doc[key] = dateify(doc[key])
-
-    return doc
+# Removed local to_extended_json - now using universal to_extended_json from utils
 
 @router.post("/create", response_model=PhotoResponse)
 async def create_photo(
@@ -229,7 +205,7 @@ async def create_photo(
         # Insert into DB
         await asyncio.wait_for(get_db_service().insert_photo(photo_document), timeout=15.0)
 
-        response_doc = _to_extended_json(photo_document)
+        response_doc = to_extended_json(photo_document)
         logger.info(f"[PHOTO-CREATE] success photo_id={photo_id}")
         return PhotoResponse(success=True, data=response_doc)
 
@@ -265,7 +241,7 @@ async def list_photos(
         )
         
         # Format response
-        formatted_photos = [_to_extended_json(photo) for photo in photos]
+        formatted_photos = [to_extended_json(photo) for photo in photos]
         
         return PhotoListResponse(
             success=True,
@@ -292,7 +268,7 @@ async def get_photo(
         if not photo:
             raise HTTPException(status_code=404, detail="Photo not found")
         
-        response_doc = _to_extended_json(photo)
+        response_doc = to_extended_json(photo)
         return PhotoResponse(success=True, data=response_doc)
         
     except HTTPException:
@@ -411,7 +387,7 @@ async def update_photo(
         
         # Get updated photo
         updated_photo = await get_db_service().get_photo_by_id(ObjectId(photo_id))
-        response_doc = _to_extended_json(updated_photo)
+        response_doc = to_extended_json(updated_photo)
         
         return PhotoResponse(success=True, data=response_doc)
         
