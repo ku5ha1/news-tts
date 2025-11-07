@@ -187,7 +187,10 @@ def remove_author_from_content(content, author):
     if not author or author == "Unknown Author":
         return content
     
-    # Remove author patterns from content
+    lines = content.split('\n')
+    cleaned_lines = []
+    
+    # Remove author patterns from content (Kannada patterns)
     patterns_to_remove = [
         rf'ಲೇಖನ\s*[:-]\s*{re.escape(author)}.*',
         rf'ಲೇಖಕರು\s*[:-]\s*{re.escape(author)}.*',
@@ -196,20 +199,57 @@ def remove_author_from_content(content, author):
         rf'^{re.escape(author)}.*',
     ]
     
-    lines = content.split('\n')
-    cleaned_lines = []
+    # For English articles, author might be at the beginning
+    # Remove author line if it appears at the start of content
+    author_removed = False
+    skip_empty_until_author = True
     
     for line in lines:
-        should_remove = False
-        for pattern in patterns_to_remove:
-            if re.search(pattern, line, re.IGNORECASE):
-                should_remove = True
+        line_stripped = line.strip()
+        
+        # Skip empty lines before author is found (for English articles)
+        if not line_stripped:
+            if skip_empty_until_author:
+                continue
+            else:
+                cleaned_lines.append(line)
+            continue
+        
+        # Check if this line matches the author name (exact match or starts with)
+        if not author_removed and (line_stripped == author or line_stripped.startswith(author)):
+            # Skip this author line
+            author_removed = True
+            skip_empty_until_author = False
+            continue
+        
+        # After we've processed the author section, check for Kannada patterns
+        if author_removed or not skip_empty_until_author:
+            should_remove = False
+            # Check Kannada patterns
+            for pattern in patterns_to_remove:
+                if re.search(pattern, line, re.IGNORECASE):
+                    should_remove = True
+                    break
+            
+            if should_remove:
+                # Also remove following lines that might be author details
                 break
-        if not should_remove:
-            cleaned_lines.append(line)
+            else:
+                cleaned_lines.append(line)
+                skip_empty_until_author = False
         else:
-            # Also remove following lines that might be author details
-            break
+            # Before author is found, keep checking
+            should_remove = False
+            for pattern in patterns_to_remove:
+                if re.search(pattern, line, re.IGNORECASE):
+                    should_remove = True
+                    break
+            
+            if not should_remove:
+                cleaned_lines.append(line)
+            else:
+                # Also remove following lines that might be author details
+                break
     
     # Remove separator lines (like "-----------------")
     final_lines = []
@@ -236,24 +276,79 @@ def convert_txt_to_json(txt_file_path, output_dir):
             print(f"Warning: {txt_file_path} is empty")
             return None
         
-        # Extract title (first non-empty line)
+        # Extract title and author
         title = ""
+        author = ""
         content_start_idx = 0
         author_from_title = None
         
-        for i, line in enumerate(lines):
-            line_stripped = line.strip()
-            if line_stripped:
-                # Check if first line contains author pattern (like "ವರದಿ :ಡಾ.ವರ ಪ್ರಸಾದ್ ರಾವ್ ಪಿ ವಿ")
-                author_match = re.search(r'ವರದಿ\s*[:-]\s*(.+?)$', line_stripped, re.IGNORECASE)
-                if author_match:
-                    author_from_title = author_match.group(1).strip()
-                    # Skip this line and use next non-empty line as title
-                    continue
-                
-                title = line_stripped
-                content_start_idx = i + 1
+        # Check if this is an English article (first line contains mostly English characters)
+        first_non_empty_line = ""
+        for line in lines:
+            if line.strip():
+                first_non_empty_line = line.strip()
                 break
+        
+        # Detect if English article: check if first line has mostly ASCII characters
+        is_english = False
+        if first_non_empty_line:
+            # Check if line contains mostly English characters (not Kannada Unicode range)
+            english_chars = sum(1 for c in first_non_empty_line if ord(c) < 128 or c.isspace())
+            total_chars = len([c for c in first_non_empty_line if not c.isspace()])
+            if total_chars > 0:
+                is_english = (english_chars / len(first_non_empty_line)) > 0.7
+        
+        if is_english:
+            # English article format: Line 1 = Title, Line 2 = Subtitle (optional), Author after empty lines
+            non_empty_lines = []
+            for i, line in enumerate(lines):
+                line_stripped = line.strip()
+                if line_stripped:
+                    non_empty_lines.append((i, line_stripped))
+            
+            if len(non_empty_lines) >= 1:
+                # First non-empty line is title
+                title = non_empty_lines[0][1]
+                
+                # Find author: typically a short line (name) that appears before content starts
+                # Author is usually one of the first few non-empty lines, short, and doesn't look like content
+                author_found = False
+                content_start_idx = non_empty_lines[0][0] + 1
+                
+                # Check lines 2-5 for author (skip line 1 which is title)
+                for idx in range(1, min(6, len(non_empty_lines))):
+                    line_text = non_empty_lines[idx][1]
+                    # Author is typically short (< 100 chars), doesn't end with punctuation, and looks like a name
+                    if (len(line_text) < 100 and 
+                        not line_text.endswith(('.', '!', '?', ':')) and
+                        (any(pattern in line_text for pattern in ['.', 'Dr', 'Mr', 'Mrs', 'Ms', 'Prof']) or 
+                         len(line_text.split()) <= 4)):
+                        # This looks like an author name
+                        author = line_text
+                        author_found = True
+                        # Content starts after this author line
+                        content_start_idx = non_empty_lines[idx][0] + 1
+                        break
+                
+                # If no author found, content starts after title (or subtitle if line 2 exists)
+                if not author_found and len(non_empty_lines) >= 2:
+                    # Line 2 might be subtitle, content starts after it
+                    content_start_idx = non_empty_lines[1][0] + 1
+        else:
+            # Kannada article format: Line 1 = Title, author at end
+            for i, line in enumerate(lines):
+                line_stripped = line.strip()
+                if line_stripped:
+                    # Check if first line contains author pattern (like "ವರದಿ :ಡಾ.ವರ ಪ್ರಸಾದ್ ರಾವ್ ಪಿ ವಿ")
+                    author_match = re.search(r'ವರದಿ\s*[:-]\s*(.+?)$', line_stripped, re.IGNORECASE)
+                    if author_match:
+                        author_from_title = author_match.group(1).strip()
+                        # Skip this line and use next non-empty line as title
+                        continue
+                    
+                    title = line_stripped
+                    content_start_idx = i + 1
+                    break
         
         # Clean title: remove extra spaces
         title = re.sub(r'\s+', ' ', title).strip()
@@ -266,12 +361,18 @@ def convert_txt_to_json(txt_file_path, output_dir):
         content_lines = [line.rstrip('\n\r') for line in lines[content_start_idx:]]
         full_content = '\n'.join(content_lines)
         
-        # Extract author
-        author = extract_author(content_lines)
-        
-        # If author was found in title, use that instead
-        if author_from_title:
-            author = author_from_title
+        # Extract author for Kannada articles
+        if not is_english:
+            extracted_author = extract_author(content_lines)
+            # If author was found in title, use that instead
+            if author_from_title:
+                author = author_from_title
+            else:
+                author = extracted_author if extracted_author else "Unknown Author"
+        else:
+            # For English articles, author is already extracted from line 2
+            if not author:
+                author = "Unknown Author"
         
         # Remove author from content
         description = remove_author_from_content(full_content, author)
