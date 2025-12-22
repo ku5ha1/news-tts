@@ -20,11 +20,31 @@ class Settings(BaseSettings):
     AZURE_STORAGE_AUDIOFIELD_CONTAINER: Optional[str] = None
     AZURE_STORAGE_MAGAZINE_CONTAINER: Optional[str] = None
     AZURE_STORAGE_MAGAZINE2_CONTAINER: Optional[str] = None
+    AZURE_STORAGE_OUTPUT_CONTAINER_NAME: Optional[str] = None
+    
+    # Azure Document Intelligence
+    DOCINT_ENDPOINT: Optional[str] = None
+    DOCINT_KEY: Optional[str] = None
+    
+    # Azure Speech (for TTS)
+    AZURE_SPEECH_KEY: Optional[str] = None
+    AZURE_SPEECH_REGION: Optional[str] = None
+    AZURE_SPEECH_ENDPOINT: Optional[str] = None
+    
+    # Qdrant Cloud (Vector Database)
+    QDRANT_URL: Optional[str] = None
+    QDRANT_API_KEY: Optional[str] = None
+    QDRANT_COLLECTION_NAME: Optional[str] = "magazine2_search"
     
     # AI Models
     AI4BHARAT_MODELS_PATH: Optional[str] = None
     ELEVENLABS_API_KEY: Optional[str] = None
     ELEVENLABS_VOICE_ID: Optional[str] = None
+    
+    # HuggingFace Cache (for FastEmbed models)
+    HF_HOME: Optional[str] = None
+    HF_HUB_CACHE: Optional[str] = None
+    TRANSFORMERS_CACHE: Optional[str] = None
     
     # Authentication
     JWT_SECRET: Optional[str] = None

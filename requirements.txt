@@ -45,14 +45,15 @@ firebase-admin==6.6.0
 # Azure Blob Storage
 azure-storage-blob==12.19.0
 
+# Azure Document Intelligence (for OCR)
 azure-ai-documentintelligence
 
-# Azure Cognitive Search
-azure-search-documents==11.4.0
+# Azure Speech (for TTS)
 azure-cognitiveservices-speech
 
-# Azure OpenAI
-openai==1.12.0
+# Qdrant Cloud and FastEmbed (for local embeddings)
+qdrant-client>=1.7.0
+fastembed>=0.2.0
 
 # Language detection
 langdetect==1.0.9
@@ -70,4 +71,3 @@ pytest-asyncio==0.21.1
 # Logging and monitoring
 structlog==23.2.0
 colorama==0.4.6
-
