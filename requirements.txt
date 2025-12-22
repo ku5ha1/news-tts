@@ -39,9 +39,6 @@ indictranstoolkit>=1.1.0
 # ElevenLabs TTS (deprecated - using Azure Speech instead)
 # elevenlabs==1.3.0
 
-# Firebase integration
-firebase-admin==6.6.0
-
 # Azure Blob Storage
 azure-storage-blob==12.19.0
 

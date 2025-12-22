@@ -9,10 +9,6 @@ class Settings(BaseSettings):
     MONGO_URI: Optional[str] = None
     DATABASE_NAME: Optional[str] = None
     
-    # Firebase
-    FIREBASE_SERVICE_ACCOUNT_BASE64: Optional[str] = None
-    FIREBASE_STORAGE_BUCKET: Optional[str] = None
-    
     # Azure Blob Storage
     AZURE_STORAGE_ACCOUNT_NAME: Optional[str] = None
     AZURE_STORAGE_CONNECTION_STRING: Optional[str] = None
