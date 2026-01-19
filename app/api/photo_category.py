@@ -207,8 +207,7 @@ async def create_photo_category(
 @router.get("/list", response_model=PhotoCategoryListResponse)
 async def list_photo_categories(
     page: int = 1,
-    page_size: int = DEFAULT_PAGE_SIZE,
-    current_user: dict = Depends(get_current_user)
+    page_size: int = DEFAULT_PAGE_SIZE
 ):
     """List photo categories with pagination."""
     try:
@@ -240,8 +239,7 @@ async def list_photo_categories(
 
 @router.get("/{category_id}", response_model=PhotoCategoryResponse)
 async def get_photo_category(
-    category_id: str,
-    current_user: dict = Depends(get_current_user)
+    category_id: str
 ):
     """Get a specific photo category by ID."""
     try:

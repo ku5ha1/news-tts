@@ -434,8 +434,7 @@ async def create_magazine2(
 async def list_magazine2s(
     page: int = 1,
     page_size: int = DEFAULT_PAGE_SIZE,
-    status_filter: str = None,
-    current_user: dict = Depends(get_current_user)
+    status_filter: str = None
 ):
     """List magazine2s with pagination and optional filters."""
     try:
@@ -468,8 +467,7 @@ async def list_magazine2s(
 
 @router.get("/{magazine2_id}", response_model=Magazine2Response)
 async def get_magazine2(
-    magazine2_id: str,
-    current_user: dict = Depends(get_current_user)
+    magazine2_id: str
 ):
     """Get a specific magazine2 by ID."""
     try:

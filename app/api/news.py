@@ -411,12 +411,11 @@ async def get_all_news(
     page: int = 1,
     limit: int = DEFAULT_PAGE_SIZE,
     status: str = None,
-    district_slug: str = None,
-    current_user: dict = Depends(get_current_user)
+    district_slug: str = None
 ):
     """Get all news with pagination and optional status/district filters."""
     try:
-        logger.info(f"[GET_ALL] start page={page} limit={limit} status={status} district_slug={district_slug} user={current_user.get('email', 'unknown')}")
+        logger.info(f"[GET_ALL] start page={page} limit={limit} status={status} district_slug={district_slug}")
         
         # Validate pagination parameters
         if page < 1:
@@ -459,12 +458,11 @@ async def get_all_news(
 
 @router.get("/{news_id}", response_model=NewsResponse)
 async def get_news_by_id(
-    news_id: str,
-    current_user: dict = Depends(get_current_user)
+    news_id: str
 ):
     """Get a single news article by ID."""
     try:
-        logger.info(f"[GET_BY_ID] start news_id={news_id} user={current_user.get('email', 'unknown')}")
+        logger.info(f"[GET_BY_ID] start news_id={news_id}")
         
         # Validate ObjectId format
         try:

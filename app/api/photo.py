@@ -233,8 +233,7 @@ async def list_photos(
     page: int = 1,
     page_size: int = DEFAULT_PAGE_SIZE,
     status_filter: str = None,
-    category_filter: str = None,
-    current_user: dict = Depends(get_current_user)
+    category_filter: str = None
 ):
     """List photos with pagination and optional filters."""
     try:
@@ -268,8 +267,7 @@ async def list_photos(
 
 @router.get("/{photo_id}", response_model=PhotoResponse)
 async def get_photo(
-    photo_id: str,
-    current_user: dict = Depends(get_current_user)
+    photo_id: str
 ):
     """Get a specific photo by ID."""
     try:
