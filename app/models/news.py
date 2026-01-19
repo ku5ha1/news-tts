@@ -24,7 +24,7 @@ class NewsUpdateRequest(BaseModel):
     newsType: Optional[Literal["statenews", "districtnews", "specialnews", "articles"]] = None
     district_slug: Optional[str] = None  # For district news filtering
     source: Optional[str] = None  # Source link for articles
-    status: Optional[Literal["pending", "ed", "rejected"]] = None
+    status: Optional[Literal["pending", "approved", "rejected"]] = None
     isLive: Optional[bool] = None
 
 class TranslationData(BaseModel):
