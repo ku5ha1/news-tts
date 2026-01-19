@@ -207,8 +207,7 @@ async def create_video_category(
 @router.get("/list", response_model=VideoCategoryListResponse)
 async def list_video_categories(
     page: int = 1,
-    page_size: int = DEFAULT_PAGE_SIZE,
-    current_user: dict = Depends(get_current_user)
+    page_size: int = DEFAULT_PAGE_SIZE
 ):
     """List video categories with pagination."""
     try:
@@ -240,8 +239,7 @@ async def list_video_categories(
 
 @router.get("/{category_id}", response_model=VideoCategoryResponse)
 async def get_video_category(
-    category_id: str,
-    current_user: dict = Depends(get_current_user)
+    category_id: str
 ):
     """Get a specific video category by ID."""
     try:

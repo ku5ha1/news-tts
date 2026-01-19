@@ -227,8 +227,7 @@ async def create_static_page(
 async def list_static_pages(
     page: int = 1,
     page_size: int = DEFAULT_PAGE_SIZE,
-    status_filter: str = None,
-    current_user: dict = Depends(get_current_user)
+    status_filter: str = None
 ):
     """List static pages with pagination and optional status filter."""
     try:
@@ -261,8 +260,7 @@ async def list_static_pages(
 
 @router.get("/{staticpage_id}", response_model=StaticPageResponse)
 async def get_static_page(
-    staticpage_id: str,
-    current_user: dict = Depends(get_current_user)
+    staticpage_id: str
 ):
     """Get a specific static page by ID."""
     try:

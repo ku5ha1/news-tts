@@ -211,8 +211,7 @@ async def create_latest_notification(
 @router.get("/list", response_model=LatestNotificationListResponse)
 async def list_latest_notifications(
     page: int = 1,
-    page_size: int = DEFAULT_PAGE_SIZE,
-    current_user: dict = Depends(get_current_user)
+    page_size: int = DEFAULT_PAGE_SIZE
 ):
     """List latest notifications with pagination."""
     try:
@@ -244,8 +243,7 @@ async def list_latest_notifications(
 
 @router.get("/{latestnotification_id}", response_model=LatestNotificationResponse)
 async def get_latest_notification(
-    latestnotification_id: str,
-    current_user: dict = Depends(get_current_user)
+    latestnotification_id: str
 ):
     """Get a specific latest notification by ID."""
     try:

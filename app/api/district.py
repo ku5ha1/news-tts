@@ -232,8 +232,7 @@ async def create_district(
 @router.get("/list", response_model=DistrictListResponse)
 async def list_districts(
     page: int = 1,
-    page_size: int = DEFAULT_PAGE_SIZE,
-    current_user: dict = Depends(get_current_user)
+    page_size: int = DEFAULT_PAGE_SIZE
 ):
     """List districts with pagination."""
     try:
@@ -265,8 +264,7 @@ async def list_districts(
 
 @router.get("/{district_id}", response_model=DistrictResponse)
 async def get_district(
-    district_id: str,
-    current_user: dict = Depends(get_current_user)
+    district_id: str
 ):
     """Get a specific district by ID."""
     try:
@@ -287,8 +285,7 @@ async def get_district(
 
 @router.get("/slug/{district_slug}", response_model=DistrictResponse)
 async def get_district_by_slug(
-    district_slug: str,
-    current_user: dict = Depends(get_current_user)
+    district_slug: str
 ):
     """Get a specific district by slug."""
     try:

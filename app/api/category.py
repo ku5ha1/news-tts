@@ -222,8 +222,7 @@ async def create_category(
 async def list_categories(
     page: int = 1,
     page_size: int = DEFAULT_PAGE_SIZE,
-    status_filter: str = None,
-    current_user: dict = Depends(get_current_user)
+    status_filter: str = None
 ):
     """List categories with pagination and optional status filter."""
     try:
@@ -256,8 +255,7 @@ async def list_categories(
 
 @router.get("/{category_id}", response_model=CategoryResponse)
 async def get_category(
-    category_id: str,
-    current_user: dict = Depends(get_current_user)
+    category_id: str
 ):
     """Get a specific category by ID."""
     try:

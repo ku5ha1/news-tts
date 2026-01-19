@@ -264,8 +264,7 @@ async def list_long_videos(
     page: int = 1,
     page_size: int = DEFAULT_PAGE_SIZE,
     status_filter: str = None,
-    category_filter: str = None,
-    current_user: dict = Depends(get_current_user)
+    category_filter: str = None
 ):
     """List long videos with pagination and optional filters."""
     try:
@@ -299,8 +298,7 @@ async def list_long_videos(
 
 @router.get("/{video_id}", response_model=LongVideoResponse)
 async def get_long_video(
-    video_id: str,
-    current_user: dict = Depends(get_current_user)
+    video_id: str
 ):
     """Get a specific long video by ID."""
     try:
