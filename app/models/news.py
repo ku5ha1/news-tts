@@ -12,6 +12,7 @@ class NewsCreateRequest(BaseModel):
     magazineType: Literal["magazine", "magazine2"]
     newsType: Literal["statenews", "districtnews", "specialnews", "articles"]
     district_slug: Optional[str] = None  # For district news filtering
+    source: Optional[str] = None  # Source link for articles 
 
 class NewsUpdateRequest(BaseModel):
     title: Optional[str] = None
@@ -22,7 +23,8 @@ class NewsUpdateRequest(BaseModel):
     magazineType: Optional[Literal["magazine", "magazine2"]] = None
     newsType: Optional[Literal["statenews", "districtnews", "specialnews", "articles"]] = None
     district_slug: Optional[str] = None  # For district news filtering
-    status: Optional[Literal["pending", "approved", "rejected"]] = None
+    source: Optional[str] = None  # Source link for articles
+    status: Optional[Literal["pending", "ed", "rejected"]] = None
     isLive: Optional[bool] = None
 
 class TranslationData(BaseModel):

@@ -528,6 +528,7 @@ async def create_news(
             "magazineType": payload.magazineType,
             "newsType": payload.newsType,
             "district_slug": payload.district_slug,
+            "source": payload.source,
             "isLive": isLive,
             "views": 0,
             "total_Likes": 0,
@@ -739,6 +740,9 @@ async def update_news(
             
         if payload.district_slug is not None:
             updates["district_slug"] = payload.district_slug
+            
+        if payload.source is not None:
+            updates["source"] = payload.source
             
         # Handle status and isLive (admin/moderator only)
         if payload.status is not None:
