@@ -149,6 +149,14 @@ async def create_photo(
             raise HTTPException(status_code=400, detail="Title cannot be empty")
         if not payload.photoImage.strip():
             raise HTTPException(status_code=400, detail="Photo image URL cannot be empty")
+        if not payload.category.strip():
+            raise HTTPException(status_code=400, detail="Category cannot be empty")
+        
+        # Validate category ObjectId
+        try:
+            category_object_id = ObjectId(payload.category)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid category ID format")
 
         # Detect source language from title
         source_lang = detect_language(payload.title)
@@ -194,6 +202,7 @@ async def create_photo(
             "_id": photo_id,
             "title": payload.title,
             "photoImage": payload.photoImage,
+            "category": category_object_id,
             "createdBy": ObjectId(current_user.get("_id")) if current_user.get("_id") else None,
             "status": status,
             "createdTime": datetime.utcnow(),
@@ -224,11 +233,12 @@ async def list_photos(
     page: int = 1,
     page_size: int = DEFAULT_PAGE_SIZE,
     status_filter: str = None,
+    category_filter: str = None,
     current_user: dict = Depends(get_current_user)
 ):
     """List photos with pagination and optional filters."""
     try:
-        logger.info(f"[PHOTO-LIST] page={page} page_size={page_size} status={status_filter}")
+        logger.info(f"[PHOTO-LIST] page={page} page_size={page_size} status={status_filter} category={category_filter}")
         
         # Calculate skip
         skip = (page - 1) * page_size
@@ -237,7 +247,8 @@ async def list_photos(
         photos, total = await get_db_service().get_photos_paginated(
             skip=skip, 
             limit=page_size, 
-            status_filter=status_filter
+            status_filter=status_filter,
+            category_filter=category_filter
         )
         
         # Format response
@@ -371,6 +382,12 @@ async def update_photo(
             
         if payload.photoImage is not None:
             updates["photoImage"] = payload.photoImage
+            
+        if payload.category is not None:
+            try:
+                updates["category"] = ObjectId(payload.category)
+            except Exception:
+                raise HTTPException(status_code=400, detail="Invalid category ID format")
             
         # Handle status updates (admin/moderator only)
         if payload.status is not None:

@@ -521,8 +521,8 @@ class DBService:
             logger.error(f"[MongoDB] Get photo error for {photo_id}: {str(e)}", exc_info=True)
             return None
 
-    async def get_photos_paginated(self, skip: int = 0, limit: int = 20, status_filter: str = None):
-        """Get photos with pagination and optional status filter"""
+    async def get_photos_paginated(self, skip: int = 0, limit: int = 20, status_filter: str = None, category_filter: str = None):
+        """Get photos with pagination and optional status and category filters"""
         if not self.connected or not self.client:
             logger.error("[MongoDB] Cannot get photos - not connected")
             return [], 0
@@ -531,6 +531,12 @@ class DBService:
             query = {}
             if status_filter:
                 query["status"] = status_filter
+            if category_filter:
+                try:
+                    query["category"] = ObjectId(category_filter)
+                except Exception:
+                    logger.warning(f"[MongoDB] Invalid category ObjectId: {category_filter}")
+                    return [], 0
             
             # Get total count
             total = await collection.count_documents(query)
@@ -1036,4 +1042,105 @@ class DBService:
                 return False
         except Exception as e:
             logger.error(f"[MongoDB] Delete newarticle error for {newarticle_id}: {str(e)}", exc_info=True)
+            return False 
+   # Photo Category methods
+    async def insert_photo_category(self, data: dict):
+        """Insert photo category document into MongoDB"""
+        if not self.connected or not self.client:
+            raise RuntimeError("Database not connected")
+        try:
+            logger.info(f"[MongoDB] Insert photo category start id={data.get('_id')}")
+            collection = self.db["photo_categories"]
+            result = await collection.insert_one(data)
+            logger.info(f"[MongoDB] Insert photo category done id={result.inserted_id}")
+            return result.inserted_id
+        except Exception as e:
+            logger.error(f"[MongoDB] Insert photo category failed error={str(e)}", exc_info=True)
+            raise RuntimeError(f"Database insert failed: {str(e)}")
+
+    async def get_photo_category_by_id(self, category_id: str | ObjectId):
+        """Get photo category by ID"""
+        if not self.connected or not self.client:
+            logger.error("[MongoDB] Cannot get photo category - not connected")
+            return None
+        try:
+            oid = ObjectId(category_id) if not isinstance(category_id, ObjectId) else category_id
+            logger.info(f"[MongoDB] Fetching photo category: {oid}")
+            collection = self.db["photo_categories"]
+            result = await collection.find_one({"_id": oid})
+            if result:
+                logger.info(f"[MongoDB] Photo category found: {oid}")
+            else:
+                logger.warning(f"[MongoDB] Photo category not found: {oid}")
+            return result
+        except Exception as e:
+            logger.error(f"[MongoDB] Get photo category error for {category_id}: {str(e)}", exc_info=True)
+            return None
+
+    async def get_photo_categories_paginated(self, skip: int = 0, limit: int = 20):
+        """Get photo categories with pagination"""
+        if not self.connected or not self.client:
+            logger.error("[MongoDB] Cannot get photo categories - not connected")
+            return [], 0
+        try:
+            collection = self.db["photo_categories"]
+            query = {}
+            
+            # Get total count
+            total = await collection.count_documents(query)
+            
+            # Get paginated results
+            cursor = collection.find(query).skip(skip).limit(limit)
+            categories = await cursor.to_list(length=limit)
+            
+            logger.info(f"[MongoDB] Found {len(categories)} photo categories (total: {total})")
+            return categories, total
+        except Exception as e:
+            logger.error(f"[MongoDB] Get photo categories error: {str(e)}", exc_info=True)
+            return [], 0
+
+    async def update_photo_category_fields(self, category_id: str | ObjectId, updates: dict, retries: int = MAX_RETRIES) -> bool:
+        """Update specific fields on a photo category document with optional retries."""
+        if not self.connected or not self.client:
+            logger.error("[MongoDB] Cannot update photo category - not connected")
+            return False
+
+        oid = ObjectId(category_id) if not isinstance(category_id, ObjectId) else category_id
+
+        for attempt in range(1, retries + 1):
+            try:
+                logger.info(f"[MongoDB] Update photo category start attempt={attempt} id={oid} fields={len(updates)}")
+                collection = self.db["photo_categories"]
+                result = await collection.update_one({"_id": oid}, {"$set": updates})
+                if result.modified_count > 0:
+                    logger.info(f"[MongoDB] Update photo category done id={oid} modified={result.modified_count}")
+                    return True
+                else:
+                    logger.warning(f"[MongoDB] Update photo category none id={oid}")
+                    return False
+            except Exception as e:
+                logger.error(f"[MongoDB] Update photo category failed attempt={attempt} id={category_id} error={str(e)}", exc_info=True)
+                if attempt < retries:
+                    await asyncio.sleep(1)
+                    continue
+                return False
+
+    async def delete_photo_category(self, category_id: str | ObjectId) -> bool:
+        """Delete a photo category"""
+        if not self.connected or not self.client:
+            logger.error("[MongoDB] Cannot delete photo category - not connected")
+            return False
+        try:
+            oid = ObjectId(category_id) if not isinstance(category_id, ObjectId) else category_id
+            logger.info(f"[MongoDB] Deleting photo category: {oid}")
+            collection = self.db["photo_categories"]
+            result = await collection.delete_one({"_id": oid})
+            if result.deleted_count > 0:
+                logger.info(f"[MongoDB] Photo category deleted: {oid}")
+                return True
+            else:
+                logger.warning(f"[MongoDB] Photo category not found for deletion: {oid}")
+                return False
+        except Exception as e:
+            logger.error(f"[MongoDB] Delete photo category error for {category_id}: {str(e)}", exc_info=True)
             return False
