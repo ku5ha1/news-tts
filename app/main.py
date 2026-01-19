@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import news, category, longvideo, shortvideo, photo, magazine, magazine2, staticpage, search, latestnotification, newarticle, photo_category
+from app.api import news, category, longvideo, shortvideo, photo, magazine, magazine2, staticpage, search, latestnotification, newarticle, photo_category, video_category
 from app.config.settings import settings
 import asyncio
 import logging
@@ -203,6 +203,7 @@ app.include_router(latestnotification.router, prefix="/api/latestnotifications",
 app.include_router(newarticle.router, prefix="/api/newarticles", tags=["newarticles"])
 app.include_router(search.router, tags=["search"])
 app.include_router(photo_category.router, prefix="/api/photo-category", tags=["photo-categories"])
+app.include_router(video_category.router, prefix="/api/video-category", tags=["video-categories"])
 
 @app.get("/health")
 async def health():
