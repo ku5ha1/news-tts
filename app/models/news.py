@@ -11,6 +11,7 @@ class NewsCreateRequest(BaseModel):
     publishedAt: datetime
     magazineType: Literal["magazine", "magazine2"]
     newsType: Literal["statenews", "districtnews", "specialnews", "articles"]
+    district_slug: Optional[str] = None  # For district news filtering
 
 class NewsUpdateRequest(BaseModel):
     title: Optional[str] = None
@@ -20,6 +21,7 @@ class NewsUpdateRequest(BaseModel):
     newsImage: Optional[str] = None
     magazineType: Optional[Literal["magazine", "magazine2"]] = None
     newsType: Optional[Literal["statenews", "districtnews", "specialnews", "articles"]] = None
+    district_slug: Optional[str] = None  # For district news filtering
     status: Optional[Literal["pending", "approved", "rejected"]] = None
     isLive: Optional[bool] = None
 

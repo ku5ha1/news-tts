@@ -129,8 +129,8 @@ class DBService:
             logger.error(f"[MongoDB] Get error for {news_id}: {str(e)}", exc_info=True)
             return None
 
-    async def get_news_paginated(self, skip: int = 0, limit: int = 20, status_filter: str = None):
-        """Get news with pagination and optional status filter"""
+    async def get_news_paginated(self, skip: int = 0, limit: int = 20, status_filter: str = None, district_slug_filter: str = None):
+        """Get news with pagination and optional status/district filters"""
         if not self.connected or not self.client:
             logger.error("[MongoDB] Cannot get news - not connected")
             return [], 0
@@ -138,6 +138,8 @@ class DBService:
             query = {}
             if status_filter:
                 query["status"] = status_filter
+            if district_slug_filter:
+                query["district_slug"] = district_slug_filter
             
             # Get total count
             total = await self.collection.count_documents(query)
@@ -1144,7 +1146,7 @@ class DBService:
         except Exception as e:
             logger.error(f"[MongoDB] Delete photo category error for {category_id}: {str(e)}", exc_info=True)
             return False    # Video Category methods
-            
+
     async def insert_video_category(self, data: dict):
         """Insert video category document into MongoDB"""
         if not self.connected or not self.client:
@@ -1244,4 +1246,123 @@ class DBService:
                 return False
         except Exception as e:
             logger.error(f"[MongoDB] Delete video category error for {category_id}: {str(e)}", exc_info=True)
+            return False    
+# District methods
+    async def insert_district(self, data: dict):
+        """Insert district document into MongoDB"""
+        if not self.connected or not self.client:
+            raise RuntimeError("Database not connected")
+        try:
+            logger.info(f"[MongoDB] Insert district start id={data.get('_id')}")
+            collection = self.db["districts"]
+            result = await collection.insert_one(data)
+            logger.info(f"[MongoDB] Insert district done id={result.inserted_id}")
+            return result.inserted_id
+        except Exception as e:
+            logger.error(f"[MongoDB] Insert district failed error={str(e)}", exc_info=True)
+            raise RuntimeError(f"Database insert failed: {str(e)}")
+
+    async def get_district_by_id(self, district_id: str | ObjectId):
+        """Get district by ID"""
+        if not self.connected or not self.client:
+            logger.error("[MongoDB] Cannot get district - not connected")
+            return None
+        try:
+            oid = ObjectId(district_id) if not isinstance(district_id, ObjectId) else district_id
+            logger.info(f"[MongoDB] Fetching district: {oid}")
+            collection = self.db["districts"]
+            result = await collection.find_one({"_id": oid})
+            if result:
+                logger.info(f"[MongoDB] District found: {oid}")
+            else:
+                logger.warning(f"[MongoDB] District not found: {oid}")
+            return result
+        except Exception as e:
+            logger.error(f"[MongoDB] Get district error for {district_id}: {str(e)}", exc_info=True)
+            return None
+
+    async def get_district_by_slug(self, district_slug: str):
+        """Get district by slug"""
+        if not self.connected or not self.client:
+            logger.error("[MongoDB] Cannot get district by slug - not connected")
+            return None
+        try:
+            logger.info(f"[MongoDB] Fetching district by slug: {district_slug}")
+            collection = self.db["districts"]
+            result = await collection.find_one({"district_slug": district_slug})
+            if result:
+                logger.info(f"[MongoDB] District found by slug: {district_slug}")
+            else:
+                logger.warning(f"[MongoDB] District not found by slug: {district_slug}")
+            return result
+        except Exception as e:
+            logger.error(f"[MongoDB] Get district by slug error for {district_slug}: {str(e)}", exc_info=True)
+            return None
+
+    async def get_districts_paginated(self, skip: int = 0, limit: int = 20):
+        """Get districts with pagination"""
+        if not self.connected or not self.client:
+            logger.error("[MongoDB] Cannot get districts - not connected")
+            return [], 0
+        try:
+            collection = self.db["districts"]
+            query = {}
+            
+            # Get total count
+            total = await collection.count_documents(query)
+            
+            # Get paginated results sorted by district_name
+            cursor = collection.find(query).sort("district_name", 1).skip(skip).limit(limit)
+            districts = await cursor.to_list(length=limit)
+            
+            logger.info(f"[MongoDB] Found {len(districts)} districts (total: {total})")
+            return districts, total
+        except Exception as e:
+            logger.error(f"[MongoDB] Get districts error: {str(e)}", exc_info=True)
+            return [], 0
+
+    async def update_district_fields(self, district_id: str | ObjectId, updates: dict, retries: int = MAX_RETRIES) -> bool:
+        """Update specific fields on a district document with optional retries."""
+        if not self.connected or not self.client:
+            logger.error("[MongoDB] Cannot update district - not connected")
+            return False
+
+        oid = ObjectId(district_id) if not isinstance(district_id, ObjectId) else district_id
+
+        for attempt in range(1, retries + 1):
+            try:
+                logger.info(f"[MongoDB] Update district start attempt={attempt} id={oid} fields={len(updates)}")
+                collection = self.db["districts"]
+                result = await collection.update_one({"_id": oid}, {"$set": updates})
+                if result.modified_count > 0:
+                    logger.info(f"[MongoDB] Update district done id={oid} modified={result.modified_count}")
+                    return True
+                else:
+                    logger.warning(f"[MongoDB] Update district none id={oid}")
+                    return False
+            except Exception as e:
+                logger.error(f"[MongoDB] Update district failed attempt={attempt} id={district_id} error={str(e)}", exc_info=True)
+                if attempt < retries:
+                    await asyncio.sleep(1)
+                    continue
+                return False
+
+    async def delete_district(self, district_id: str | ObjectId) -> bool:
+        """Delete a district"""
+        if not self.connected or not self.client:
+            logger.error("[MongoDB] Cannot delete district - not connected")
+            return False
+        try:
+            oid = ObjectId(district_id) if not isinstance(district_id, ObjectId) else district_id
+            logger.info(f"[MongoDB] Deleting district: {oid}")
+            collection = self.db["districts"]
+            result = await collection.delete_one({"_id": oid})
+            if result.deleted_count > 0:
+                logger.info(f"[MongoDB] District deleted: {oid}")
+                return True
+            else:
+                logger.warning(f"[MongoDB] District not found for deletion: {oid}")
+                return False
+        except Exception as e:
+            logger.error(f"[MongoDB] Delete district error for {district_id}: {str(e)}", exc_info=True)
             return False

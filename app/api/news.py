@@ -411,11 +411,12 @@ async def get_all_news(
     page: int = 1,
     limit: int = DEFAULT_PAGE_SIZE,
     status: str = None,
+    district_slug: str = None,
     current_user: dict = Depends(get_current_user)
 ):
-    """Get all news with pagination and optional status filter."""
+    """Get all news with pagination and optional status/district filters."""
     try:
-        logger.info(f"[GET_ALL] start page={page} limit={limit} status={status} user={current_user.get('email', 'unknown')}")
+        logger.info(f"[GET_ALL] start page={page} limit={limit} status={status} district_slug={district_slug} user={current_user.get('email', 'unknown')}")
         
         # Validate pagination parameters
         if page < 1:
@@ -429,7 +430,8 @@ async def get_all_news(
         news_list, total = await get_db_service().get_news_paginated(
             skip=skip,
             limit=limit,
-            status_filter=status
+            status_filter=status,
+            district_slug_filter=district_slug
         )
         
         # Convert to extended JSON format
@@ -525,6 +527,7 @@ async def create_news(
             "publishedAt": datetime.utcnow(),
             "magazineType": payload.magazineType,
             "newsType": payload.newsType,
+            "district_slug": payload.district_slug,
             "isLive": isLive,
             "views": 0,
             "total_Likes": 0,
@@ -733,6 +736,9 @@ async def update_news(
             
         if payload.newsType is not None:
             updates["newsType"] = payload.newsType
+            
+        if payload.district_slug is not None:
+            updates["district_slug"] = payload.district_slug
             
         # Handle status and isLive (admin/moderator only)
         if payload.status is not None:
