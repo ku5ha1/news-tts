@@ -927,3 +927,140 @@ async def health_check():
         timestamp=datetime.utcnow(),
         version="1.0.0"
     )
+
+# News Type Filtering Endpoints
+@router.get("/news/getNewsByNewsType/articles", response_model=NewsResponse)
+async def get_articles(
+    date: str = None
+):
+    """Get all articles with optional date filter."""
+    try:
+        logger.info(f"[GET_ARTICLES] start date={date}")
+        
+        # Get all articles from database (no pagination)
+        news_list, total = await get_db_service().get_news_paginated(
+            skip=0,
+            limit=10000,  # Large limit to get all results
+            status_filter="approved",  # Only approved news
+            news_type_filter="articles",
+            date_filter=date
+        )
+        
+        # Convert to extended JSON format
+        news_list_json = [to_extended_json(doc) for doc in news_list]
+        
+        logger.info(f"[GET_ARTICLES] success - found {len(news_list)}/{total} articles")
+        
+        return NewsResponse(
+            success=True,
+            data={
+                "news": news_list_json,
+                "total": total
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"[GET_ARTICLES] error: {e}")
+        raise HTTPException(status_code=500, detail=f"Error fetching articles: {str(e)}")
+
+@router.get("/news/getNewsByNewsType/specialnews", response_model=NewsResponse)
+async def get_special_news(
+    date: str = None
+):
+    """Get all special news with optional date filter."""
+    try:
+        logger.info(f"[GET_SPECIALNEWS] start date={date}")
+        
+        # Get all special news from database (no pagination)
+        news_list, total = await get_db_service().get_news_paginated(
+            skip=0,
+            limit=10000,  # Large limit to get all results
+            status_filter="approved",  # Only approved news
+            news_type_filter="specialnews",
+            date_filter=date
+        )
+        
+        # Convert to extended JSON format
+        news_list_json = [to_extended_json(doc) for doc in news_list]
+        
+        logger.info(f"[GET_SPECIALNEWS] success - found {len(news_list)}/{total} special news")
+        
+        return NewsResponse(
+            success=True,
+            data={
+                "news": news_list_json,
+                "total": total
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"[GET_SPECIALNEWS] error: {e}")
+        raise HTTPException(status_code=500, detail=f"Error fetching special news: {str(e)}")
+
+@router.get("/news/getNewsByNewsType/districtnews", response_model=NewsResponse)
+async def get_district_news_by_type(
+    date: str = None
+):
+    """Get all district news with optional date filter."""
+    try:
+        logger.info(f"[GET_DISTRICTNEWS] start date={date}")
+        
+        # Get all district news from database (no pagination)
+        news_list, total = await get_db_service().get_news_paginated(
+            skip=0,
+            limit=10000,  # Large limit to get all results
+            status_filter="approved",  # Only approved news
+            news_type_filter="districtnews",
+            date_filter=date
+        )
+        
+        # Convert to extended JSON format
+        news_list_json = [to_extended_json(doc) for doc in news_list]
+        
+        logger.info(f"[GET_DISTRICTNEWS] success - found {len(news_list)}/{total} district news")
+        
+        return NewsResponse(
+            success=True,
+            data={
+                "news": news_list_json,
+                "total": total
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"[GET_DISTRICTNEWS] error: {e}")
+        raise HTTPException(status_code=500, detail=f"Error fetching district news: {str(e)}")
+
+@router.get("/news/getNewsByNewsType/statenews", response_model=NewsResponse)
+async def get_state_news(
+    date: str = None
+):
+    """Get all state news with optional date filter."""
+    try:
+        logger.info(f"[GET_STATENEWS] start date={date}")
+        
+        # Get all state news from database (no pagination)
+        news_list, total = await get_db_service().get_news_paginated(
+            skip=0,
+            limit=10000,  # Large limit to get all results
+            status_filter="approved",  # Only approved news
+            news_type_filter="statenews",
+            date_filter=date
+        )
+        
+        # Convert to extended JSON format
+        news_list_json = [to_extended_json(doc) for doc in news_list]
+        
+        logger.info(f"[GET_STATENEWS] success - found {len(news_list)}/{total} state news")
+        
+        return NewsResponse(
+            success=True,
+            data={
+                "news": news_list_json,
+                "total": total
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"[GET_STATENEWS] error: {e}")
+        raise HTTPException(status_code=500, detail=f"Error fetching state news: {str(e)}")

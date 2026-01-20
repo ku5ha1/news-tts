@@ -129,8 +129,8 @@ class DBService:
             logger.error(f"[MongoDB] Get error for {news_id}: {str(e)}", exc_info=True)
             return None
 
-    async def get_news_paginated(self, skip: int = 0, limit: int = 20, status_filter: str = None, district_slug_filter: str = None, date_filter: str = None):
-        """Get news with pagination and optional status/district/date filters"""
+    async def get_news_paginated(self, skip: int = 0, limit: int = 20, status_filter: str = None, district_slug_filter: str = None, date_filter: str = None, news_type_filter: str = None):
+        """Get news with pagination and optional status/district/date/newsType filters"""
         if not self.connected or not self.client:
             logger.error("[MongoDB] Cannot get news - not connected")
             return [], 0
@@ -140,6 +140,8 @@ class DBService:
                 query["status"] = status_filter
             if district_slug_filter:
                 query["district_slug"] = district_slug_filter
+            if news_type_filter:
+                query["newsType"] = news_type_filter
             if date_filter:
                 # Parse date string (YYYY-MM-DD) and create date range for the entire day
                 from datetime import datetime, timedelta
@@ -158,8 +160,8 @@ class DBService:
             # Get total count
             total = await self.collection.count_documents(query)
             
-            # Get paginated results, sorted by creation time (newest first)
-            cursor = self.collection.find(query).sort("createdTime", -1).skip(skip).limit(limit)
+            # Get paginated results, sorted by published date (newest first)
+            cursor = self.collection.find(query).sort("publishedAt", -1).skip(skip).limit(limit)
             news_list = await cursor.to_list(length=limit)
             
             logger.info(f"[MongoDB] Found {len(news_list)} news (total: {total})")
