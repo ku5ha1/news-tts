@@ -19,7 +19,7 @@ import os
 logger = logging.getLogger(__name__)
 
 DEFAULT_TRANSLATION_TIMEOUT = 90.0
-DEFAULT_PAGE_SIZE = 20
+DEFAULT_PAGE_SIZE = 40
 
 router = APIRouter()
 
