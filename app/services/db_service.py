@@ -364,8 +364,8 @@ class DBService:
                 logger.info(f"[MongoDB] Update longvideo start attempt={attempt} id={oid} fields={len(updates)}")
                 collection = self.db["longvideos"]
                 result = await collection.update_one({"_id": oid}, {"$set": updates})
-                if result.modified_count > 0:
-                    logger.info(f"[MongoDB] Update longvideo done id={oid} modified={result.modified_count}")
+                if result.matched_count > 0:
+                    logger.info(f"[MongoDB] Update longvideo done id={oid} matched={result.matched_count} modified={result.modified_count}")
                     return True
                 else:
                     logger.warning(f"[MongoDB] Update longvideo none id={oid}")
