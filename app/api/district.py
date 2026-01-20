@@ -230,21 +230,15 @@ async def create_district(
         raise HTTPException(status_code=500, detail=f"Error creating district: {str(e)}")
 
 @router.get("/list", response_model=DistrictListResponse)
-async def list_districts(
-    page: int = 1,
-    page_size: int = DEFAULT_PAGE_SIZE
-):
-    """List districts with pagination."""
+async def list_districts():
+    """List all districts."""
     try:
-        logger.info(f"[DISTRICT-LIST] page={page} page_size={page_size}")
+        logger.info(f"[DISTRICT-LIST] getting all districts")
         
-        # Calculate skip
-        skip = (page - 1) * page_size
-        
-        # Get districts from DB
+        # Get all districts from DB (no pagination)
         districts, total = await get_db_service().get_districts_paginated(
-            skip=skip, 
-            limit=page_size
+            skip=0, 
+            limit=10000  # Large limit to get all results
         )
         
         # Format response
@@ -254,8 +248,8 @@ async def list_districts(
             success=True,
             data={"districts": formatted_districts},
             total=total,
-            page=page,
-            page_size=page_size
+            page=1,
+            page_size=total
         )
         
     except Exception as e:
@@ -459,28 +453,24 @@ async def delete_district(
 @router.get("/news/{district_slug}")
 async def get_district_news(
     district_slug: str,
-    page: int = 1,
-    page_size: int = DEFAULT_PAGE_SIZE
+    date: str = None
 ):
-    """Get news for a specific district by slug (public endpoint)."""
+    """Get news for a specific district by slug with optional date filter (public endpoint)."""
     try:
-        logger.info(f"[DISTRICT-NEWS] district_slug={district_slug} page={page} page_size={page_size}")
+        logger.info(f"[DISTRICT-NEWS] district_slug={district_slug} date={date}")
         
         # Validate district exists
         district = await get_db_service().get_district_by_slug(district_slug)
         if not district:
             raise HTTPException(status_code=404, detail="District not found")
         
-        # Calculate skip
-        skip = (page - 1) * page_size
-        
-        # Get news for this district
+        # Get all news for this district (no pagination)
         news_list, total = await get_db_service().get_news_paginated(
-            skip=skip,
-            limit=page_size,
+            skip=0,
+            limit=10000,  # Large limit to get all results
             status_filter="approved",  # Only approved news
             district_slug_filter=district_slug,
-            date_filter=None  # No date filter for district news endpoint
+            date_filter=date
         )
         
         # Format response
@@ -491,10 +481,7 @@ async def get_district_news(
             "district": to_extended_json(district),
             "data": {
                 "news": formatted_news,
-                "total": total,
-                "page": page,
-                "page_size": page_size,
-                "total_pages": (total + page_size - 1) // page_size if total > 0 else 0
+                "total": total
             }
         }
         

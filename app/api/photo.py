@@ -230,22 +230,17 @@ async def create_photo(
 
 @router.get("/list", response_model=PhotoListResponse)
 async def list_photos(
-    page: int = 1,
-    page_size: int = DEFAULT_PAGE_SIZE,
     status_filter: str = None,
     category_filter: str = None
 ):
-    """List photos with pagination and optional filters."""
+    """List all photos with optional filters."""
     try:
-        logger.info(f"[PHOTO-LIST] page={page} page_size={page_size} status={status_filter} category={category_filter}")
+        logger.info(f"[PHOTO-LIST] status={status_filter} category={category_filter}")
         
-        # Calculate skip
-        skip = (page - 1) * page_size
-        
-        # Get photos from DB
+        # Get all photos from DB (no pagination)
         photos, total = await get_db_service().get_photos_paginated(
-            skip=skip, 
-            limit=page_size, 
+            skip=0, 
+            limit=10000,  # Large limit to get all results
             status_filter=status_filter,
             category_filter=category_filter
         )
@@ -257,7 +252,6 @@ async def list_photos(
             success=True,
             data={"photos": formatted_photos},
             total=total,
-            page=page,
             page_size=page_size
         )
         

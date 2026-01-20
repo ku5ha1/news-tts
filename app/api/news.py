@@ -408,28 +408,18 @@ async def _generate_and_attach_audio(document_id: ObjectId, payload: NewsCreateR
 
 @router.get("/", response_model=NewsResponse)
 async def get_all_news(
-    page: int = 1,
-    limit: int = DEFAULT_PAGE_SIZE,
     status: str = None,
     district_slug: str = None,
     date: str = None
 ):
-    """Get all news with pagination and optional status/district/date filters."""
+    """Get all news with optional status/district/date filters."""
     try:
-        logger.info(f"[GET_ALL] start page={page} limit={limit} status={status} district_slug={district_slug} date={date}")
+        logger.info(f"[GET_ALL] start status={status} district_slug={district_slug} date={date}")
         
-        # Validate pagination parameters
-        if page < 1:
-            raise HTTPException(status_code=400, detail="Page must be >= 1")
-        if limit < 1 or limit > 100:
-            raise HTTPException(status_code=400, detail="Limit must be between 1 and 100")
-        
-        skip = (page - 1) * limit
-        
-        # Get news from database using db_service
+        # Get all news from database using db_service (no pagination)
         news_list, total = await get_db_service().get_news_paginated(
-            skip=skip,
-            limit=limit,
+            skip=0,
+            limit=10000,  # Large limit to get all results
             status_filter=status,
             district_slug_filter=district_slug,
             date_filter=date
@@ -444,12 +434,10 @@ async def get_all_news(
             success=True,
             data={
                 "news": news_list_json,
-                "total": total,
-                "page": page,
-                "limit": limit,
-                "total_pages": (total + limit - 1) // limit if total > 0 else 0
+                "total": total
             }
         )
+            
         
     except HTTPException:
         raise
