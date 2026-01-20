@@ -479,7 +479,8 @@ async def get_district_news(
             skip=skip,
             limit=page_size,
             status_filter="approved",  # Only approved news
-            district_slug_filter=district_slug
+            district_slug_filter=district_slug,
+            date_filter=None  # No date filter for district news endpoint
         )
         
         # Format response

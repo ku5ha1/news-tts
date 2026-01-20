@@ -411,11 +411,12 @@ async def get_all_news(
     page: int = 1,
     limit: int = DEFAULT_PAGE_SIZE,
     status: str = None,
-    district_slug: str = None
+    district_slug: str = None,
+    date: str = None
 ):
-    """Get all news with pagination and optional status/district filters."""
+    """Get all news with pagination and optional status/district/date filters."""
     try:
-        logger.info(f"[GET_ALL] start page={page} limit={limit} status={status} district_slug={district_slug}")
+        logger.info(f"[GET_ALL] start page={page} limit={limit} status={status} district_slug={district_slug} date={date}")
         
         # Validate pagination parameters
         if page < 1:
@@ -430,7 +431,8 @@ async def get_all_news(
             skip=skip,
             limit=limit,
             status_filter=status,
-            district_slug_filter=district_slug
+            district_slug_filter=district_slug,
+            date_filter=date
         )
         
         # Convert to extended JSON format

@@ -129,8 +129,8 @@ class DBService:
             logger.error(f"[MongoDB] Get error for {news_id}: {str(e)}", exc_info=True)
             return None
 
-    async def get_news_paginated(self, skip: int = 0, limit: int = 20, status_filter: str = None, district_slug_filter: str = None):
-        """Get news with pagination and optional status/district filters"""
+    async def get_news_paginated(self, skip: int = 0, limit: int = 20, status_filter: str = None, district_slug_filter: str = None, date_filter: str = None):
+        """Get news with pagination and optional status/district/date filters"""
         if not self.connected or not self.client:
             logger.error("[MongoDB] Cannot get news - not connected")
             return [], 0
@@ -140,6 +140,20 @@ class DBService:
                 query["status"] = status_filter
             if district_slug_filter:
                 query["district_slug"] = district_slug_filter
+            if date_filter:
+                # Parse date string (YYYY-MM-DD) and create date range for the entire day
+                from datetime import datetime, timedelta
+                try:
+                    target_date = datetime.strptime(date_filter, "%Y-%m-%d")
+                    start_of_day = target_date.replace(hour=0, minute=0, second=0, microsecond=0)
+                    end_of_day = start_of_day + timedelta(days=1) - timedelta(microseconds=1)
+                    query["publishedAt"] = {
+                        "$gte": start_of_day,
+                        "$lte": end_of_day
+                    }
+                    logger.info(f"[MongoDB] Date filter applied: {start_of_day} to {end_of_day}")
+                except ValueError:
+                    logger.warning(f"[MongoDB] Invalid date format: {date_filter}, expected YYYY-MM-DD")
             
             # Get total count
             total = await self.collection.count_documents(query)
