@@ -1,4 +1,5 @@
 import logging
+import uuid
 from typing import List, Dict, Any, Optional
 from qdrant_client import QdrantClient
 from qdrant_client.models import (
@@ -151,13 +152,18 @@ class QdrantService:
             
             points = []
             for doc, dense_vec, sparse_vec in zip(documents, dense_embeddings, sparse_embeddings):
+                # Convert string ID to UUID for Qdrant compatibility
+                string_id = doc["id"]
+                point_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, string_id))
+                
                 point = PointStruct(
-                    id=doc["id"],
+                    id=point_id,
                     vector={
                         "dense": dense_vec,
                         "sparse": sparse_vec
                     },
                     payload={
+                        "id": string_id,  # Store original string ID in payload
                         "title": doc.get("title", ""),
                         "description": doc.get("description", ""),
                         "content": doc.get("content", ""),
@@ -174,7 +180,7 @@ class QdrantService:
                 points.append(point)
             
             # Upsert in batches to manage memory
-            batch_size = 100
+            batch_size = 50
             for i in range(0, len(points), batch_size):
                 batch = points[i:i + batch_size]
                 self.client.upsert(
@@ -211,21 +217,21 @@ class QdrantService:
         """
         try:
             # Perform dense vector search
-            dense_results = self.client.search(
+            dense_results = self.client.query_points(
                 collection_name=self.collection_name,
-                query_vector=("dense", query_dense),
+                query=query_dense,
+                using="dense",
                 limit=top * 2,  # Oversample by 2x for better accuracy
-                search_params=QuantizationSearchParams(
-                    rescore=True,  # Enable rescoring for binary quantization
-                    oversampling=2.0  # Oversample by 2x for accuracy
-                )
+                with_payload=True
             )
             
             # Perform sparse vector search
-            sparse_results = self.client.search(
+            sparse_results = self.client.query_points(
                 collection_name=self.collection_name,
-                query_vector=("sparse", query_sparse),
-                limit=top * 2
+                query=query_sparse,
+                using="sparse",
+                limit=top * 2,
+                with_payload=True
             )
             
             # Implement RRF (Reciprocal Rank Fusion) manually
@@ -233,18 +239,72 @@ class QdrantService:
             k = 60  # RRF constant
             
             # Score dense results
-            for rank, result in enumerate(dense_results, 1):
+            for rank, result in enumerate(dense_results.points, 1):
                 doc_id = result.id
                 rrf_scores[doc_id] = rrf_scores.get(doc_id, 0) + 1 / (k + rank)
             
             # Score sparse results
-            for rank, result in enumerate(sparse_results, 1):
+            for rank, result in enumerate(sparse_results.points, 1):
                 doc_id = result.id
                 rrf_scores[doc_id] = rrf_scores.get(doc_id, 0) + 1 / (k + rank)
             
             # Create a map of doc_id to result for easy lookup
             results_map = {}
-            for result in dense_results + sparse_results:
+            for result in dense_results.points + sparse_results.points:
+                if result.id not in results_map:
+                    results_map[result.id] = result
+            
+            # Sort by RRF score and get top results
+            sorted_ids = sorted(rrf_scores.items(), key=lambda x: x[1], reverse=True)[:top]
+            
+            # Map results to our format
+            final_results = []
+            for doc_id, rrf_score in sorted_ids:
+                result = results_map[doc_id]
+                final_result = {
+                    "id": result.id,
+                    "score": rrf_score,
+                    **result.payload
+                }
+                final_results.append(final_result)
+            
+            logger.info(f"[Qdrant] Hybrid search returned {len(final_results)} results")
+            return final_results
+            
+        except Exception as e:
+            logger.error(f"[Qdrant] Hybrid search failed: {e}")
+            # Fallback to dense-only search
+            try:
+                dense_results = self.client.query_points(
+                    collection_name=self.collection_name,
+                    query=query_dense,
+                    using="dense",
+                    limit=top,
+                    with_payload=True
+                )
+                
+                final_results = []
+                for result in dense_results.points:
+                    final_result = {
+                        "id": result.id,
+                        "score": result.score,
+                        **result.payload
+                    }
+                    final_results.append(final_result)
+                
+                logger.info(f"[Qdrant] Fallback dense search returned {len(final_results)} results")
+                return final_results
+                
+            except Exception as fallback_e:
+                logger.error(f"[Qdrant] Fallback search also failed: {fallback_e}")
+                return []
+            for rank, result in enumerate(sparse_results.points, 1):
+                doc_id = result.id
+                rrf_scores[doc_id] = rrf_scores.get(doc_id, 0) + 1 / (k + rank)
+            
+            # Create a map of doc_id to result for easy lookup
+            results_map = {}
+            for result in dense_results.points + sparse_results.points:
                 if result.id not in results_map:
                     results_map[result.id] = result
             
