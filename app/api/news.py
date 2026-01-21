@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from datetime import datetime
+from time import perf_counter
 from bson import ObjectId
 import asyncio
 import os
@@ -414,6 +415,7 @@ async def get_all_news(
 ):
     """Get all news with optional status/district/date filters."""
     try:
+        t0 = perf_counter()
         logger.info(f"[GET_ALL] start status={status} district_slug={district_slug} date={date}")
         
         # Get all news from database using db_service (no pagination)
@@ -423,6 +425,15 @@ async def get_all_news(
             status_filter=status,
             district_slug_filter=district_slug,
             date_filter=date
+        )
+        logger.info(
+            "[GET_ALL] fetched %s/%s items in %.3fs (status=%s district=%s date=%s)",
+            len(news_list),
+            total,
+            perf_counter() - t0,
+            status,
+            district_slug,
+            date,
         )
         
         # Convert to extended JSON format
@@ -452,6 +463,7 @@ async def get_news_by_id(
 ):
     """Get a single news article by ID."""
     try:
+        t0 = perf_counter()
         logger.info(f"[GET_BY_ID] start news_id={news_id}")
         
         # Validate ObjectId format
@@ -464,6 +476,7 @@ async def get_news_by_id(
         news = await get_db_service().get_news_by_id(ObjectId(news_id))
         if not news:
             raise HTTPException(status_code=404, detail="News not found")
+        logger.info("[GET_BY_ID] fetched 1 item in %.3fs news_id=%s", perf_counter() - t0, news_id)
         
         # Convert to extended JSON format
         news_json = to_extended_json(news)
@@ -935,6 +948,7 @@ async def get_articles(
 ):
     """Get all articles with optional date filter."""
     try:
+        t0 = perf_counter()
         logger.info(f"[GET_ARTICLES] start date={date}")
         
         # Get all articles from database (no pagination)
@@ -944,6 +958,13 @@ async def get_articles(
             status_filter="approved",  # Only approved news
             news_type_filter="articles",
             date_filter=date
+        )
+        logger.info(
+            "[GET_ARTICLES] fetched %s/%s items in %.3fs date=%s",
+            len(news_list),
+            total,
+            perf_counter() - t0,
+            date,
         )
         
         # Convert to extended JSON format
@@ -969,6 +990,7 @@ async def get_special_news(
 ):
     """Get all special news with optional date filter."""
     try:
+        t0 = perf_counter()
         logger.info(f"[GET_SPECIALNEWS] start date={date}")
         
         # Get all special news from database (no pagination)
@@ -978,6 +1000,13 @@ async def get_special_news(
             status_filter="approved",  # Only approved news
             news_type_filter="specialnews",
             date_filter=date
+        )
+        logger.info(
+            "[GET_SPECIALNEWS] fetched %s/%s items in %.3fs date=%s",
+            len(news_list),
+            total,
+            perf_counter() - t0,
+            date,
         )
         
         # Convert to extended JSON format
@@ -1003,6 +1032,7 @@ async def get_district_news_by_type(
 ):
     """Get all district news with optional date filter."""
     try:
+        t0 = perf_counter()
         logger.info(f"[GET_DISTRICTNEWS] start date={date}")
         
         # Get all district news from database (no pagination)
@@ -1012,6 +1042,13 @@ async def get_district_news_by_type(
             status_filter="approved",  # Only approved news
             news_type_filter="districtnews",
             date_filter=date
+        )
+        logger.info(
+            "[GET_DISTRICTNEWS] fetched %s/%s items in %.3fs date=%s",
+            len(news_list),
+            total,
+            perf_counter() - t0,
+            date,
         )
         
         # Convert to extended JSON format
@@ -1037,6 +1074,7 @@ async def get_state_news(
 ):
     """Get all state news with optional date filter."""
     try:
+        t0 = perf_counter()
         logger.info(f"[GET_STATENEWS] start date={date}")
         
         # Get all state news from database (no pagination)
@@ -1046,6 +1084,13 @@ async def get_state_news(
             status_filter="approved",  # Only approved news
             news_type_filter="statenews",
             date_filter=date
+        )
+        logger.info(
+            "[GET_STATENEWS] fetched %s/%s items in %.3fs date=%s",
+            len(news_list),
+            total,
+            perf_counter() - t0,
+            date,
         )
         
         # Convert to extended JSON format
