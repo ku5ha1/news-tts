@@ -24,18 +24,40 @@ class DBService:
             else:
                 database_name = settings.DATABASE_NAME
 
-            logger.info(f"[MongoDB] Connecting to database: {database_name}")
-            self.client = AsyncIOMotorClient(settings.MONGO_URI)
+            logger.info(f"[MongoDB] Connecting to database: {database_name} with connection pooling")
+            
+            # Configure connection pooling for better performance
+            self.client = AsyncIOMotorClient(
+                settings.MONGO_URI,
+                maxPoolSize=50,              # Max 50 concurrent connections
+                minPoolSize=5,               # Keep 5 connections always open
+                maxIdleTimeMS=30000,         # Close idle connections after 30s
+                connectTimeoutMS=5000,       # 5s connection timeout
+                serverSelectionTimeoutMS=5000,  # 5s server selection timeout
+                socketTimeoutMS=10000,       # 10s socket timeout
+                retryWrites=True,            # Enable retry for write operations
+                w="majority",                # Write concern for consistency
+                readPreference="primaryPreferred"  # Read from primary, fallback to secondary
+            )
+            
             self.db = self.client[database_name]
             self.collection = self.db["news"]
             self.connected = True
-            logger.info("[MongoDB] Initialized successfully")
+            logger.info("[MongoDB] Initialized successfully with connection pooling (maxPool=50, minPool=5)")
         except ImportError as e:
             logger.error(f"[MongoDB] Import error: {str(e)}", exc_info=True)
         except ConnectionError as e:
             logger.error(f"[MongoDB] Connection error: {str(e)}", exc_info=True)
         except Exception as e:
             logger.error(f"[MongoDB] Initialization error: {str(e)}", exc_info=True)
+
+    async def close_connections(self):
+        """Close MongoDB connections properly."""
+        if self.client:
+            logger.info("[MongoDB] Closing connection pool")
+            self.client.close()
+            self.connected = False
+            logger.info("[MongoDB] Connection pool closed")
 
     async def insert_news(self, data: dict):
         """Insert news document into MongoDB"""

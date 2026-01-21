@@ -83,11 +83,12 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         )
 
 def get_db_service():
-    """Lazy import of DB service to avoid module-level failures."""
+    """Singleton pattern for DB service to reuse connections."""
     global db_service
     if db_service is None:
         try:
             db_service = DBService()
+            logger.info("[DB_SERVICE] Created singleton DBService instance with connection pooling")
         except ImportError as e:
             logger.error(f"Failed to import DB service: {e}")
             raise HTTPException(

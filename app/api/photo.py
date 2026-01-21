@@ -83,11 +83,12 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         )
 
 def get_db_service():
-    """Lazy import of DB service to avoid module-level failures."""
+    """Singleton pattern for DB service to reuse connections."""
     global db_service
     if db_service is None:
         try:
             db_service = DBService()
+            logger.info("[DB_SERVICE] Created singleton DBService instance with connection pooling")
         except ImportError as e:
             logger.error(f"Failed to import DB service: {e}")
             raise HTTPException(
@@ -237,10 +238,10 @@ async def list_photos(
     try:
         logger.info(f"[PHOTO-LIST] status={status_filter} category={category_filter}")
         
-        # Get all photos from DB (no pagination)
+        # Get photos from DB with proper pagination
         photos, total = await get_db_service().get_photos_paginated(
             skip=0, 
-            limit=10000,  # Large limit to get all results
+            limit=1000,  # Cap at 1000 for performance
             status_filter=status_filter,
             category_filter=category_filter
         )

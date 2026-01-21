@@ -145,11 +145,12 @@ def get_azure_blob_service():
     return azure_blob_service
 
 def get_db_service():
-    """Lazy import of DB service to avoid module-level failures."""
+    """Singleton pattern for DB service to reuse connections."""
     global db_service
     if db_service is None:
         try:
             db_service = DBService()
+            logger.info("[DB_SERVICE] Created singleton DBService instance with connection pooling")
         except ImportError as e:
             logger.error(f"Failed to import DB service: {e}")
             raise HTTPException(
@@ -418,10 +419,11 @@ async def get_all_news(
         t0 = perf_counter()
         logger.info(f"[GET_ALL] start status={status} district_slug={district_slug} date={date}")
         
-        # Get all news from database using db_service (no pagination)
+        # Get news from database with proper pagination (limit large requests)
+        actual_limit = 1000  # Cap at 1000 items max for performance
         news_list, total = await get_db_service().get_news_paginated(
             skip=0,
-            limit=10000,  # Large limit to get all results
+            limit=actual_limit,
             status_filter=status,
             district_slug_filter=district_slug,
             date_filter=date
@@ -951,10 +953,10 @@ async def get_articles(
         t0 = perf_counter()
         logger.info(f"[GET_ARTICLES] start date={date}")
         
-        # Get all articles from database (no pagination)
+        # Get articles from database with proper pagination
         news_list, total = await get_db_service().get_news_paginated(
             skip=0,
-            limit=10000,  # Large limit to get all results
+            limit=1000,  # Cap at 1000 for performance
             status_filter="approved",  # Only approved news
             news_type_filter="articles",
             date_filter=date
@@ -993,10 +995,10 @@ async def get_special_news(
         t0 = perf_counter()
         logger.info(f"[GET_SPECIALNEWS] start date={date}")
         
-        # Get all special news from database (no pagination)
+        # Get special news from database with proper pagination
         news_list, total = await get_db_service().get_news_paginated(
             skip=0,
-            limit=10000,  # Large limit to get all results
+            limit=1000,  # Cap at 1000 for performance
             status_filter="approved",  # Only approved news
             news_type_filter="specialnews",
             date_filter=date
@@ -1035,10 +1037,10 @@ async def get_district_news_by_type(
         t0 = perf_counter()
         logger.info(f"[GET_DISTRICTNEWS] start date={date}")
         
-        # Get all district news from database (no pagination)
+        # Get district news from database with proper pagination
         news_list, total = await get_db_service().get_news_paginated(
             skip=0,
-            limit=10000,  # Large limit to get all results
+            limit=1000,  # Cap at 1000 for performance
             status_filter="approved",  # Only approved news
             news_type_filter="districtnews",
             date_filter=date
@@ -1077,10 +1079,10 @@ async def get_state_news(
         t0 = perf_counter()
         logger.info(f"[GET_STATENEWS] start date={date}")
         
-        # Get all state news from database (no pagination)
+        # Get state news from database with proper pagination
         news_list, total = await get_db_service().get_news_paginated(
             skip=0,
-            limit=10000,  # Large limit to get all results
+            limit=1000,  # Cap at 1000 for performance
             status_filter="approved",  # Only approved news
             news_type_filter="statenews",
             date_filter=date

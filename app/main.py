@@ -161,6 +161,14 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             log.exception("Translation warmup task failed: %s", e)
 
+    # Close database connections
+    try:
+        from app.services.db_singleton import close_db_connections
+        await close_db_connections()
+        log.info("Database connections closed successfully")
+    except Exception as e:
+        log.error(f"Error closing database connections: {e}")
+
     
 
 def _parse_cors(origins_env: str | None) -> list[str]:
