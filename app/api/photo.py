@@ -239,9 +239,10 @@ async def list_photos(
         logger.info(f"[PHOTO-LIST] status={status_filter} category={category_filter}")
         
         # Get photos from DB with proper pagination
+        page_size = 1000  # Cap at 1000 for performance
         photos, total = await get_db_service().get_photos_paginated(
             skip=0, 
-            limit=1000,  # Cap at 1000 for performance
+            limit=page_size,
             status_filter=status_filter,
             category_filter=category_filter
         )
@@ -253,6 +254,7 @@ async def list_photos(
             success=True,
             data={"photos": formatted_photos},
             total=total,
+            page=1,
             page_size=page_size
         )
         

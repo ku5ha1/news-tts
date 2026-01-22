@@ -16,6 +16,10 @@ class DBService:
         self.client = None
         self.db = None
         self.collection = None
+        self._news_indexes_ready = False
+        self._news_indexes_lock = asyncio.Lock()
+        self._indexes_ready: set[str] = set()
+        self._indexes_lock = asyncio.Lock()
 
         try:
             if not settings.DATABASE_NAME:
@@ -50,6 +54,200 @@ class DBService:
             logger.error(f"[MongoDB] Connection error: {str(e)}", exc_info=True)
         except Exception as e:
             logger.error(f"[MongoDB] Initialization error: {str(e)}", exc_info=True)
+
+    async def _ensure_index(
+        self,
+        collection,
+        *,
+        collection_name: str,
+        index_name: str,
+        keys: list[tuple[str, int]],
+        unique: bool = False,
+    ) -> None:
+        """Create a MongoDB index once (idempotent) with helpful logs."""
+        if (not self.connected) or (self.db is None) or (collection is None):
+            logger.warning("[MongoDB] ensure_index skipped (not connected): %s.%s", collection_name, index_name)
+            return
+
+        key = f"{collection_name}:{index_name}"
+        if key in self._indexes_ready:
+            logger.debug("[MongoDB] ensure_index skipped (already ready): %s", key)
+            return
+
+        async with self._indexes_lock:
+            if key in self._indexes_ready:
+                logger.debug("[MongoDB] ensure_index skipped (already ready after lock): %s", key)
+                return
+            try:
+                logger.info("[MongoDB] Ensuring index %s on `%s`...", index_name, collection_name)
+                try:
+                    existing = await collection.index_information()
+                    logger.info("[MongoDB] Existing `%s` indexes: %s", collection_name, list(existing.keys()))
+                except Exception as e:
+                    logger.debug("[MongoDB] Could not read `%s` indexes: %s", collection_name, e)
+
+                await collection.create_index(keys, name=index_name, unique=unique)
+                logger.info("[MongoDB] Ensured index: %s on `%s`", index_name, collection_name)
+
+                try:
+                    existing_after = await collection.index_information()
+                    logger.info("[MongoDB] `%s` indexes after ensure: %s", collection_name, list(existing_after.keys()))
+                except Exception as e:
+                    logger.debug("[MongoDB] Could not read `%s` indexes after ensure: %s", collection_name, e)
+            except Exception as e:
+                # Do not break requests if permissions/roles do not allow index creation.
+                logger.warning("[MongoDB] Failed to ensure index %s on `%s`: %s", index_name, collection_name, e)
+            finally:
+                self._indexes_ready.add(key)
+
+    async def ensure_news_indexes(self) -> None:
+        """
+        Ensure MongoDB indexes exist for the `news` collection.
+
+        We query `news` with optional filters (status/district_slug/newsType/date range)
+        and sort newest-to-oldest by publishedAt, so we create a compound index aligned
+        to those access patterns.
+        """
+        # IMPORTANT: pymongo/motor Collection objects are not truthy/falsey.
+        if (not self.connected) or (self.collection is None):
+            logger.warning("[MongoDB] ensure_news_indexes skipped (not connected or no collection)")
+            return
+
+        if self._news_indexes_ready:
+            logger.debug("[MongoDB] ensure_news_indexes skipped (already ready)")
+            return
+
+        async with self._news_indexes_lock:
+            if self._news_indexes_ready:
+                logger.debug("[MongoDB] ensure_news_indexes skipped (already ready after lock)")
+                return
+            try:
+                await self._ensure_index(
+                    self.collection,
+                    collection_name="news",
+                    index_name="idx_news_filters_publishedAt_desc",
+                    keys=[
+                        ("status", 1),
+                        ("district_slug", 1),
+                        ("newsType", 1),
+                        ("publishedAt", -1),
+                    ],
+                )
+            except Exception as e:
+                # Don't fail requests if index creation is not possible (permissions, etc.)
+                logger.warning("[MongoDB] Failed to ensure news indexes: %s", e)
+            finally:
+                self._news_indexes_ready = True
+
+    async def ensure_categories_indexes(self) -> None:
+        if (not self.connected) or (self.db is None):
+            return
+        await self._ensure_index(
+            self.db["categories"],
+            collection_name="categories",
+            index_name="idx_categories_status",
+            keys=[("status", 1)],
+        )
+
+    async def ensure_longvideos_indexes(self) -> None:
+        if (not self.connected) or (self.db is None):
+            return
+        await self._ensure_index(
+            self.db["longvideos"],
+            collection_name="longvideos",
+            index_name="idx_longvideos_status_category",
+            keys=[("status", 1), ("category", 1)],
+        )
+
+    async def ensure_shortvideos_indexes(self) -> None:
+        if (not self.connected) or (self.db is None):
+            return
+        # Short videos are stored in `videos` collection in this codebase.
+        await self._ensure_index(
+            self.db["videos"],
+            collection_name="videos",
+            index_name="idx_videos_status_category",
+            keys=[("status", 1), ("category", 1)],
+        )
+
+    async def ensure_photos_indexes(self) -> None:
+        if (not self.connected) or (self.db is None):
+            return
+        await self._ensure_index(
+            self.db["photos"],
+            collection_name="photos",
+            index_name="idx_photos_status_category",
+            keys=[("status", 1), ("category", 1)],
+        )
+
+    async def ensure_magazines_indexes(self) -> None:
+        if (not self.connected) or (self.db is None):
+            return
+        await self._ensure_index(
+            self.db["magazines"],
+            collection_name="magazines",
+            index_name="idx_magazines_status",
+            keys=[("status", 1)],
+        )
+
+    async def ensure_magazine2_indexes(self) -> None:
+        if (not self.connected) or (self.db is None):
+            return
+        await self._ensure_index(
+            self.db["magazine2"],
+            collection_name="magazine2",
+            index_name="idx_magazine2_status",
+            keys=[("status", 1)],
+        )
+
+    async def ensure_staticpages_indexes(self) -> None:
+        if (not self.connected) or (self.db is None):
+            return
+        await self._ensure_index(
+            self.db["staticpages"],
+            collection_name="staticpages",
+            index_name="idx_staticpages_status_createdTime_desc",
+            keys=[("status", 1), ("createdTime", -1)],
+        )
+
+    async def ensure_latestnotifications_indexes(self) -> None:
+        if (not self.connected) or (self.db is None):
+            return
+        await self._ensure_index(
+            self.db["latestnotifications"],
+            collection_name="latestnotifications",
+            index_name="idx_latestnotifications_createdAt_desc",
+            keys=[("createdAt", -1)],
+        )
+
+    async def ensure_newarticles_indexes(self) -> None:
+        if (not self.connected) or (self.db is None):
+            return
+        await self._ensure_index(
+            self.db["newarticles"],
+            collection_name="newarticles",
+            index_name="idx_newarticles_createdAt_desc",
+            keys=[("createdAt", -1)],
+        )
+
+    async def ensure_districts_indexes(self) -> None:
+        if (not self.connected) or (self.db is None):
+            return
+        collection = self.db["districts"]
+        await self._ensure_index(
+            collection,
+            collection_name="districts",
+            index_name="idx_districts_slug",
+            keys=[("district_slug", 1)],
+            unique=False,
+        )
+        await self._ensure_index(
+            collection,
+            collection_name="districts",
+            index_name="idx_districts_name",
+            keys=[("district_name", 1)],
+            unique=False,
+        )
 
     async def close_connections(self):
         """Close MongoDB connections properly."""
@@ -157,6 +355,9 @@ class DBService:
             logger.error("[MongoDB] Cannot get news - not connected")
             return [], 0
         try:
+            # Create indexes lazily on first real read (safe in production).
+            await self.ensure_news_indexes()
+
             query = {}
             if status_filter:
                 query["status"] = status_filter
@@ -251,6 +452,7 @@ class DBService:
             logger.error("[MongoDB] Cannot get categories - not connected")
             return [], 0
         try:
+            await self.ensure_categories_indexes()
             collection = self.db["categories"]
             query = {}
             if status_filter:
@@ -355,6 +557,7 @@ class DBService:
             logger.error("[MongoDB] Cannot get longvideos - not connected")
             return [], 0
         try:
+            await self.ensure_longvideos_indexes()
             collection = self.db["longvideos"]
             query = {}
             if status_filter:
@@ -461,6 +664,7 @@ class DBService:
             logger.error("[MongoDB] Cannot get shortvideos - not connected")
             return [], 0
         try:
+            await self.ensure_shortvideos_indexes()
             collection = self.db["videos"]
             query = {}
             if status_filter:
@@ -567,6 +771,7 @@ class DBService:
             logger.error("[MongoDB] Cannot get photos - not connected")
             return [], 0
         try:
+            await self.ensure_photos_indexes()
             collection = self.db["photos"]
             query = {}
             if status_filter:
@@ -677,6 +882,7 @@ class DBService:
             logger.error("[MongoDB] Cannot get magazines - not connected")
             return [], 0
         try:
+            await self.ensure_magazines_indexes()
             collection = self.db["magazines"]
             query = {}
             if status_filter:
@@ -781,6 +987,7 @@ class DBService:
             logger.error("[MongoDB] Cannot get magazine2s - not connected")
             return [], 0
         try:
+            await self.ensure_magazine2_indexes()
             collection = self.db["magazine2"]
             query = {}
             if status_filter:
@@ -875,6 +1082,7 @@ class DBService:
     async def get_staticpages_paginated(self, skip: int = 0, limit: int = 20, status_filter: str = None) -> tuple[List[dict], int]:
         """Get paginated static pages with optional status filter."""
         try:
+            await self.ensure_staticpages_indexes()
             collection = self.db["staticpages"]
             
             # Build filter
@@ -958,6 +1166,7 @@ class DBService:
     async def get_latestnotifications_paginated(self, skip: int = 0, limit: int = 20) -> tuple[List[dict], int]:
         """Get paginated latest notifications."""
         try:
+            await self.ensure_latestnotifications_indexes()
             collection = self.db["latestnotifications"]
             
             # Get total count
@@ -1036,6 +1245,7 @@ class DBService:
     async def get_newarticles_paginated(self, skip: int = 0, limit: int = 20) -> tuple[List[dict], int]:
         """Get paginated new articles."""
         try:
+            await self.ensure_newarticles_indexes()
             collection = self.db["newarticles"]
             
             # Get total count
@@ -1325,6 +1535,7 @@ class DBService:
             logger.error("[MongoDB] Cannot get district by slug - not connected")
             return None
         try:
+            await self.ensure_districts_indexes()
             logger.info(f"[MongoDB] Fetching district by slug: {district_slug}")
             collection = self.db["districts"]
             result = await collection.find_one({"district_slug": district_slug})
@@ -1343,6 +1554,7 @@ class DBService:
             logger.error("[MongoDB] Cannot get districts - not connected")
             return [], 0
         try:
+            await self.ensure_districts_indexes()
             collection = self.db["districts"]
             query = {}
             
