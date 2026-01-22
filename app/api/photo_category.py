@@ -7,7 +7,7 @@ from app.models.photo_category import (
     PhotoCategoryCreateRequest, PhotoCategoryResponse,
     PhotoCategoryUpdateRequest, PhotoCategoryListResponse
 )
-from app.services.db_service import DBService
+from app.services.db_singleton import get_db_service
 from app.services.auth_service import auth_service
 from app.utils.language_detection import detect_language
 from app.utils.retry_utils import retry_translation_with_timeout
@@ -21,8 +21,6 @@ DEFAULT_TRANSLATION_TIMEOUT = 90.0
 DEFAULT_PAGE_SIZE = 20
 
 router = APIRouter()
-
-db_service = None
 
 # Authentication setup
 security = HTTPBearer()
@@ -81,32 +79,6 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Authentication service error",
         )
-
-def get_db_service():
-    """Lazy import of DB service to avoid module-level failures."""
-    global db_service
-    if db_service is None:
-        try:
-            db_service = DBService()
-        except ImportError as e:
-            logger.error(f"Failed to import DB service: {e}")
-            raise HTTPException(
-                status_code=503, 
-                detail=f"Database service import failed: {str(e)}"
-            )
-        except RuntimeError as e:
-            logger.error(f"DB service runtime error: {e}")
-            raise HTTPException(
-                status_code=503, 
-                detail=f"Database service unavailable: {str(e)}"
-            )
-        except Exception as e:
-            logger.error(f"Failed to initialize DB service: {e}")
-            raise HTTPException(
-                status_code=503, 
-                detail=f"Database service unavailable: {str(e)}"
-            )
-    return db_service
 
 def get_translation_service():
     """Lazy import of translation service to avoid module-level failures."""

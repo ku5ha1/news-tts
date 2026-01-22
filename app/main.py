@@ -21,6 +21,34 @@ _model_err: str | None = None
 _warmup_task: asyncio.Task | None = None
 
 
+async def _initialize_database_indexes():
+    """Initialize all database indexes at startup for consistent low latency."""
+    try:
+        log.info("Initializing database indexes...")
+        from app.services.db_singleton import get_db_service
+        
+        db_service = get_db_service()
+        
+        # Initialize all indexes
+        await db_service.ensure_news_indexes()
+        await db_service.ensure_categories_indexes()
+        await db_service.ensure_longvideos_indexes()
+        await db_service.ensure_shortvideos_indexes()
+        await db_service.ensure_photos_indexes()
+        await db_service.ensure_magazines_indexes()
+        await db_service.ensure_magazine2_indexes()
+        await db_service.ensure_staticpages_indexes()
+        await db_service.ensure_latestnotifications_indexes()
+        await db_service.ensure_newarticles_indexes()
+        await db_service.ensure_districts_indexes()
+        
+        log.info("Database indexes initialized successfully")
+        
+    except Exception as e:
+        log.error(f"Failed to initialize database indexes: {e}")
+        # Don't fail startup - indexes will be created lazily if needed
+        log.warning("Continuing startup - indexes will be created on first request if needed")
+
 async def _run_translation_warmup() -> None:
     global _is_ready, _model_err
     try:
@@ -99,6 +127,9 @@ async def lifespan(app: FastAPI):
     task = None   
     try:
         log.info("Starting services...")
+        
+        # Initialize database indexes first
+        await _initialize_database_indexes()
         
         # Comprehensive environment variable logging
         log.info("=== ENVIRONMENT VARIABLES DEBUG ===")
