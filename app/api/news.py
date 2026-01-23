@@ -410,8 +410,11 @@ async def get_all_news(
             date,
         )
         
-        # Convert to extended JSON format
-        news_list_json = [to_extended_json(doc) for doc in news_list]
+        # OPTIMIZATION: Offload CPU-bound JSON serialization to thread pool
+        # This prevents blocking the event loop when processing large result sets
+        news_list_json = await asyncio.to_thread(
+            lambda: [to_extended_json(doc) for doc in news_list]
+        )
         
         logger.info(f"[GET_ALL] success - found {len(news_list)}/{total} news items")
         
@@ -452,8 +455,8 @@ async def get_news_by_id(
             raise HTTPException(status_code=404, detail="News not found")
         logger.info("[GET_BY_ID] fetched 1 item in %.3fs news_id=%s", perf_counter() - t0, news_id)
         
-        # Convert to extended JSON format
-        news_json = to_extended_json(news)
+        # OPTIMIZATION: Offload JSON serialization to thread pool
+        news_json = await asyncio.to_thread(to_extended_json, news)
         
         logger.info(f"[GET_BY_ID] success news_id={news_id}")
         return NewsResponse(success=True, data=news_json)
@@ -941,8 +944,10 @@ async def get_articles(
             date,
         )
         
-        # Convert to extended JSON format
-        news_list_json = [to_extended_json(doc) for doc in news_list]
+        # OPTIMIZATION: Offload JSON serialization to thread pool
+        news_list_json = await asyncio.to_thread(
+            lambda: [to_extended_json(doc) for doc in news_list]
+        )
         
         logger.info(f"[GET_ARTICLES] success - found {len(news_list)}/{total} articles")
         
@@ -983,8 +988,10 @@ async def get_special_news(
             date,
         )
         
-        # Convert to extended JSON format
-        news_list_json = [to_extended_json(doc) for doc in news_list]
+        # OPTIMIZATION: Offload JSON serialization to thread pool
+        news_list_json = await asyncio.to_thread(
+            lambda: [to_extended_json(doc) for doc in news_list]
+        )
         
         logger.info(f"[GET_SPECIALNEWS] success - found {len(news_list)}/{total} special news")
         
@@ -1025,8 +1032,10 @@ async def get_district_news_by_type(
             date,
         )
         
-        # Convert to extended JSON format
-        news_list_json = [to_extended_json(doc) for doc in news_list]
+        # OPTIMIZATION: Offload JSON serialization to thread pool
+        news_list_json = await asyncio.to_thread(
+            lambda: [to_extended_json(doc) for doc in news_list]
+        )
         
         logger.info(f"[GET_DISTRICTNEWS] success - found {len(news_list)}/{total} district news")
         
@@ -1067,8 +1076,10 @@ async def get_state_news(
             date,
         )
         
-        # Convert to extended JSON format
-        news_list_json = [to_extended_json(doc) for doc in news_list]
+        # OPTIMIZATION: Offload JSON serialization to thread pool
+        news_list_json = await asyncio.to_thread(
+            lambda: [to_extended_json(doc) for doc in news_list]
+        )
         
         logger.info(f"[GET_STATENEWS] success - found {len(news_list)}/{total} state news")
         

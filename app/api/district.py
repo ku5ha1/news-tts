@@ -446,8 +446,10 @@ async def get_district_news(
             date_filter=date
         )
         
-        # Format response
-        formatted_news = [to_extended_json(news) for news in news_list]
+        # OPTIMIZATION: Offload JSON serialization to thread pool
+        formatted_news = await asyncio.to_thread(
+            lambda: [to_extended_json(news) for news in news_list]
+        )
         
         return {
             "success": True,

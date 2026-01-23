@@ -355,8 +355,7 @@ class DBService:
             logger.error("[MongoDB] Cannot get news - not connected")
             return [], 0
         try:
-            # Create indexes lazily on first real read (safe in production).
-            await self.ensure_news_indexes()
+            # OPTIMIZATION: Indexes are created at startup, no need to check on every request
 
             query = {}
             if status_filter:
@@ -452,7 +451,7 @@ class DBService:
             logger.error("[MongoDB] Cannot get categories - not connected")
             return [], 0
         try:
-            await self.ensure_categories_indexes()
+            # OPTIMIZATION: Indexes created at startup
             collection = self.db["categories"]
             query = {}
             if status_filter:
@@ -557,7 +556,7 @@ class DBService:
             logger.error("[MongoDB] Cannot get longvideos - not connected")
             return [], 0
         try:
-            await self.ensure_longvideos_indexes()
+            # OPTIMIZATION: Indexes created at startup
             collection = self.db["longvideos"]
             query = {}
             if status_filter:
@@ -664,7 +663,7 @@ class DBService:
             logger.error("[MongoDB] Cannot get shortvideos - not connected")
             return [], 0
         try:
-            await self.ensure_shortvideos_indexes()
+            # OPTIMIZATION: Indexes created at startup
             collection = self.db["videos"]
             query = {}
             if status_filter:
@@ -771,7 +770,7 @@ class DBService:
             logger.error("[MongoDB] Cannot get photos - not connected")
             return [], 0
         try:
-            await self.ensure_photos_indexes()
+            # OPTIMIZATION: Indexes created at startup
             collection = self.db["photos"]
             query = {}
             if status_filter:
@@ -882,7 +881,7 @@ class DBService:
             logger.error("[MongoDB] Cannot get magazines - not connected")
             return [], 0
         try:
-            await self.ensure_magazines_indexes()
+            # OPTIMIZATION: Indexes created at startup
             collection = self.db["magazines"]
             query = {}
             if status_filter:
@@ -987,7 +986,7 @@ class DBService:
             logger.error("[MongoDB] Cannot get magazine2s - not connected")
             return [], 0
         try:
-            await self.ensure_magazine2_indexes()
+            # OPTIMIZATION: Indexes created at startup
             collection = self.db["magazine2"]
             query = {}
             if status_filter:
@@ -1082,7 +1081,7 @@ class DBService:
     async def get_staticpages_paginated(self, skip: int = 0, limit: int = 20, status_filter: str = None) -> tuple[List[dict], int]:
         """Get paginated static pages with optional status filter."""
         try:
-            await self.ensure_staticpages_indexes()
+            # OPTIMIZATION: Indexes created at startup
             collection = self.db["staticpages"]
             
             # Build filter
@@ -1166,7 +1165,7 @@ class DBService:
     async def get_latestnotifications_paginated(self, skip: int = 0, limit: int = 20) -> tuple[List[dict], int]:
         """Get paginated latest notifications."""
         try:
-            await self.ensure_latestnotifications_indexes()
+            # OPTIMIZATION: Indexes created at startup
             collection = self.db["latestnotifications"]
             
             # Get total count
@@ -1245,7 +1244,7 @@ class DBService:
     async def get_newarticles_paginated(self, skip: int = 0, limit: int = 20) -> tuple[List[dict], int]:
         """Get paginated new articles."""
         try:
-            await self.ensure_newarticles_indexes()
+            # OPTIMIZATION: Indexes created at startup
             collection = self.db["newarticles"]
             
             # Get total count
@@ -1535,7 +1534,7 @@ class DBService:
             logger.error("[MongoDB] Cannot get district by slug - not connected")
             return None
         try:
-            await self.ensure_districts_indexes()
+            # OPTIMIZATION: Indexes created at startup
             logger.info(f"[MongoDB] Fetching district by slug: {district_slug}")
             collection = self.db["districts"]
             result = await collection.find_one({"district_slug": district_slug})
@@ -1554,7 +1553,7 @@ class DBService:
             logger.error("[MongoDB] Cannot get districts - not connected")
             return [], 0
         try:
-            await self.ensure_districts_indexes()
+            # OPTIMIZATION: Indexes created at startup
             collection = self.db["districts"]
             query = {}
             

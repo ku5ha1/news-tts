@@ -302,16 +302,16 @@ if __name__ == "__main__":
     # CRITICAL: Reduce workers to prevent memory overload
     # Each worker loads 2 translation models (~2-3GB each) = 4-6GB per worker
     # With 16GB VM RAM: 1-2 workers max (leaves 8-12GB for system/other)
-    # With 4 vCPU: 1-2 workers is optimal (translation is CPU-bound, GIL limits parallelism)
+    # With 4 vCPU: 4 workers is optimal for user-facing API (translation is background)
     cpu_count = os.cpu_count() or 4
-    # RECOMMENDED: 1 worker for 16GB RAM, 2 workers for 32GB+ RAM
-    max_workers = 1 if os.getenv("VM_RAM_GB", "16").lower() in ["16", "15", "14"] else 2
-    num_workers = int(os.getenv("UVICORN_WORKERS", str(max_workers)))
-    # Safety: Never exceed 2 workers (memory constraint)
-    num_workers = min(num_workers, 2)
-    print(f"⚠️  CRITICAL: Starting with {num_workers} worker(s) (recommended: 1-2 for 16GB RAM, 4 vCPU)")
-    print(f"   Each worker loads ~4-6GB models. {num_workers} workers = ~{num_workers * 5}GB RAM for models")
-    print(f"   If experiencing OOM/performance issues, set UVICORN_WORKERS=1")
+    # OPTIMIZATION: Increased from 1 to 4 workers for better concurrency
+    # Background translation uses separate ProcessPoolExecutor, won't conflict
+    num_workers = int(os.getenv("UVICORN_WORKERS", "4"))
+    # Safety: Cap at 4 workers for 16GB RAM
+    num_workers = min(num_workers, 4)
+    print(f"⚡ OPTIMIZED: Starting with {num_workers} worker(s) for better API concurrency")
+    print(f"   Background translation uses separate process pool")
+    print(f"   Each worker handles user-facing API requests concurrently")
     
     # Check if SSL certificates exist (with better error handling)
     ssl_cert_path = "/etc/letsencrypt/live/diprkarnataka.duckdns.org/fullchain.pem"
